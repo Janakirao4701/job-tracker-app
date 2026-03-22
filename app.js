@@ -1,7 +1,10 @@
 const SUPABASE_URL = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
 // Extension ID - update this after publishing to Chrome Web Store
 // For now using runtime detection
-const EXT_ID = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) || null;
+// Extension ID - this is set after the extension is installed
+// chrome.runtime.id works when page is opened FROM the extension
+// For external pages (Vercel), we use externally_connectable messaging
+const EXT_ID = null; // Will be provided via URL parameter
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucWJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
 
 const STATUS_COLORS = {
@@ -130,25 +133,25 @@ function saveSession(data) {
       name:  data.user.user_metadata?.full_name || data.user.email.split('@')[0]
     }
   };
-  // Save to localStorage for web app persistence
+  // Always save to localStorage
   localStorage.setItem('rjd_web_session', JSON.stringify(payload));
 
-  // Try chrome.storage directly (works if opened as extension page)
-  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    chrome.storage.local.set({ rjd_session: payload });
-  }
+  // Get extension ID from URL param (passed by extension when opening this page)
+  const urlParams = new URLSearchParams(window.location.search);
+  const extId = urlParams.get('ext_id');
 
-  // Try externally_connectable messaging
-  if (typeof chrome !== 'undefined' && chrome.runtime && EXT_ID) {
-    try { chrome.runtime.sendMessage(EXT_ID, { action: 'save_session', payload }, () => {}); } catch(e) {}
+  if (extId && typeof chrome !== 'undefined' && chrome.runtime) {
+    // Send to extension background script via externally_connectable
+    try {
+      chrome.runtime.sendMessage(extId, { action: 'save_session', payload }, (resp) => {
+        if (chrome.runtime.lastError) {
+          console.log('Extension messaging failed:', chrome.runtime.lastError.message);
+        } else {
+          console.log('Session saved to extension:', resp);
+        }
+      });
+    } catch(e) { console.log('sendMessage error:', e); }
   }
-
-  // Broadcast session via BroadcastChannel so extension content script can pick it up
-  try {
-    const bc = new BroadcastChannel('rjd_session_channel');
-    bc.postMessage({ action: 'save_session', payload });
-    bc.close();
-  } catch(e) {}
 }
 function loadStoredSession() {
   try { return JSON.parse(localStorage.getItem('rjd_web_session')); } catch { return null; }
@@ -156,7 +159,9 @@ function loadStoredSession() {
 function clearStoredSession() {
   localStorage.removeItem('rjd_web_session');
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    chrome.storage.local.remove('rjd_session');
+    chrome.storage.local.remove('rjd_session', () => {
+      chrome.runtime.sendMessage({ action: 'session_cleared' });
+    });
   }
 }
 
