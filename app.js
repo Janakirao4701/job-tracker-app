@@ -42,7 +42,8 @@ function showToast(msg, isError) {
 }
 
 function headers(extra) {
-  return { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+(session?.access_token||SUPABASE_KEY), ...extra };
+  const token = session?.access_token || session?.token || SUPABASE_KEY;
+  return { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+token, ...extra };
 }
 
 // ── SUPABASE AUTH ──
@@ -117,26 +118,44 @@ async function deleteApp(id) {
 
 // ── SESSION ──
 function saveSession(data) {
-  localStorage.setItem('rjd_web_session', JSON.stringify({
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
-    user: data.user
-  }));
+  const payload = {
+    token: data.access_token,
+    refreshToken: data.refresh_token || '',
+    user: {
+      id:    data.user.id,
+      email: data.user.email,
+      name:  data.user.user_metadata?.full_name || data.user.email.split('@')[0]
+    }
+  };
+  // Save to localStorage for web app
+  localStorage.setItem('rjd_web_session', JSON.stringify(payload));
+  // Also save to chrome.storage so the extension sidebar can read it
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.set({ rjd_session: payload });
+  }
 }
 function loadStoredSession() {
   try { return JSON.parse(localStorage.getItem('rjd_web_session')); } catch { return null; }
 }
-function clearStoredSession() { localStorage.removeItem('rjd_web_session'); }
+function clearStoredSession() {
+  localStorage.removeItem('rjd_web_session');
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.remove('rjd_session');
+  }
+}
 
 // ── AUTH SETUP ──
 function setupAuth() {
   const stored = loadStoredSession();
-  if (stored && stored.access_token) {
-    session     = stored;
-    currentUser = { id: stored.user.id, email: stored.user.email,
-      name: stored.user.user_metadata?.full_name || stored.user.email.split('@')[0] };
-    showApp();
-    return;
+  if (stored && (stored.access_token || stored.token)) {
+    // Support both old format (access_token) and new format (token)
+    session = stored.access_token
+      ? { access_token: stored.access_token, refresh_token: stored.refresh_token }
+      : { access_token: stored.token, refresh_token: stored.refreshToken };
+    currentUser = stored.user
+      ? { id: stored.user.id, email: stored.user.email, name: stored.user.name || stored.user.email.split('@')[0] }
+      : null;
+    if (currentUser) { showApp(); return; }
   }
   showSection('auth-section');
 }
