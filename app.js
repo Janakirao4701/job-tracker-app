@@ -133,24 +133,18 @@ function saveSession(data) {
       name:  data.user.user_metadata?.full_name || data.user.email.split('@')[0]
     }
   };
-  // Always save to localStorage
+
+  // Save to localStorage for web app
   localStorage.setItem('rjd_web_session', JSON.stringify(payload));
 
-  // Get extension ID from URL param (passed by extension when opening this page)
-  const urlParams = new URLSearchParams(window.location.search);
-  const extId = urlParams.get('ext_id');
-
-  if (extId && typeof chrome !== 'undefined' && chrome.runtime) {
-    // Send to extension background script via externally_connectable
-    try {
-      chrome.runtime.sendMessage(extId, { action: 'save_session', payload }, (resp) => {
-        if (chrome.runtime.lastError) {
-          console.log('Extension messaging failed:', chrome.runtime.lastError.message);
-        } else {
-          console.log('Session saved to extension:', resp);
-        }
+  // Save to chrome.storage — works because app.html is an extension page
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.set({ rjd_session: payload }, () => {
+      // Tell background to push to all tabs
+      chrome.runtime.sendMessage({ action: 'session_saved', payload }, () => {
+        if (chrome.runtime.lastError) {} // ignore
       });
-    } catch(e) { console.log('sendMessage error:', e); }
+    });
   }
 }
 function loadStoredSession() {
