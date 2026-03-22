@@ -778,6 +778,10 @@ document.getElementById('signout-btn').addEventListener('click', async () => {
   await signOut();
   clearStoredSession();
   session = null; currentUser = null; apps = [];
+  // Clear all form fields so previous user's data isn't visible
+  const fields = ['auth-email','auth-password','auth-name','forgot-email'];
+  fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('auth-msg').innerHTML = '';
   showSection('auth-section');
   setMode('signin');
 });
