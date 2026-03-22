@@ -1,4 +1,7 @@
 const SUPABASE_URL = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
+// Extension ID - update this after publishing to Chrome Web Store
+// For now using runtime detection
+const EXT_ID = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) || null;
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucWJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
 
 const STATUS_COLORS = {
@@ -127,11 +130,20 @@ function saveSession(data) {
       name:  data.user.user_metadata?.full_name || data.user.email.split('@')[0]
     }
   };
-  // Save to localStorage for web app
+  // Save to localStorage for web app persistence
   localStorage.setItem('rjd_web_session', JSON.stringify(payload));
-  // Also save to chrome.storage so the extension sidebar can read it
+  // Write to chrome.storage via extension messaging
+  // This works when app.html is opened as an extension page
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    chrome.storage.local.set({ rjd_session: payload });
+    chrome.storage.local.set({ rjd_session: payload }, () => {
+      console.log('Session saved to chrome.storage');
+    });
+  }
+  // Send to extension via externally_connectable (from GitHub Pages)
+  if (typeof chrome !== 'undefined' && chrome.runtime && EXT_ID) {
+    try {
+      chrome.runtime.sendMessage(EXT_ID, { action: 'save_session', payload }, () => {});
+    } catch(e) {}
   }
 }
 function loadStoredSession() {
