@@ -735,7 +735,7 @@ function renderExport() {
 function renderPrivacy() {
   document.getElementById('page-content').innerHTML = `
     <div style="max-width:700px;">
-      <iframe src="privacy.html" style="width:100%;height:800px;border:none;border-radius:12px;"></iframe>
+      <iframe src="https://janakirao4701.github.io/job-tracker-app/privacy.html" style="width:100%;height:800px;border:none;border-radius:12px;"></iframe>
     </div>`;
 }
 
