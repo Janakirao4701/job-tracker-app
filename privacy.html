@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — Job Application Tracker</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f4f8;color:#1a202c;line-height:1.7}
+nav{background:#1F4E79;padding:0 48px;height:60px;display:flex;align-items:center;gap:12px}
+.nav-icon{width:30px;height:30px;background:rgba(255,255,255,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.nav-title{font-size:14px;font-weight:700;color:#fff}
+.container{max-width:760px;margin:0 auto;padding:48px 24px}
+.hero{background:#1F4E79;color:#fff;padding:48px;text-align:center;margin-bottom:0}
+.hero h1{font-size:28px;font-weight:800;margin-bottom:8px}
+.hero p{font-size:13px;color:rgba(255,255,255,0.7)}
+.card{background:#fff;border-radius:16px;padding:32px;border:1px solid #e2e8f0;margin-bottom:20px}
+.card h2{font-size:17px;font-weight:700;color:#1F4E79;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #e2e8f0}
+.card h3{font-size:14px;font-weight:700;color:#1a202c;margin:16px 0 6px}
+.card p{font-size:13px;color:#4a5568;margin-bottom:10px}
+.card ul{font-size:13px;color:#4a5568;padding-left:20px;margin-bottom:10px}
+.card ul li{margin-bottom:5px}
+.badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600;margin-bottom:12px}
+.badge-green{background:#f0fff4;color:#276749;border:1px solid #c6f6d5}
+.badge-blue{background:#ebf4ff;color:#2E75B6;border:1px solid #bee3f8}
+.badge-amber{background:#fffbeb;color:#975a16;border:1px solid #fbd38d}
+.highlight{background:#ebf4ff;border-left:3px solid #2E75B6;padding:12px 16px;border-radius:0 8px 8px 0;font-size:13px;color:#2d3748;margin:12px 0}
+.contact-box{background:#f8fafc;border-radius:10px;padding:16px;font-size:13px;color:#4a5568}
+footer{background:#1F4E79;padding:24px 48px;text-align:center;font-size:12px;color:rgba(255,255,255,0.6);margin-top:40px}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-icon">📋</div>
+  <span class="nav-title">Job Application Tracker</span>
+</nav>
+
+<div class="hero">
+  <h1>Privacy Policy</h1>
+  <p>Last updated: March 2026 &nbsp;·&nbsp; Effective immediately</p>
+</div>
+
+<div class="container">
+
+  <div class="card">
+    <h2>Overview</h2>
+    <div class="badge badge-green">Privacy-first design</div>
+    <p>Job Application Tracker is a Chrome extension that helps you track job applications using AI. We are committed to protecting your privacy. This policy explains what data we collect, how we use it, and your rights.</p>
+    <div class="highlight">
+      We do not sell your data. We do not show ads. Your job applications are private to you.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Data We Collect</h2>
+
+    <h3>Account Information</h3>
+    <p>When you create an account we collect:</p>
+    <ul>
+      <li>Email address</li>
+      <li>Full name (optional, used for display only)</li>
+      <li>Encrypted password (handled by Supabase Auth — we never see your password)</li>
+    </ul>
+
+    <h3>Job Application Data</h3>
+    <p>When you save an application we store:</p>
+    <ul>
+      <li>Company name and job title</li>
+      <li>Job posting URL</li>
+      <li>Job description text (copied from the page)</li>
+      <li>Your resume text (if you choose to add it)</li>
+      <li>Application status and notes</li>
+      <li>Date and time of saving</li>
+      <li>Follow-up date (if set)</li>
+    </ul>
+
+    <h3>What We Do NOT Collect</h3>
+    <ul>
+      <li>Browsing history or page content (beyond what you explicitly copy)</li>
+      <li>Personal financial information</li>
+      <li>Location data</li>
+      <li>Analytics or usage tracking</li>
+      <li>Your Gemini API key (stored only in your own browser)</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>How We Use Your Data</h2>
+    <ul>
+      <li><strong>Authentication</strong> — to verify your identity and secure your account</li>
+      <li><strong>Sync</strong> — to make your applications available across devices</li>
+      <li><strong>Display</strong> — to show your applications in the extension sidebar</li>
+      <li><strong>Export</strong> — to generate your Excel/CSV reports on demand</li>
+    </ul>
+    <p>We do not use your data for advertising, profiling, or any purpose beyond operating the extension.</p>
+  </div>
+
+  <div class="card">
+    <h2>Third-Party Services</h2>
+    <div class="badge badge-amber">Two third parties involved</div>
+
+    <h3>Supabase</h3>
+    <p>Your account and application data is stored in Supabase (supabase.com), a PostgreSQL cloud database. Data is stored in their cloud infrastructure. Supabase's privacy policy applies to data stored there.</p>
+    <ul>
+      <li>Row Level Security ensures only you can access your data</li>
+      <li>Data is encrypted in transit (HTTPS) and at rest</li>
+    </ul>
+
+    <h3>Google Gemini API</h3>
+    <p>When you use Extract & Save, the job description text is sent to Google's Gemini API to extract the company name and job title. This uses your own personal API key.</p>
+    <ul>
+      <li>Only the job description text is sent — not your personal data</li>
+      <li>Google's API terms and privacy policy apply to this call</li>
+      <li>Your Gemini API key is stored only in your browser's local storage and is never transmitted to our servers</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Data Storage & Security</h2>
+    <ul>
+      <li>All data is transmitted over HTTPS</li>
+      <li>Authentication tokens expire and auto-refresh</li>
+      <li>Row Level Security (RLS) in Supabase ensures each user can only read and write their own data — even if someone had the API key, they cannot access your applications</li>
+      <li>Your Gemini API key never leaves your browser</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Your Rights</h2>
+    <h3>Access your data</h3>
+    <p>You can export all your data at any time using the Export Excel or CSV options in the extension.</p>
+    <h3>Delete your data</h3>
+    <p>You can delete all your applications from Settings → My Data → Delete all. To delete your account entirely, contact us.</p>
+    <h3>Data portability</h3>
+    <p>Your exported Excel and CSV files contain all your data in standard formats you can use anywhere.</p>
+  </div>
+
+  <div class="card">
+    <h2>Children's Privacy</h2>
+    <p>This extension is not intended for use by anyone under the age of 13. We do not knowingly collect personal information from children.</p>
+  </div>
+
+  <div class="card">
+    <h2>Changes to This Policy</h2>
+    <p>We may update this policy from time to time. We will notify users of significant changes by updating the "Last updated" date at the top of this page. Continued use of the extension after changes constitutes acceptance of the new policy.</p>
+  </div>
+
+  <div class="card">
+    <h2>Contact</h2>
+    <div class="contact-box">
+      If you have any questions about this privacy policy or your data, please reach out via the Chrome Web Store support page for Job Application Tracker.
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Job Application Tracker · Privacy Policy · v4.1.0<br>
+  <span style="margin-top:4px;display:block;">This extension is free and open. Your data belongs to you.</span>
+</footer>
+
+</body>
+</html>
