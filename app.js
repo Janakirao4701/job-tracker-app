@@ -132,19 +132,23 @@ function saveSession(data) {
   };
   // Save to localStorage for web app persistence
   localStorage.setItem('rjd_web_session', JSON.stringify(payload));
-  // Write to chrome.storage via extension messaging
-  // This works when app.html is opened as an extension page
+
+  // Try chrome.storage directly (works if opened as extension page)
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    chrome.storage.local.set({ rjd_session: payload }, () => {
-      console.log('Session saved to chrome.storage');
-    });
+    chrome.storage.local.set({ rjd_session: payload });
   }
-  // Send to extension via externally_connectable (from GitHub Pages)
+
+  // Try externally_connectable messaging
   if (typeof chrome !== 'undefined' && chrome.runtime && EXT_ID) {
-    try {
-      chrome.runtime.sendMessage(EXT_ID, { action: 'save_session', payload }, () => {});
-    } catch(e) {}
+    try { chrome.runtime.sendMessage(EXT_ID, { action: 'save_session', payload }, () => {}); } catch(e) {}
   }
+
+  // Broadcast session via BroadcastChannel so extension content script can pick it up
+  try {
+    const bc = new BroadcastChannel('rjd_session_channel');
+    bc.postMessage({ action: 'save_session', payload });
+    bc.close();
+  } catch(e) {}
 }
 function loadStoredSession() {
   try { return JSON.parse(localStorage.getItem('rjd_web_session')); } catch { return null; }
@@ -766,7 +770,7 @@ function renderExport() {
 function renderPrivacy() {
   document.getElementById('page-content').innerHTML = `
     <div style="max-width:700px;">
-      <iframe src="https://janakirao4701.github.io/job-tracker-app/privacy.html" style="width:100%;height:800px;border:none;border-radius:12px;"></iframe>
+      <iframe src="https://job-tracker-app-iota-beryl.vercel.app/privacy.html" style="width:100%;height:800px;border:none;border-radius:12px;"></iframe>
     </div>`;
 }
 
