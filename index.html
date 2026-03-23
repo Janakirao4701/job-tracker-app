@@ -60,7 +60,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .topbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:0;z-index:5}
 .topbar-title{font-size:16px;font-weight:700;color:#1F4E79}
 .topbar-right{display:flex;align-items:center;gap:12px}
-.topbar-badge{font-size:11px;background:#ebf4ff;color:#2E75B6;padding:3px 10px;border-radius:20px;font-weight:600}
+.topbar-badge{font-size:11px;background:#1F4E79;color:#fff;padding:4px 14px;border-radius:20px;font-weight:700;letter-spacing:0.3px}
 .content{flex:1;padding:28px 32px}
 
 /* ── STATS GRID ── */
@@ -104,12 +104,12 @@ tr:hover td{background:#fafcff}
 .loading-row{text-align:center;padding:48px;color:#a0aec0;font-size:13px}
 
 /* ── SETTINGS PAGE ── */
-.settings-layout{display:grid;grid-template-columns:200px 1fr;gap:20px}
+.settings-layout{display:grid;grid-template-columns:190px 1fr;gap:20px;align-items:start}
 .settings-nav-card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:8px 0;height:fit-content}
-.settings-nav-item{display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;color:#718096;cursor:pointer;border-left:3px solid transparent}
-.settings-nav-item:hover{background:#f7f8fa;color:#1a202c}
+.settings-nav-item{display:flex;align-items:center;gap:10px;padding:11px 16px;font-size:13px;color:#718096;cursor:pointer;border-left:3px solid transparent;border-radius:0 8px 8px 0;margin-right:8px;transition:all 0.15s}
+.settings-nav-item:hover{background:#f1f5f9;color:#1a202c}
 .settings-nav-item.active{background:#ebf4ff;color:#1F4E79;border-left-color:#1F4E79;font-weight:600}
-.settings-content-card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:28px}
+.settings-content-card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:32px;max-width:680px}
 .settings-section-title{font-size:17px;font-weight:700;color:#1a202c;margin-bottom:4px}
 .settings-section-sub{font-size:13px;color:#718096;margin-bottom:24px}
 .settings-field{margin-bottom:18px}
@@ -128,16 +128,7 @@ tr:hover td{background:#fafcff}
 .privacy-block{background:#f8fafc;border-radius:8px;padding:14px 16px;font-size:12px;color:#4a5568;line-height:1.7;margin-bottom:10px;border:1px solid #e2e8f0}
 .privacy-block strong{color:#1F4E79}
 
-/* ── KANBAN ── */
-.kanban-board{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;align-items:start;overflow-x:auto}
-@media(max-width:1100px){.kanban-board{grid-template-columns:repeat(3,minmax(200px,1fr))}}
-.kanban-col{background:#f8fafc;border-radius:12px;padding:12px;min-height:200px}
-.kanban-col-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;padding:6px 8px;border-radius:6px;margin-bottom:10px}
-.kanban-card{background:#fff;border-radius:10px;padding:12px;margin-bottom:8px;border:1px solid #e2e8f0;cursor:pointer;transition:box-shadow 0.15s,transform 0.1s}
-.kanban-card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.1);transform:translateY(-1px)}
-.kanban-card-company{font-size:12px;font-weight:700;color:#1a202c;margin-bottom:3px}
-.kanban-card-title{font-size:11px;color:#718096;margin-bottom:4px;line-height:1.4}
-.kanban-card-date{font-size:10px;color:#a0aec0}
+
 
 /* ── ADD APP MODAL ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
