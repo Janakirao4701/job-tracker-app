@@ -436,6 +436,62 @@ tr:hover td{background:#fafcff}
   </div>
 </div>
 
+<!-- DETAIL MODAL -->
+<div class="modal-overlay hidden" id="detail-modal">
+  <div class="modal" style="max-width:680px;width:95%;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="detail-modal-title">Application Detail</div>
+        <div id="detail-modal-sub" style="font-size:12px;color:#718096;margin-top:2px;"></div>
+      </div>
+      <button class="modal-close" id="detail-modal-close">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <!-- Tab bar -->
+      <div style="display:flex;border-bottom:1px solid #e2e8f0;padding:0 20px;background:#f8fafc;">
+        <button class="detail-tab active" data-tab="jd">Job Description</button>
+        <button class="detail-tab" data-tab="resume">Resume</button>
+        <button class="detail-tab" data-tab="notes">Notes &amp; Details</button>
+      </div>
+      <!-- Tab panels -->
+      <div id="detail-tab-jd" class="detail-tab-panel" style="padding:20px;">
+        <pre id="detail-jd-text" style="white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:13px;color:#2d3748;line-height:1.7;max-height:420px;overflow-y:auto;background:#f8fafc;border-radius:8px;padding:16px;border:1px solid #e2e8f0;"></pre>
+      </div>
+      <div id="detail-tab-resume" class="detail-tab-panel hidden" style="padding:20px;">
+        <pre id="detail-resume-text" style="white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:13px;color:#2d3748;line-height:1.7;max-height:420px;overflow-y:auto;background:#f8fafc;border-radius:8px;padding:16px;border:1px solid #e2e8f0;"></pre>
+      </div>
+      <div id="detail-tab-notes" class="detail-tab-panel hidden" style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div><div style="font-size:11px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Status</div>
+            <select id="detail-status-sel" class="settings-input" style="width:100%;"></select>
+          </div>
+          <div><div style="font-size:11px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Follow-up Date</div>
+            <input type="date" id="detail-followup-input" class="settings-input" style="width:100%;"/>
+          </div>
+        </div>
+        <div><div style="font-size:11px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Notes</div>
+          <textarea id="detail-notes-input" class="settings-input" rows="5" style="width:100%;resize:vertical;" placeholder="Add notes..."></textarea>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <a id="detail-url-link" href="#" target="_blank" class="btn-new" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:13px;" rel="noopener">Open Job URL ↗</a>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-new" id="detail-modal-cancel">Close</button>
+      <button class="btn-export" id="detail-modal-save">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.detail-tab{padding:10px 16px;font-size:13px;font-weight:600;color:#718096;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;font-family:inherit;transition:all 0.15s;margin-bottom:-1px;}
+.detail-tab:hover{color:#1F4E79;}
+.detail-tab.active{color:#1F4E79;border-bottom-color:#1F4E79;}
+.detail-tab-panel{}
+.detail-tab-panel.hidden{display:none;}
+</style>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 

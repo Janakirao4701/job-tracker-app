@@ -664,7 +664,12 @@ function renderApplications() {
             : filtered.map((a,i) => `
               <tr data-id="${a.id}">
                 <td style="color:#a0aec0;font-size:12px;">${i+1}</td>
-                <td><div style="font-weight:600;font-size:13px;">${esc(a.company||'—')}</div></td>
+                <td><div style="font-weight:600;font-size:13px;">${esc(a.company||'—')}</div>
+                    <div style="margin-top:3px;display:flex;gap:4px;">
+                      ${a.jd     ? `<span style="font-size:10px;background:#EBF4FF;color:#1F4E79;border-radius:4px;padding:1px 5px;font-weight:600;">JD</span>` : ''}
+                      ${a.resume ? `<span style="font-size:10px;background:#F0FFF4;color:#276749;border-radius:4px;padding:1px 5px;font-weight:600;">Resume</span>` : ''}
+                    </div>
+                </td>
                 <td style="font-size:13px;color:#4a5568;">${esc(a.jobTitle||'—')}</td>
                 <td>${a.url?`<a href="${esc(a.url)}" target="_blank" class="url-link">Open ↗</a>`:'—'}</td>
                 <td>
@@ -674,7 +679,8 @@ function renderApplications() {
                 </td>
                 <td style="font-size:12px;color:#718096;white-space:nowrap;">${esc(a.date||'—')}</td>
                 <td style="font-size:12px;color:#718096;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(a.notes||'—')}</td>
-                <td>
+                <td style="white-space:nowrap;">
+                  <button class="auth-link view-btn" data-id="${a.id}" style="color:#2E75B6;font-size:12px;margin-right:8px;">View</button>
                   <button class="auth-link del-btn" data-id="${a.id}" style="color:#c53030;font-size:12px;">Delete</button>
                 </td>
               </tr>`).join('')}
@@ -714,7 +720,78 @@ function renderApplications() {
       renderApplications(); updateBadge(); showToast('Deleted');
     });
   });
+
+  document.querySelectorAll('.view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const app = apps.find(a => a.id === btn.dataset.id);
+      if (app) openDetailModal(app);
+    });
+  });
 }
+
+// ── DETAIL MODAL ──
+function openDetailModal(app) {
+  // Title & subtitle
+  document.getElementById('detail-modal-title').textContent = app.company || 'Application';
+  document.getElementById('detail-modal-sub').textContent   = app.jobTitle || '';
+
+  // JD tab
+  const jdEl = document.getElementById('detail-jd-text');
+  jdEl.textContent = app.jd || 'No job description saved for this application.';
+  jdEl.style.color = app.jd ? '#2d3748' : '#a0aec0';
+
+  // Resume tab
+  const resumeEl = document.getElementById('detail-resume-text');
+  resumeEl.textContent = app.resume || 'No resume saved for this application.';
+  resumeEl.style.color = app.resume ? '#2d3748' : '#a0aec0';
+
+  // Notes tab
+  document.getElementById('detail-notes-input').value    = app.notes || '';
+  document.getElementById('detail-followup-input').value = app.followUpDate || '';
+  const statusSel = document.getElementById('detail-status-sel');
+  statusSel.innerHTML = STATUSES.map(s => `<option value="${s}" ${app.status===s?'selected':''}>${s}</option>`).join('');
+  statusSel.style.background = (STATUS_BG[app.status]||STATUS_BG.Applied).bg;
+  statusSel.style.color      = (STATUS_BG[app.status]||STATUS_BG.Applied).color;
+  statusSel.addEventListener('change', () => {
+    statusSel.style.background = (STATUS_BG[statusSel.value]||STATUS_BG.Applied).bg;
+    statusSel.style.color      = (STATUS_BG[statusSel.value]||STATUS_BG.Applied).color;
+  });
+
+  // URL button
+  const urlLink = document.getElementById('detail-url-link');
+  if (app.url) { urlLink.href = app.url; urlLink.style.display = 'inline-flex'; }
+  else         { urlLink.style.display = 'none'; }
+
+  // Default to JD tab (or resume if no JD)
+  switchDetailTab(app.jd ? 'jd' : (app.resume ? 'resume' : 'notes'));
+
+  // Show modal
+  document.getElementById('detail-modal').classList.remove('hidden');
+
+  // Save changes
+  document.getElementById('detail-modal-save').onclick = async () => {
+    app.notes       = document.getElementById('detail-notes-input').value.trim();
+    app.followUpDate= document.getElementById('detail-followup-input').value;
+    app.status      = document.getElementById('detail-status-sel').value;
+    const ok = await updateApp(app);
+    if (ok) { showToast('Saved ✓'); document.getElementById('detail-modal').classList.add('hidden'); renderPage(currentPage); }
+    else    { showToast('Save failed', true); }
+  };
+}
+
+function switchDetailTab(tab) {
+  document.querySelectorAll('.detail-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.detail-tab-panel').forEach(p => p.classList.toggle('hidden', p.id !== 'detail-tab-' + tab));
+}
+
+// Tab clicks
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('detail-tab')) switchDetailTab(e.target.dataset.tab);
+});
+
+// Close detail modal
+document.getElementById('detail-modal-close').addEventListener('click',  () => document.getElementById('detail-modal').classList.add('hidden'));
+document.getElementById('detail-modal-cancel').addEventListener('click', () => document.getElementById('detail-modal').classList.add('hidden'));
 
 // ── SETTINGS ──
 let settingsSection = 'apikey';
