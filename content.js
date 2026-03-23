@@ -1173,10 +1173,12 @@
 
   // Fallback poll every 3 seconds
   if (hasChromeStorage) {
-    setInterval(() => {
+    const _poll = setInterval(() => {
       try {
+        // Stop polling if extension context is gone (happens after extension reload)
+        if (!chrome.runtime || !chrome.runtime.id) { clearInterval(_poll); return; }
         chrome.storage.local.get('rjd_session', r => {
-          if (chrome.runtime.lastError) return;
+          if (chrome.runtime.lastError) { clearInterval(_poll); return; }
           const sess = r.rjd_session || null;
           if (sess && sess.token && sess.user && !currentUser) {
             applySession(sess);
@@ -1184,7 +1186,7 @@
             applySession(null);
           }
         });
-      } catch(e) {}
+      } catch(e) { clearInterval(_poll); }
     }, 3000);
   }
 
