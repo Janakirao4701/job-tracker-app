@@ -606,10 +606,14 @@ function renderDashboard() {
   // Critical fix: render chart after innerHTML is set — scripts inside innerHTML don't execute
   document.getElementById('page-content').innerHTML = dashHTML;
 
-  // Build weekly chart
+  // Build weekly chart — wait for Chart.js to load if not ready yet
   function buildWeeklyChart() {
     const el = document.getElementById('weekly-chart');
     if (!el) return;
+    if (typeof Chart === 'undefined') {
+      setTimeout(buildWeeklyChart, 50);
+      return;
+    }
     const labels = weeklyData.map(w => w.label);
     const data   = weeklyData.map(w => w.count);
     new Chart(el, {
