@@ -214,12 +214,26 @@
   }
 
   // ── UTILS ──
+  // workingDate: manually chosen date for this session (YYYY-MM-DD), stored in chrome.storage
+  let workingDate = '';
+
+  function getWorkingDateObj() {
+    if (workingDate) {
+      const [y,m,d] = workingDate.split('-').map(Number);
+      return new Date(y, m-1, d);
+    }
+    return new Date();
+  }
   function today() {
-    return new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return getWorkingDateObj().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
   function todayKey() {
-    const d = new Date();
+    const d = getWorkingDateObj();
     return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+  }
+  function todayISO() {
+    const d = getWorkingDateObj();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
   function escHtml(s) {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -490,9 +504,10 @@
     const thisWeek  = applications.filter(a => { const d = new Date(a.dateRaw); return (new Date()-d) <= 7*86400000; }).length;
     const interviews = applications.filter(a => a.status === 'Interview Scheduled' || a.status === 'Interview Done').length;
     const offers     = applications.filter(a => a.status === 'Offer').length;
+    const workDayLabel = workingDate ? workingDate : 'Today';
     const el = document.getElementById('rjd-stats');
     if (el) el.innerHTML = `
-      <div class="rjd-stat-box"><div class="rjd-stat-num">${todayApps}</div><div class="rjd-stat-lbl">Today</div></div>
+      <div class="rjd-stat-box"><div class="rjd-stat-num" id="rjd-today-count">${todayApps}</div><div class="rjd-stat-lbl">${escHtml(workDayLabel)}</div></div>
       <div class="rjd-stat-box"><div class="rjd-stat-num">${thisWeek}</div><div class="rjd-stat-lbl">This Week</div></div>
       <div class="rjd-stat-box"><div class="rjd-stat-num">${interviews}</div><div class="rjd-stat-lbl">Interviews</div></div>
       <div class="rjd-stat-box"><div class="rjd-stat-num rjd-stat-offer">${offers}</div><div class="rjd-stat-lbl">Offers</div></div>`;
@@ -709,6 +724,13 @@
 
           <div id="rjd-stats"></div>
 
+          <!-- Working Date Bar -->
+          <div id="rjd-working-date-bar" style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:#1a365d;border-bottom:1px solid #2a4a7f;font-size:12px;color:#bee3f8;">
+            <span style="font-weight:600;white-space:nowrap;">📅 Working Date:</span>
+            <input type="date" id="rjd-working-date-input" style="flex:1;padding:3px 8px;border-radius:5px;border:1px solid #2E75B6;background:#0f2744;color:#fff;font-size:12px;font-family:inherit;"/>
+            <button id="rjd-working-date-today" style="padding:3px 8px;border-radius:5px;border:none;background:#2E75B6;color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;">Today</button>
+          </div>
+
           <div id="rjd-filters">
             <input type="text" id="rjd-search-input" placeholder="Search company or title..." />
             <select id="rjd-status-filter">
@@ -804,6 +826,36 @@
     document.getElementById('rjd-search-input').addEventListener('input', (e) => { filterSearch = e.target.value; renderTable(); });
     document.getElementById('rjd-status-filter').addEventListener('change', (e) => { filterStatus = e.target.value; renderTable(); });
     document.getElementById('rjd-date-filter').addEventListener('change', (e) => { filterDate = e.target.value; renderTable(); });
+
+    // ── WORKING DATE picker ──
+    function setWorkingDate(iso) {
+      workingDate = iso;
+      const input = document.getElementById('rjd-working-date-input');
+      if (input) input.value = iso;
+      chrome.storage.local.set({ rjd_working_date: iso });
+      // Update stats to reflect new working date
+      updateStatsBar();
+    }
+    function updateStatsBar() {
+      const todayApps = applications.filter(a => a.dateKey === todayKey()).length;
+      const el = document.getElementById('rjd-today-count');
+      if (el) el.textContent = todayApps;
+    }
+    // Load saved working date
+    chrome.storage.local.get('rjd_working_date', r => {
+      const saved = r.rjd_working_date || '';
+      workingDate = saved;
+      const input = document.getElementById('rjd-working-date-input');
+      if (input) input.value = saved;
+    });
+    document.getElementById('rjd-working-date-input').addEventListener('change', e => {
+      setWorkingDate(e.target.value);
+    });
+    document.getElementById('rjd-working-date-today').addEventListener('click', () => {
+      const d = new Date();
+      const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      setWorkingDate(iso);
+    });
 
     // Quick extract & save
     let _extracting = false;

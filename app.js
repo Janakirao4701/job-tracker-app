@@ -46,6 +46,34 @@ function initials(name) {
 function today() { return new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
 function todayISO() { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
+// ── WORK DAY LOGIC ──
+// Your work day STARTS in the evening (default 6pm) and runs until the next evening.
+// So 6pm Mon → 5:59pm Tue = all labelled as "Mon" (the day it started).
+// Apps at 11pm Mon, 2am Tue, 9am Tue, 4pm Tue → all count as Mon's work day.
+function getWorkDayStart() {
+  return parseInt(localStorage.getItem('rjd_workday_start') || '18', 10); // default 6pm
+}
+function saveWorkDayStart(hour) {
+  localStorage.setItem('rjd_workday_start', String(hour));
+}
+// Returns the ISO work-day string (YYYY-MM-DD) for a given dateRaw timestamp
+// Logic: if hour >= workDayStart → work day = today (the session just started)
+//        if hour <  workDayStart → work day = yesterday (still in last night's session)
+function getWorkDayISO(dateRaw) {
+  if (!dateRaw) return '';
+  const d = new Date(dateRaw);
+  const startHour = getWorkDayStart();
+  if (d.getHours() < startHour) {
+    // Before today's session start → belongs to yesterday's work day
+    d.setDate(d.getDate() - 1);
+  }
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+// Work-day ISO for right now
+function workTodayISO() {
+  return getWorkDayISO(new Date().toISOString());
+}
+
 function showToast(msg, isError) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -458,7 +486,7 @@ function updateBadge() {
 function renderDashboard() {
   document.getElementById('page-content').innerHTML = '<div style="padding:60px;text-align:center"><div class="spinner"></div></div>';
   const now   = new Date();
-  const today = apps.filter(a => { if(!a.dateRaw) return false; const d=new Date(a.dateRaw); return d.toLocaleDateString('en-CA') === todayISO(); }).length;
+  const today = apps.filter(a => a.dateRaw && getWorkDayISO(a.dateRaw) === workTodayISO()).length;
   const week  = apps.filter(a => a.dateRaw && (now - new Date(a.dateRaw)) <= 7*86400000).length;
   const ints  = apps.filter(a => a.status==='Interview Scheduled'||a.status==='Interview Done').length;
   const offers= apps.filter(a => a.status==='Offer').length;
@@ -470,7 +498,7 @@ function renderDashboard() {
 
   // Build calendar day lookup
   const calendarData = {};
-  apps.forEach(a => { if (a.dateRaw) { const k = new Date(a.dateRaw).toLocaleDateString('en-CA'); calendarData[k] = (calendarData[k]||0)+1; } });
+  apps.forEach(a => { if (a.dateRaw) { const k = getWorkDayISO(a.dateRaw); calendarData[k] = (calendarData[k]||0)+1; } });
 
   // Build weekly progress data (last 6 weeks)
   const weeklyData = [];
@@ -900,10 +928,29 @@ function renderSettingsSection(sec) {
       <div style="background:#fff8f0;border:1px solid #fbd38d;border-radius:8px;padding:12px 16px;font-size:13px;color:#975a16;margin-bottom:20px;">
         To change your password, sign out and use the Forgot Password option on the sign-in screen.
       </div>
-      <div style="border-top:1px solid #f1f5f9;padding-top:20px;">
+      <div style="border-top:1px solid #f1f5f9;padding-top:20px;margin-top:4px;">
+        <div style="font-size:13px;font-weight:700;color:#1a202c;margin-bottom:4px;">🌙 Night Shift Cutoff</div>
+        <div style="font-size:12px;color:#718096;margin-bottom:10px;">If you work past midnight, applications before this hour are counted as the <strong>previous day</strong>. Affects Today count, calendar, and date export filters.</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <select id="cutoff-select" class="settings-input" style="width:160px;">
+            ${[0,1,2,3,4,5,6].map(h => `<option value="${h}" ${getWorkDayCutoff()===h?'selected':''}>${h===0?'Disabled (midnight)':h+':00 AM'}</option>`).join('')}
+          </select>
+          <button class="settings-btn" id="save-cutoff-btn" style="padding:8px 20px;">Save</button>
+          <span id="cutoff-msg" style="font-size:12px;color:#276749;"></span>
+        </div>
+      </div>
+      <div style="border-top:1px solid #f1f5f9;padding-top:20px;margin-top:20px;">
         <div style="font-size:13px;font-weight:700;color:#c53030;margin-bottom:10px;">Danger Zone</div>
         <button class="settings-danger-btn" id="delete-all-btn">Delete all my applications</button>
       </div>`;
+
+    document.getElementById('save-cutoff-btn').addEventListener('click', () => {
+      const h = parseInt(document.getElementById('cutoff-select').value, 10);
+      saveWorkDayCutoff(h);
+      const msg = document.getElementById('cutoff-msg');
+      msg.textContent = h === 0 ? 'Disabled ✓' : 'Saved — cutoff set to ' + h + ':00 AM ✓';
+      setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
+    });
 
     document.getElementById('delete-all-btn').addEventListener('click', async () => {
       if (!confirm('Delete ALL your applications? This cannot be undone.')) return;
@@ -966,12 +1013,45 @@ function renderSettingsSection(sec) {
 
 // ── EXPORT PAGE ──
 function renderExport() {
+  // Build list of unique WORK-DAY dates that have applications
+  // Use dateKey (working date chosen in extension) if available, else fallback to workday from dateRaw
+  const dateCounts = {};
+  apps.forEach(a => {
+    let k = '';
+    if (a.dateKey) {
+      const parts = a.dateKey.split('-');
+      k = parts[0] + '-' + String(parts[1]).padStart(2,'0') + '-' + String(parts[2]).padStart(2,'0');
+    } else if (a.dateRaw) {
+      k = getWorkDayISO(a.dateRaw);
+    }
+    if (k) dateCounts[k] = (dateCounts[k]||0)+1;
+  });
+  const uniqueDates = Object.keys(dateCounts).sort().reverse().slice(0, 7);
+  const wToday = workTodayISO();
+
   document.getElementById('page-content').innerHTML = `
+    <!-- Filter bar -->
+    <div class="section-card" style="padding:20px;max-width:700px;margin-bottom:20px;">
+      <div style="font-size:14px;font-weight:700;color:#1a202c;margin-bottom:12px;">📅 Filter by Date</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <button class="export-date-btn active" data-date="" style="">All (${apps.length})</button>
+        <button class="export-date-btn" data-date="${wToday}">Today (${dateCounts[wToday]||0})</button>
+        ${uniqueDates.filter(d => d !== wToday).map(d => `
+          <button class="export-date-btn" data-date="${d}">${d} (${dateCounts[d]})</button>
+        `).join('')}
+        <input type="date" id="export-custom-date" class="filter-input" style="height:34px;" title="Pick a custom date"/>
+      </div>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #f1f5f9;font-size:13px;color:#718096;">
+        Exporting: <strong id="export-count-label" style="color:#1F4E79;">${apps.length} applications</strong>
+      </div>
+    </div>
+
+    <!-- Export buttons -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:700px;">
       <div class="section-card" style="padding:24px;">
         <div style="font-size:32px;margin-bottom:12px;">📊</div>
         <div style="font-size:15px;font-weight:700;color:#1a202c;margin-bottom:6px;">Excel Report (.xlsx)</div>
-        <div style="font-size:13px;color:#718096;margin-bottom:20px;line-height:1.6;">Professional color-coded spreadsheet with Applications sheet and Summary Dashboard.</div>
+        <div style="font-size:13px;color:#718096;margin-bottom:20px;line-height:1.6;">Color-coded spreadsheet with Applications sheet and Summary Dashboard.</div>
         <button class="btn-export" id="export-xlsx-btn" style="width:100%;padding:10px;">Download Excel</button>
       </div>
       <div class="section-card" style="padding:24px;">
@@ -981,52 +1061,88 @@ function renderExport() {
         <button class="btn-new" id="export-csv-btn" style="width:100%;padding:10px;">Download CSV</button>
       </div>
     </div>
-    <div style="margin-top:20px;background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:20px;max-width:700px;">
-      <div style="font-size:14px;font-weight:700;color:#1a202c;margin-bottom:8px;">Export summary</div>
-      <div style="font-size:13px;color:#718096;">
-        <strong>${apps.length}</strong> total applications · 
-        <strong>${apps.filter(a=>a.resume).length}</strong> with resume · 
-        <strong>${apps.filter(a=>a.jd).length}</strong> with JD
-      </div>
-    </div>
     <div style="margin-top:16px;background:#ebf4ff;border-radius:10px;border:1px solid #bee3f8;padding:16px;max-width:700px;">
-      <div style="font-size:13px;font-weight:700;color:#2E75B6;margin-bottom:4px;">💡 Interview Notifications</div>
+      <div style="font-size:13px;font-weight:700;color:#2E75B6;margin-bottom:4px;">💡 Daily Target Tip</div>
       <div style="font-size:12px;color:#4a5568;line-height:1.6;">
-        To get notified on interview day — open any application in the tracker, set the <strong>Follow-up Date</strong> to your interview date, and make sure status is <strong>Interview Scheduled</strong>. You'll get a Chrome notification at 9am that day.
+        Applied 30 today? Click <strong>Today</strong> above then download — you'll get only today's applications in the sheet.
       </div>
     </div>`;
 
-  document.getElementById('export-csv-btn').addEventListener('click', () => {
-    if (!apps.length) { showToast('No applications to export', true); return; }
-    const headers = ['#','Company','Job Title','URL','Status','Date','Follow-up Date','Notes'];
-    const rows = apps.map((a,i) => [i+1,a.company,a.jobTitle,a.url,a.status,a.date,a.followUpDate||'',a.notes].map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(','));
-    const blob = new Blob([[headers.join(','),...rows].join('\n')], {type:'text/csv'});
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = (currentUser.name||'applications')+'_'+todayISO()+'.csv';
-    link.click();
-    showToast('CSV exported');
+  // ── Date filter state ──
+  let exportDate = ''; // '' = all
+
+  function getFilteredApps() {
+    if (!exportDate) return apps;
+    // Match by dateKey (set to working date in extension) OR fallback to dateRaw-based workday
+    return apps.filter(a => {
+      if (a.dateKey) {
+        // dateKey format is "YYYY-M-D", normalize it
+        const parts = a.dateKey.split('-');
+        const normalized = parts[0] + '-' + String(parts[1]).padStart(2,'0') + '-' + String(parts[2]).padStart(2,'0');
+        return normalized === exportDate;
+      }
+      return a.dateRaw && getWorkDayISO(a.dateRaw) === exportDate;
+    });
+  }
+
+  function updateExportLabel() {
+    const filtered = getFilteredApps();
+    document.getElementById('export-count-label').textContent = filtered.length + ' application' + (filtered.length !== 1 ? 's' : '');
+  }
+
+  function setExportDate(date) {
+    exportDate = date;
+    document.querySelectorAll('.export-date-btn').forEach(b => b.classList.toggle('active', b.dataset.date === date));
+    if (date) document.getElementById('export-custom-date').value = date;
+    else document.getElementById('export-custom-date').value = '';
+    updateExportLabel();
+  }
+
+  document.querySelectorAll('.export-date-btn').forEach(btn => {
+    btn.addEventListener('click', () => setExportDate(btn.dataset.date));
   });
 
+  document.getElementById('export-custom-date').addEventListener('change', e => {
+    setExportDate(e.target.value);
+    // Deselect all quick buttons since custom date is picked
+    document.querySelectorAll('.export-date-btn').forEach(b => b.classList.remove('active'));
+  });
+
+  // ── CSV Export ──
+  document.getElementById('export-csv-btn').addEventListener('click', () => {
+    const filtered = getFilteredApps();
+    if (!filtered.length) { showToast('No applications to export', true); return; }
+    const hdrs = ['#','Company','Job Title','URL','Status','Date','Follow-up Date','Notes'];
+    const rows = filtered.map((a,i) => [i+1,a.company,a.jobTitle,a.url,a.status,a.date,a.followUpDate||'',a.notes].map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(','));
+    const blob = new Blob([[hdrs.join(','),...rows].join('\n')], {type:'text/csv'});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = (currentUser.name||'applications') + '_' + (exportDate||todayISO()) + '.csv';
+    link.click();
+    showToast('CSV exported (' + filtered.length + ' rows)');
+  });
+
+  // ── XLSX Export ──
   document.getElementById('export-xlsx-btn').addEventListener('click', async () => {
-    if (!apps.length) { showToast('No applications to export', true); return; }
+    const filtered = getFilteredApps();
+    if (!filtered.length) { showToast('No applications to export', true); return; }
     showToast('Preparing export...');
     try {
-      // Warning fix #3: implement full XLSX export in web app — same logic as content.js
       const now = new Date();
+      const dateLabel = exportDate ? ' — ' + exportDate : '';
       const statusStyleMap = { 'Applied':2,'Interview Scheduled':3,'Interview Done':4,'Offer':5,'Rejected':6,'Skipped':7 };
       const numCols = 8;
       const colWidths = [5, 22, 30, 28, 20, 14, 45, 55];
       const rowHeights = {};
       const sheetRows = [];
-      sheetRows.push([{ v: 'Job Application Report — ' + currentUser.name, t:'s', s:15 }, ...Array(numCols-1).fill(null)]);
+      sheetRows.push([{ v: 'Job Application Report — ' + currentUser.name + dateLabel, t:'s', s:15 }, ...Array(numCols-1).fill(null)]);
       rowHeights[0] = 30;
-      sheetRows.push([{ v: 'Exported on ' + now.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) + '   ·   Total: ' + apps.length, t:'s', s:16 }, ...Array(numCols-1).fill(null)]);
+      sheetRows.push([{ v: 'Exported on ' + now.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) + '   ·   Total: ' + filtered.length, t:'s', s:16 }, ...Array(numCols-1).fill(null)]);
       rowHeights[1] = 18;
       sheetRows.push(Array(numCols).fill(null)); rowHeights[2] = 6;
       const xlsxHeaders = ['#','Company','Job Title','Job URL','Status','Date Applied','Resume Text','Job Description'];
       sheetRows.push(xlsxHeaders.map(h=>({ v:h, t:'s', s:1 }))); rowHeights[3] = 22;
-      apps.forEach((a,i) => {
+      filtered.forEach((a,i) => {
         const isAlt = i%2===1; const sStat = statusStyleMap[a.status]||2;
         const def=isAlt?8:0, wrap=isAlt?10:9, ctr=isAlt?14:13;
         const urlCell = a.url ? { v:'Open Link', t:'s', s:11, url:a.url } : { v:'—', t:'s', s:def };
@@ -1038,18 +1154,18 @@ function renderExport() {
         ]);
       });
       const STATUSES2 = ['Applied','Interview Scheduled','Interview Done','Offer','Rejected','Skipped'];
-      const statusCounts = {}; STATUSES2.forEach(s=>{ statusCounts[s]=apps.filter(a=>a.status===s).length; });
+      const statusCounts = {}; STATUSES2.forEach(s=>{ statusCounts[s]=filtered.filter(a=>a.status===s).length; });
       const s2rows = []; const s2heights = {};
-      s2rows.push([{ v:'Summary Dashboard', t:'s', s:15 }, null,null,null,null,null]); s2heights[0]=28;
+      s2rows.push([{ v:'Summary Dashboard' + dateLabel, t:'s', s:15 }, null,null,null,null,null]); s2heights[0]=28;
       s2rows.push([{ v:'User: '+currentUser.name+'   ·   '+now.toLocaleDateString(), t:'s', s:16 }, null,null,null,null,null]); s2heights[1]=16;
       s2rows.push(Array(6).fill(null)); s2heights[2]=10;
-      const kpis=[{label:'Total',value:String(apps.length)},{label:'This Week',value:String(apps.filter(a=>{const d=new Date(a.dateRaw);return(now-d)<=7*86400000;}).length)},{label:'Interviews',value:String((statusCounts['Interview Scheduled']||0)+(statusCounts['Interview Done']||0))},{label:'Offers',value:String(statusCounts['Offer']||0)},{label:'With Resume',value:String(apps.filter(a=>a.resume).length)},{label:'Success %',value:apps.length>0?Math.round(((statusCounts['Offer']||0)/apps.length)*100)+'%':'0%'}];
+      const kpis=[{label:'Total',value:String(filtered.length)},{label:'This Week',value:String(apps.filter(a=>{const d=new Date(a.dateRaw);return(now-d)<=7*86400000;}).length)},{label:'Interviews',value:String((statusCounts['Interview Scheduled']||0)+(statusCounts['Interview Done']||0))},{label:'Offers',value:String(statusCounts['Offer']||0)},{label:'With Resume',value:String(filtered.filter(a=>a.resume).length)},{label:'Success %',value:filtered.length>0?Math.round(((statusCounts['Offer']||0)/filtered.length)*100)+'%':'0%'}];
       const kpiStyles=[17,22,23,24,25,26];
       s2rows.push(kpis.map((k,i)=>({ v:k.label, t:'s', s:kpiStyles[i] }))); s2heights[3]=18;
       s2rows.push(kpis.map(k=>({ v:k.value, t:'s', s:18 }))); s2heights[4]=40;
       s2rows.push(Array(6).fill(null)); s2heights[5]=12;
       s2rows.push([{v:'Status',t:'s',s:19},{v:'Count',t:'s',s:19},{v:'%',t:'s',s:19},null,null,null]); s2heights[6]=20;
-      STATUSES2.forEach((st,i)=>{ const c=statusCounts[st]||0; const pct=apps.length>0?((c/apps.length)*100).toFixed(1)+'%':'0%'; const ss=statusStyleMap[st]||2; s2rows.push([{v:st,t:'s',s:ss},{v:String(c),t:'n',s:13},{v:pct,t:'s',s:13},null,null,null]); s2heights[7+i]=18; });
+      STATUSES2.forEach((st,i)=>{ const c=statusCounts[st]||0; const pct=filtered.length>0?((c/filtered.length)*100).toFixed(1)+'%':'0%'; const ss=statusStyleMap[st]||2; s2rows.push([{v:st,t:'s',s:ss},{v:String(c),t:'n',s:13},{v:pct,t:'s',s:13},null,null,null]); s2heights[7+i]=18; });
       const bytes = await window.buildXLSX([
         { name:'Applications', headers:xlsxHeaders, rows:sheetRows, colWidths, merges:['A1:H1','A2:H2'], rowHeights },
         { name:'Summary', headers:[], rows:s2rows, colWidths:[22,12,12,12,12,12], merges:['A1:F1','A2:F2'], rowHeights:s2heights }
@@ -1057,9 +1173,11 @@ function renderExport() {
       const blob = new Blob([bytes], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url; link.download = currentUser.name + '_' + todayISO() + '.xlsx';
+      link.href = url;
+      link.download = currentUser.name + '_' + (exportDate||todayISO()) + '.xlsx';
       document.body.appendChild(link); link.click(); document.body.removeChild(link);
-      URL.revokeObjectURL(url); showToast('Excel exported ✓');
+      URL.revokeObjectURL(url);
+      showToast('Excel exported ✓ (' + filtered.length + ' rows)');
     } catch(err) { showToast('Export failed: ' + err.message, true); }
   });
 }
