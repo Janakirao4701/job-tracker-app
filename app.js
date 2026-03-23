@@ -351,6 +351,13 @@ document.getElementById('forgot-submit').addEventListener('click', async () => {
 // ── SHOW APP ──
 async function showApp() {
   showSection('app-section');
+  // Topbar user info
+  const ta = document.getElementById('topbar-avatar');
+  const tn = document.getElementById('topbar-name');
+  const te = document.getElementById('topbar-email');
+  if (ta) ta.textContent = initials(currentUser.name);
+  if (tn) tn.textContent = currentUser.name;
+  if (te) te.textContent = currentUser.email;
   // Click topbar user → go to settings
   const tb = document.getElementById('topbar-user-btn');
   if (tb) tb.addEventListener('click', () => navigateTo('settings'));
