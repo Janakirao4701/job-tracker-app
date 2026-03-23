@@ -841,13 +841,9 @@
       const el = document.getElementById('rjd-today-count');
       if (el) el.textContent = todayApps;
     }
-    // Load saved working date
-    chrome.storage.local.get('rjd_working_date', r => {
-      const saved = r.rjd_working_date || '';
-      workingDate = saved;
-      const input = document.getElementById('rjd-working-date-input');
-      if (input) input.value = saved;
-    });
+    // Set the input to reflect already-loaded workingDate
+    const _wdInput = document.getElementById('rjd-working-date-input');
+    if (_wdInput && workingDate) _wdInput.value = workingDate;
     document.getElementById('rjd-working-date-input').addEventListener('change', e => {
       setWorkingDate(e.target.value);
     });
@@ -1221,10 +1217,14 @@
   const hasChromeStorage = typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
   const hasChromeRuntime = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage;
 
-  // On page load — check chrome.storage for existing session
+  // On page load — load working date AND session together so workingDate is set before any save
   if (hasChromeStorage) {
-    chrome.storage.local.get('rjd_session', r => {
+    chrome.storage.local.get(['rjd_session', 'rjd_working_date'], r => {
       if (chrome.runtime.lastError) return;
+      // Set workingDate FIRST before applySession renders the sidebar
+      if (r.rjd_working_date) {
+        workingDate = r.rjd_working_date;
+      }
       applySession(r.rjd_session || null);
     });
   }
