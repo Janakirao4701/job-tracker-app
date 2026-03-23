@@ -229,7 +229,7 @@
   }
   function todayKey() {
     const d = getWorkingDateObj();
-    return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
   function todayISO() {
     const d = getWorkingDateObj();
@@ -500,17 +500,34 @@
   // STATS
   // ════════════════════════════════════════
   function renderStats() {
-    const todayApps = applications.filter(a => a.dateKey === todayKey()).length;
-    const thisWeek  = applications.filter(a => { const d = new Date(a.dateRaw); return (new Date()-d) <= 7*86400000; }).length;
-    const interviews = applications.filter(a => a.status === 'Interview Scheduled' || a.status === 'Interview Done').length;
-    const offers     = applications.filter(a => a.status === 'Offer').length;
-    const workDayLabel = workingDate ? workingDate : 'Today';
+    const sessionApps = applications.filter(a => a.dateKey === todayKey()).length;
+    const thisWeek    = applications.filter(a => { const d = new Date(a.dateRaw); return (new Date()-d) <= 7*86400000; }).length;
+    const interviews  = applications.filter(a => a.status === 'Interview Scheduled' || a.status === 'Interview Done').length;
+    const offers      = applications.filter(a => a.status === 'Offer').length;
     const el = document.getElementById('rjd-stats');
     if (el) el.innerHTML = `
-      <div class="rjd-stat-box"><div class="rjd-stat-num" id="rjd-today-count">${todayApps}</div><div class="rjd-stat-lbl">${escHtml(workDayLabel)}</div></div>
+      <div class="rjd-stat-box"><div class="rjd-stat-num" id="rjd-today-count">${sessionApps}</div><div class="rjd-stat-lbl">This Session</div></div>
       <div class="rjd-stat-box"><div class="rjd-stat-num">${thisWeek}</div><div class="rjd-stat-lbl">This Week</div></div>
       <div class="rjd-stat-box"><div class="rjd-stat-num">${interviews}</div><div class="rjd-stat-lbl">Interviews</div></div>
       <div class="rjd-stat-box"><div class="rjd-stat-num rjd-stat-offer">${offers}</div><div class="rjd-stat-lbl">Offers</div></div>`;
+    // Update progress bar
+    updateSessionProgress();
+  }
+
+  function getSessionTarget() {
+    return parseInt(localStorage.getItem('rjd_session_target') || '30', 10);
+  }
+  function updateSessionProgress() {
+    const target     = getSessionTarget();
+    const done       = applications.filter(a => a.dateKey === todayKey()).length;
+    const pct        = Math.min(100, Math.round((done / target) * 100));
+    const progText   = document.getElementById('rjd-session-progress');
+    const progBar    = document.getElementById('rjd-progress-bar');
+    const targSel    = document.getElementById('rjd-target-select');
+    if (progText) progText.textContent = done + '/' + target;
+    if (progText) progText.style.color = done >= target ? '#68d391' : '#90cdf4';
+    if (progBar)  { progBar.style.width = pct + '%'; progBar.style.background = done >= target ? '#68d391' : '#2E75B6'; }
+    if (targSel)  targSel.value = String(target);
   }
 
   // ── TABLE ──
@@ -552,7 +569,7 @@
     tbody.innerHTML = filtered.map((app, idx) => {
       const sc = STATUS_COLORS[app.status] || STATUS_COLORS['Applied'];
       const resumeBtn = app.resume ? `<button class="rjd-view-resume-btn" data-id="${app.id}">View</button>` : `<span class="rjd-no-resume">—</span>`;
-      const urlBtn    = app.url    ? `<a href="${escHtml(app.url)}" target="_blank" class="rjd-url-link">Open</a>` : `<span class="rjd-no-resume">—</span>`;
+      const urlBtn    = app.url    ? `<a href="${escHtml(app.url)}" target="_blank" class="rjd-url-link">Open</a><button class="rjd-copy-url-btn" data-url="${escHtml(app.url)}" style="margin-left:4px;padding:2px 6px;font-size:10px;background:#ebf4ff;border:1px solid #bee3f8;border-radius:4px;color:#2E75B6;cursor:pointer;font-family:inherit;">Copy</button>` : `<span class="rjd-no-resume">—</span>`;
       // Warning fix #4: compare date strings directly — avoids UTC vs local timezone mismatch
       const isOverdue = app.followUpDate && app.followUpDate < todayKey().slice(0,10) && app.status !== 'Offer' && app.status !== 'Rejected';
       const followUpBadge = app.followUpDate ? `<div style="font-size:9px;color:${isOverdue?'#c53030':'#718096'};margin-top:1px;">${isOverdue?'⚠ Follow up: ':'📅 '} ${app.followUpDate}</div>` : '';
@@ -586,6 +603,15 @@
 
     tbody.querySelectorAll('.rjd-view-resume-btn').forEach(btn => {
       btn.addEventListener('click', (e) => { e.stopPropagation(); const app = applications.find(a=>a.id===btn.dataset.id); if(app) showResumeDetail(app); });
+    });
+
+    tbody.querySelectorAll('.rjd-copy-url-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(btn.dataset.url).then(() => {
+          btn.textContent = '✓'; setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+        }).catch(() => showToast('Copy failed', true));
+      });
     });
 
     tbody.querySelectorAll('.rjd-row').forEach(row => {
@@ -628,6 +654,28 @@
     document.getElementById('rjd-detail-title').textContent   = app.jobTitle || '—';
     document.getElementById('rjd-detail-url').href        = app.url || '#';
     document.getElementById('rjd-detail-url').textContent = app.url ? 'Open Job Link' : '—';
+    // Copy URL button
+    const copyUrlBtn = document.getElementById('rjd-copy-url-detail-btn');
+    if (copyUrlBtn) {
+      copyUrlBtn.style.display = app.url ? 'inline-block' : 'none';
+      copyUrlBtn.onclick = () => {
+        if (!app.url) return;
+        navigator.clipboard.writeText(app.url).then(() => {
+          copyUrlBtn.textContent = '✓'; setTimeout(() => { copyUrlBtn.textContent = 'Copy'; }, 1500);
+        }).catch(() => showToast('Copy failed', true));
+      };
+    }
+    // Copy JD button
+    const copyJdBtn = document.getElementById('rjd-copy-jd-btn');
+    if (copyJdBtn) {
+      copyJdBtn.onclick = () => {
+        const text = app.jd || '';
+        if (!text) { showToast('No JD to copy', true); return; }
+        navigator.clipboard.writeText(text).then(() => {
+          copyJdBtn.textContent = '✓ Copied'; setTimeout(() => { copyJdBtn.textContent = 'Copy JD'; }, 1500);
+        }).catch(() => showToast('Copy failed', true));
+      };
+    }
     document.getElementById('rjd-detail-date').textContent   = app.date   || '—';
     document.getElementById('rjd-detail-status').textContent = app.status || '—';
     document.getElementById('rjd-detail-jd').textContent     = app.jd     || 'No JD saved.';
@@ -724,11 +772,23 @@
 
           <div id="rjd-stats"></div>
 
-          <!-- Working Date Bar -->
-          <div id="rjd-working-date-bar" style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:#1a365d;border-bottom:1px solid #2a4a7f;font-size:12px;color:#bee3f8;">
-            <span style="font-weight:600;white-space:nowrap;">📅 Working Date:</span>
-            <input type="date" id="rjd-working-date-input" style="flex:1;padding:3px 8px;border-radius:5px;border:1px solid #2E75B6;background:#0f2744;color:#fff;font-size:12px;font-family:inherit;"/>
-            <button id="rjd-working-date-today" style="padding:3px 8px;border-radius:5px;border:none;background:#2E75B6;color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;">Today</button>
+          <!-- Session Bar -->
+          <div id="rjd-session-bar" style="padding:8px 12px;background:#1a365d;border-bottom:1px solid #2a4a7f;font-size:12px;color:#bee3f8;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <span style="font-weight:700;white-space:nowrap;">📅 Session:</span>
+              <input type="date" id="rjd-working-date-input" style="flex:1;padding:3px 8px;border-radius:5px;border:1px solid #2E75B6;background:#0f2744;color:#fff;font-size:12px;font-family:inherit;"/>
+              <button id="rjd-working-date-today" style="padding:3px 8px;border-radius:5px;border:none;background:#2E75B6;color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;">Today</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="white-space:nowrap;">🎯 Target:</span>
+              <select id="rjd-target-select" style="padding:3px 8px;border-radius:5px;border:1px solid #2E75B6;background:#0f2744;color:#fff;font-size:12px;font-family:inherit;flex:1;">
+                ${[10,15,20,25,30,35,40,50].map(n=>`<option value="${n}">${n} applications</option>`).join('')}
+              </select>
+              <span id="rjd-session-progress" style="font-weight:700;white-space:nowrap;color:#90cdf4;">0/30</span>
+            </div>
+            <div id="rjd-progress-bar-wrap" style="margin-top:6px;background:#0f2744;border-radius:4px;height:6px;overflow:hidden;">
+              <div id="rjd-progress-bar" style="height:6px;background:#2E75B6;border-radius:4px;width:0%;transition:width 0.3s;"></div>
+            </div>
           </div>
 
           <div id="rjd-filters">
@@ -738,6 +798,7 @@
               ${STATUSES.map(s=>`<option value="${s}">${s}</option>`).join('')}
             </select>
             <input type="date" id="rjd-date-filter" title="Filter by date" />
+            <button id="rjd-refresh-btn" title="Refresh" style="padding:5px 9px;background:#1a365d;border:1px solid #2E75B6;color:#90cdf4;border-radius:5px;font-size:13px;cursor:pointer;font-family:inherit;" >⟳</button>
             <button id="rjd-export-csv-btn" title="Export Excel">Export XLSX</button>
           </div>
 
@@ -782,11 +843,22 @@
           </div>
           <div class="rjd-panel-body">
             <div class="rjd-detail-row"><span class="rjd-detail-lbl">Job Title</span><span id="rjd-detail-title"></span></div>
-            <div class="rjd-detail-row"><span class="rjd-detail-lbl">URL</span><a id="rjd-detail-url" target="_blank" class="rjd-url-link"></a></div>
+            <div class="rjd-detail-row"><span class="rjd-detail-lbl">URL</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <a id="rjd-detail-url" target="_blank" class="rjd-url-link"></a>
+                <button id="rjd-copy-url-detail-btn" style="padding:2px 7px;font-size:10px;background:#ebf4ff;border:1px solid #bee3f8;border-radius:4px;color:#2E75B6;cursor:pointer;font-family:inherit;">Copy</button>
+              </div>
+            </div>
             <div class="rjd-detail-row"><span class="rjd-detail-lbl">Date</span><span id="rjd-detail-date"></span></div>
             <div class="rjd-detail-row"><span class="rjd-detail-lbl">Status</span><span id="rjd-detail-status"></span></div>
             <div class="rjd-detail-section"><div class="rjd-detail-lbl">Resume</div><div id="rjd-detail-resume-section" style="margin-top:6px;"></div></div>
-            <div class="rjd-detail-section"><div class="rjd-detail-lbl">Job Description</div><pre id="rjd-detail-jd" class="rjd-jd-text"></pre></div>
+            <div class="rjd-detail-section">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                <div class="rjd-detail-lbl">Job Description</div>
+                <button id="rjd-copy-jd-btn" style="padding:2px 8px;font-size:10px;background:#ebf4ff;border:1px solid #bee3f8;border-radius:4px;color:#2E75B6;cursor:pointer;font-family:inherit;">Copy JD</button>
+              </div>
+              <pre id="rjd-detail-jd" class="rjd-jd-text"></pre>
+            </div>
             <div class="rjd-detail-section">
               <div class="rjd-detail-lbl">Follow-up Date</div>
               <input type="date" id="rjd-detail-followup" style="width:100%;padding:6px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:12px;font-family:inherit;background:#fff !important;color:#1a202c !important;margin-top:4px;"/>
@@ -827,6 +899,17 @@
     document.getElementById('rjd-status-filter').addEventListener('change', (e) => { filterStatus = e.target.value; renderTable(); });
     document.getElementById('rjd-date-filter').addEventListener('change', (e) => { filterDate = e.target.value; renderTable(); });
 
+    document.getElementById('rjd-refresh-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('rjd-refresh-btn');
+      btn.textContent = '...'; btn.disabled = true;
+      try {
+        applications = await dbLoadApps();
+        renderTable();
+        showToast('Refreshed ✓');
+      } catch(e) { showToast('Refresh failed', true); }
+      btn.textContent = '⟳'; btn.disabled = false;
+    });
+
     // ── WORKING DATE picker ──
     function setWorkingDate(iso) {
       workingDate = iso;
@@ -852,6 +935,14 @@
       const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       setWorkingDate(iso);
     });
+    document.getElementById('rjd-target-select').addEventListener('change', e => {
+      localStorage.setItem('rjd_session_target', e.target.value);
+      updateSessionProgress();
+    });
+    // Init target select value
+    const _tSel = document.getElementById('rjd-target-select');
+    if (_tSel) _tSel.value = String(getSessionTarget());
+    updateSessionProgress();
 
     // Quick extract & save
     let _extracting = false;
