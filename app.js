@@ -222,15 +222,25 @@ function clearStoredSession() {
 // ── AUTH SETUP ──
 function setupAuth() {
   const stored = loadStoredSession();
-  if (stored && (stored.access_token || stored.token)) {
-    const token = stored.access_token || stored.token;
+  if (stored) {
+    const token = stored.access_token || stored.token || null;
     const refresh = stored.refresh_token || stored.refreshToken || '';
-    session = { access_token: token, refresh_token: refresh };
-    currentUser = stored.user
-      ? { id: stored.user.id, email: stored.user.email, name: stored.user.name || stored.user.email.split('@')[0] }
-      : null;
-    if (currentUser && token) { showApp(); return; }
+    const user = stored.user || null;
+
+    // Validate token looks like a JWT (starts with eyJ)
+    if (token && token.startsWith('eyJ') && user && user.id) {
+      session = { access_token: token, refresh_token: refresh };
+      currentUser = { 
+        id: user.id, 
+        email: user.email, 
+        name: user.name || user.email.split('@')[0] 
+      };
+      showApp();
+      return;
+    }
   }
+  // No valid session — clear and show login
+  clearStoredSession();
   showSection('auth-section');
 }
 
