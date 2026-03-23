@@ -28,7 +28,7 @@ const STATUSES = ['Applied','Interview Scheduled','Interview Done','Offer','Reje
 let session     = null;
 let currentUser = null;
 let apps        = [];
-let currentPage = 'kanban';
+let currentPage = 'dashboard';
 let authMode    = 'signin';
 let filterStatus = 'all';
 let filterSearch = '';
@@ -36,7 +36,12 @@ let filterDate   = '';
 
 // ── UTILS ──
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function initials(name) { return (name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
+function initials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(' ').filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0,2).toUpperCase();
+  return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
+}
 function today() { return new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
 function todayISO() { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
@@ -264,7 +269,7 @@ async function showApp() {
   document.getElementById('sb-email').textContent  = currentUser.email;
   showLoading();
   apps = await loadApps();
-  navigateTo('kanban');
+  navigateTo('dashboard');
 }
 
 function showSection(id) {
@@ -285,7 +290,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
 function navigateTo(page) {
   currentPage = page;
   document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.page === page));
-  const titles = { dashboard:'Overview', applications:'Applications', kanban:'Kanban Board', settings:'Settings', export:'Export', privacy:'Privacy Policy' };
+  const titles = { dashboard:'Overview', applications:'Applications', settings:'Settings', export:'Export', privacy:'Privacy Policy' };
   document.getElementById('page-title').textContent = titles[page] || page;
   document.getElementById('add-app-btn').classList.toggle('hidden', page !== 'applications');
   renderPage(page);
@@ -295,18 +300,18 @@ function renderPage(page) {
   updateBadge();
   if (page === 'dashboard')    renderDashboard();
   else if (page === 'applications') renderApplications();
-  else if (page === 'kanban')  renderKanban();
   else if (page === 'settings') renderSettings();
   else if (page === 'export')  renderExport();
   else if (page === 'privacy') renderPrivacy();
 }
 
 function updateBadge() {
-  document.getElementById('total-badge').textContent = apps.length + ' application' + (apps.length !== 1 ? 's' : '');
+  document.getElementById('total-badge').textContent = apps.length + ' application' + (apps.length !== 1 ? 's' : '') + ' tracked';
 }
 
 // ── DASHBOARD ──
 function renderDashboard() {
+  document.getElementById('page-content').innerHTML = '<div style="padding:60px;text-align:center"><div class="spinner"></div></div>';
   const now   = new Date();
   const today = apps.filter(a => { if(!a.dateRaw) return false; const d=new Date(a.dateRaw); return d.toLocaleDateString('en-CA') === todayISO(); }).length;
   const week  = apps.filter(a => a.dateRaw && (now - new Date(a.dateRaw)) <= 7*86400000).length;
@@ -467,122 +472,6 @@ function renderApplications() {
   });
 }
 
-// ── KANBAN ──
-function renderKanban() {
-  const total = apps.length;
-  document.getElementById('page-content').innerHTML = `
-    <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
-      ${STATUSES.map(s => {
-        const count = apps.filter(a=>a.status===s).length;
-        const sc = STATUS_BG[s]||STATUS_BG.Applied;
-        return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 14px;display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="filterKanban('${s}')">
-          <div style="width:8px;height:8px;border-radius:50%;background:${sc.color};flex-shrink:0;"></div>
-          <span style="font-size:12px;color:#4a5568;">${s}</span>
-          <span style="font-size:12px;font-weight:700;color:#1a202c;">${count}</span>
-        </div>`;
-      }).join('')}
-      <div style="margin-left:auto;font-size:12px;color:#a0aec0;display:flex;align-items:center;">${total} total</div>
-    </div>
-    <div class="kanban-board" id="kanban-board-inner">
-      ${STATUSES.map(s => {
-        const sc  = STATUS_BG[s]||STATUS_BG.Applied;
-        const col = apps.filter(a => a.status === s);
-        return `<div class="kanban-col" data-status="${s}">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-            <div style="display:flex;align-items:center;gap:6px;">
-              <div style="width:10px;height:10px;border-radius:50%;background:${sc.color};"></div>
-              <span style="font-size:11px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:0.5px;">${s}</span>
-            </div>
-            <span style="font-size:11px;font-weight:700;background:${sc.bg};color:${sc.color};padding:1px 7px;border-radius:10px;">${col.length}</span>
-          </div>
-          ${col.map(a => `
-            <div class="kanban-card" data-id="${a.id}" onclick="openKanbanCard('${a.id}')">
-              <div class="kanban-card-company">${esc(a.company||'—')}</div>
-              <div class="kanban-card-title">${esc(a.jobTitle||'—')}</div>
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
-                <div class="kanban-card-date">${esc(a.date||'—')}</div>
-                ${a.followUpDate ? `<div style="font-size:9px;color:${a.followUpDate<=todayISO()?'#c53030':'#718096'};">📅 ${a.followUpDate}</div>` : ''}
-              </div>
-              ${a.resume ? '<div style="margin-top:4px;font-size:9px;color:#276749;font-weight:600;">📄 Resume</div>' : ''}
-              ${a.notes ? '<div style="margin-top:4px;font-size:9px;color:#718096;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;">' + esc(a.notes.slice(0,60)) + (a.notes.length>60?'...':'') + '</div>' : ''}
-            </div>`).join('') || `
-          <div style="border:2px dashed #e2e8f0;border-radius:8px;padding:20px;text-align:center;">
-            <div style="font-size:11px;color:#cbd5e0;">No applications</div>
-          </div>`}
-        </div>`;
-      }).join('')}
-    </div>
-    <!-- Card detail modal -->
-    <div id="kanban-detail" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;display:none;align-items:center;justify-content:center;padding:20px;">
-      <div style="background:#fff;border-radius:16px;width:100%;max-width:560px;max-height:85vh;overflow-y:auto;">
-        <div style="padding:20px 24px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
-          <div id="kd-company" style="font-size:17px;font-weight:700;color:#1a202c;"></div>
-          <button onclick="closeKanbanCard()" style="background:none;border:none;font-size:20px;color:#a0aec0;cursor:pointer;">✕</button>
-        </div>
-        <div style="padding:20px 24px;">
-          <div id="kd-title" style="font-size:14px;color:#718096;margin-bottom:16px;"></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-            <div><div style="font-size:10px;font-weight:700;color:#a0aec0;text-transform:uppercase;margin-bottom:4px;">Status</div>
-              <select id="kd-status" class="filter-select" style="width:100%;"></select></div>
-            <div><div style="font-size:10px;font-weight:700;color:#a0aec0;text-transform:uppercase;margin-bottom:4px;">Follow-up Date</div>
-              <input type="date" id="kd-followup" class="filter-input" style="width:100%;"/></div>
-          </div>
-          <div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;color:#a0aec0;text-transform:uppercase;margin-bottom:4px;">Notes</div>
-            <textarea id="kd-notes" style="width:100%;padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;min-height:80px;outline:none;" placeholder="Add notes..."></textarea></div>
-          <div id="kd-url-row" style="margin-bottom:12px;"></div>
-          <div style="display:flex;gap:8px;justify-content:space-between;">
-            <button onclick="deleteKanbanCard()" style="background:#fff5f5;color:#c53030;border:1px solid #fed7d7;border-radius:7px;padding:7px 16px;font-size:12px;cursor:pointer;font-family:inherit;">Delete</button>
-            <button onclick="saveKanbanCard()" class="btn-export" style="padding:8px 20px;">Save changes</button>
-          </div>
-        </div>
-      </div>
-    </div>`;
-}
-
-let kanbanDetailId = null;
-function openKanbanCard(id) {
-  const app = apps.find(a => a.id === id);
-  if (!app) return;
-  kanbanDetailId = id;
-  document.getElementById('kd-company').textContent = app.company || '—';
-  document.getElementById('kd-title').textContent   = app.jobTitle || '—';
-  document.getElementById('kd-notes').value         = app.notes || '';
-  document.getElementById('kd-followup').value      = app.followUpDate || '';
-  document.getElementById('kd-status').innerHTML    = STATUSES.map(s => `<option value="${s}" ${app.status===s?'selected':''}>${s}</option>`).join('');
-  document.getElementById('kd-url-row').innerHTML   = app.url
-    ? `<a href="${esc(app.url)}" target="_blank" class="url-link" style="font-size:13px;">Open job posting ↗</a>`
-    : '';
-  document.getElementById('kanban-detail').style.display = 'flex';
-}
-function closeKanbanCard() {
-  document.getElementById('kanban-detail').style.display = 'none';
-  kanbanDetailId = null;
-}
-async function saveKanbanCard() {
-  const app = apps.find(a => a.id === kanbanDetailId);
-  if (!app) return;
-  app.status      = document.getElementById('kd-status').value;
-  app.notes       = document.getElementById('kd-notes').value;
-  app.followUpDate= document.getElementById('kd-followup').value || '';
-  await updateApp(app);
-  closeKanbanCard();
-  renderKanban();
-  showToast('Saved');
-}
-async function deleteKanbanCard() {
-  if (!confirm('Delete this application?')) return;
-  await deleteApp(kanbanDetailId);
-  apps = apps.filter(a => a.id !== kanbanDetailId);
-  closeKanbanCard();
-  renderKanban();
-  updateBadge();
-  showToast('Deleted');
-}
-function filterKanban(status) {
-  filterStatus = filterStatus === status ? 'all' : status;
-  renderKanban();
-}
-
 // ── SETTINGS ──
 let settingsSection = 'apikey';
 function renderSettings() {
@@ -614,13 +503,13 @@ function renderSettingsSection(sec) {
       <div class="settings-info-box">Your key is stored only in your browser. It is sent directly to Google Gemini — never to any other server.</div>
       <div id="settings-msg"></div>
       <div class="settings-field"><label>API Key</label>
-        <div style="display:flex;gap:8px;">
-          <input type="password" class="settings-input" id="key-input" value="${esc(savedKey)}" placeholder="AIzaSy..." style="flex:1"/>
-          <button class="btn-new" id="show-key-btn" style="white-space:nowrap;padding:0 14px;">Show</button>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <input type="password" class="settings-input" id="key-input" value="${esc(savedKey)}" placeholder="AIzaSy..." style="flex:1;max-width:520px;"/>
+          <button class="btn-new" id="show-key-btn" style="white-space:nowrap;padding:0 16px;height:42px;">Show</button>
         </div>
-      </div>
-      <div style="display:flex;gap:10px;margin-bottom:20px;">
-        <button class="settings-btn" id="save-key-btn">Save Key</button>
+        <div style="display:flex;gap:10px;margin-bottom:20px;">
+          <button class="settings-btn" id="save-key-btn" style="padding:10px 28px;font-size:14px;">Save Key</button>
+        </div>
       </div>
       <div style="font-size:13px;color:#4a5568;background:#f8fafc;border-radius:8px;padding:14px;border:1px solid #e2e8f0;">
         <strong>Get a free key:</strong><br>
@@ -746,6 +635,12 @@ function renderExport() {
         <strong>${apps.filter(a=>a.resume).length}</strong> with resume · 
         <strong>${apps.filter(a=>a.jd).length}</strong> with JD
       </div>
+    </div>
+    <div style="margin-top:16px;background:#ebf4ff;border-radius:10px;border:1px solid #bee3f8;padding:16px;max-width:700px;">
+      <div style="font-size:13px;font-weight:700;color:#2E75B6;margin-bottom:4px;">💡 Interview Notifications</div>
+      <div style="font-size:12px;color:#4a5568;line-height:1.6;">
+        To get notified on interview day — open any application in the tracker, set the <strong>Follow-up Date</strong> to your interview date, and make sure status is <strong>Interview Scheduled</strong>. You'll get a Chrome notification at 9am that day.
+      </div>
     </div>`;
 
   document.getElementById('export-csv-btn').addEventListener('click', () => {
@@ -775,10 +670,10 @@ function renderPrivacy() {
 
 // ── SIGN OUT ──
 document.getElementById('signout-btn').addEventListener('click', async () => {
+  if (!confirm('Sign out of Job Tracker?')) return;
   await signOut();
   clearStoredSession();
   session = null; currentUser = null; apps = [];
-  // Clear all form fields so previous user's data isn't visible
   const fields = ['auth-email','auth-password','auth-name','forgot-email'];
   fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('auth-msg').innerHTML = '';
