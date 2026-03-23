@@ -53,7 +53,7 @@ function showToast(msg, isError) {
 }
 
 function headers(extra) {
-  const token = session?.access_token || session?.token || SUPABASE_KEY;
+  const token = (session && (session.access_token || session.token)) || SUPABASE_KEY;
   return { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+token, ...extra };
 }
 
@@ -183,8 +183,10 @@ async function loadGeminiKeyDB() {
 
 function saveSession(data) {
   const payload = {
-    token: data.access_token,
-    refreshToken: data.refresh_token || '',
+    token:         data.access_token,
+    access_token:  data.access_token,
+    refresh_token: data.refresh_token || '',
+    refreshToken:  data.refresh_token || '',
     user: {
       id:    data.user.id,
       email: data.user.email,
@@ -221,14 +223,13 @@ function clearStoredSession() {
 function setupAuth() {
   const stored = loadStoredSession();
   if (stored && (stored.access_token || stored.token)) {
-    // Support both old format (access_token) and new format (token)
-    session = stored.access_token
-      ? { access_token: stored.access_token, refresh_token: stored.refresh_token }
-      : { access_token: stored.token, refresh_token: stored.refreshToken };
+    const token = stored.access_token || stored.token;
+    const refresh = stored.refresh_token || stored.refreshToken || '';
+    session = { access_token: token, refresh_token: refresh };
     currentUser = stored.user
       ? { id: stored.user.id, email: stored.user.email, name: stored.user.name || stored.user.email.split('@')[0] }
       : null;
-    if (currentUser) { showApp(); return; }
+    if (currentUser && token) { showApp(); return; }
   }
   showSection('auth-section');
 }
