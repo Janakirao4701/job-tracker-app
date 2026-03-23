@@ -1,3 +1,5 @@
+// ── CONFIG ── (Quality note: popup runs in its own isolated context — cannot import from background.js)
+// These must match background.js exactly. If rotating keys, update all 4 files: app.js, content.js, background.js, popup.js
 const SUPABASE_URL = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucWJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
 

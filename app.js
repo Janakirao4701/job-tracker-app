@@ -177,13 +177,19 @@ async function saveGeminiKeyDB(key) {
       body: JSON.stringify({ username: currentUser.id, gemini_key: key })
     });
     if (res.ok) {
-      // Also save locally for fast access
       localStorage.setItem('rjd_gemini_key_' + currentUser.id, key);
+      // Critical fix #5: also sync to chrome.storage so the extension sidebar can read it
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ rjd_gemini_key: key });
+      }
       return true;
     }
   } catch(e) {}
-  // Fallback to localStorage only
+  // Fallback to local storage only
   localStorage.setItem('rjd_gemini_key_' + currentUser.id, key);
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.set({ rjd_gemini_key: key });
+  }
   return false;
 }
 
@@ -510,6 +516,15 @@ function renderDashboard() {
         </tbody>
       </table>
     </div>` : ''}`;
+
+  // Critical fix #2: dashHTML was built but never inserted — dashboard showed spinner forever
+  document.getElementById('page-content').innerHTML = dashHTML;
+
+  if (apps.length > 6) {
+    const viewAllBtn = document.getElementById('view-all-btn');
+    if (viewAllBtn) viewAllBtn.addEventListener('click', () => navigateTo('applications'));
+  }
+}
 }
 
 // ── APPLICATIONS TABLE ──
@@ -619,7 +634,17 @@ function renderSettingsSection(sec) {
   if (!panel) return;
 
   if (sec === 'apikey') {
-    const savedKey = localStorage.getItem('rjd_gemini_key_' + (currentUser?.id||'')) || '';
+    // Critical fix #5: read from chrome.storage first (shared with extension), fall back to localStorage
+    const localKey = localStorage.getItem('rjd_gemini_key_' + (currentUser?.id||'')) || '';
+    let savedKey = localKey;
+    if (!savedKey && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get('rjd_gemini_key', r => {
+        if (r.rjd_gemini_key) {
+          const input = document.getElementById('key-input');
+          if (input) input.value = r.rjd_gemini_key;
+        }
+      });
+    }
     panel.innerHTML = `
       <div class="settings-section-title">Gemini API Key</div>
       <div class="settings-section-sub">Powers AI extraction in the Chrome extension. Free from Google.</div>
@@ -779,16 +804,68 @@ function renderExport() {
     showToast('CSV exported');
   });
 
-  document.getElementById('export-xlsx-btn').addEventListener('click', () => {
-    showToast('Use the extension\'s Export XLSX button for the full Excel report', false);
+  document.getElementById('export-xlsx-btn').addEventListener('click', async () => {
+    if (!apps.length) { showToast('No applications to export', true); return; }
+    showToast('Preparing export...');
+    try {
+      // Warning fix #3: implement full XLSX export in web app — same logic as content.js
+      const now = new Date();
+      const statusStyleMap = { 'Applied':2,'Interview Scheduled':3,'Interview Done':4,'Offer':5,'Rejected':6,'Skipped':7 };
+      const numCols = 8;
+      const colWidths = [5, 22, 30, 28, 20, 14, 45, 55];
+      const rowHeights = {};
+      const sheetRows = [];
+      sheetRows.push([{ v: 'Job Application Report — ' + currentUser.name, t:'s', s:15 }, ...Array(numCols-1).fill(null)]);
+      rowHeights[0] = 30;
+      sheetRows.push([{ v: 'Exported on ' + now.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) + '   ·   Total: ' + apps.length, t:'s', s:16 }, ...Array(numCols-1).fill(null)]);
+      rowHeights[1] = 18;
+      sheetRows.push(Array(numCols).fill(null)); rowHeights[2] = 6;
+      const xlsxHeaders = ['#','Company','Job Title','Job URL','Status','Date Applied','Resume Text','Job Description'];
+      sheetRows.push(xlsxHeaders.map(h=>({ v:h, t:'s', s:1 }))); rowHeights[3] = 22;
+      apps.forEach((a,i) => {
+        const isAlt = i%2===1; const sStat = statusStyleMap[a.status]||2;
+        const def=isAlt?8:0, wrap=isAlt?10:9, ctr=isAlt?14:13;
+        const urlCell = a.url ? { v:'Open Link', t:'s', s:11, url:a.url } : { v:'—', t:'s', s:def };
+        rowHeights[4+i] = (a.resume||a.jd) ? 90 : 18;
+        sheetRows.push([
+          { v:String(i+1), t:'n', s:ctr }, { v:a.company||'—', t:'s', s:def },
+          { v:a.jobTitle||'—', t:'s', s:def }, urlCell, { v:a.status||'—', t:'s', s:sStat },
+          { v:a.date||'—', t:'s', s:ctr }, { v:a.resume||'', t:'s', s:wrap }, { v:a.jd||'', t:'s', s:wrap },
+        ]);
+      });
+      const STATUSES2 = ['Applied','Interview Scheduled','Interview Done','Offer','Rejected','Skipped'];
+      const statusCounts = {}; STATUSES2.forEach(s=>{ statusCounts[s]=apps.filter(a=>a.status===s).length; });
+      const s2rows = []; const s2heights = {};
+      s2rows.push([{ v:'Summary Dashboard', t:'s', s:15 }, null,null,null,null,null]); s2heights[0]=28;
+      s2rows.push([{ v:'User: '+currentUser.name+'   ·   '+now.toLocaleDateString(), t:'s', s:16 }, null,null,null,null,null]); s2heights[1]=16;
+      s2rows.push(Array(6).fill(null)); s2heights[2]=10;
+      const kpis=[{label:'Total',value:String(apps.length)},{label:'This Week',value:String(apps.filter(a=>{const d=new Date(a.dateRaw);return(now-d)<=7*86400000;}).length)},{label:'Interviews',value:String((statusCounts['Interview Scheduled']||0)+(statusCounts['Interview Done']||0))},{label:'Offers',value:String(statusCounts['Offer']||0)},{label:'With Resume',value:String(apps.filter(a=>a.resume).length)},{label:'Success %',value:apps.length>0?Math.round(((statusCounts['Offer']||0)/apps.length)*100)+'%':'0%'}];
+      const kpiStyles=[17,22,23,24,25,26];
+      s2rows.push(kpis.map((k,i)=>({ v:k.label, t:'s', s:kpiStyles[i] }))); s2heights[3]=18;
+      s2rows.push(kpis.map(k=>({ v:k.value, t:'s', s:18 }))); s2heights[4]=40;
+      s2rows.push(Array(6).fill(null)); s2heights[5]=12;
+      s2rows.push([{v:'Status',t:'s',s:19},{v:'Count',t:'s',s:19},{v:'%',t:'s',s:19},null,null,null]); s2heights[6]=20;
+      STATUSES2.forEach((st,i)=>{ const c=statusCounts[st]||0; const pct=apps.length>0?((c/apps.length)*100).toFixed(1)+'%':'0%'; const ss=statusStyleMap[st]||2; s2rows.push([{v:st,t:'s',s:ss},{v:String(c),t:'n',s:13},{v:pct,t:'s',s:13},null,null,null]); s2heights[7+i]=18; });
+      const bytes = await window.buildXLSX([
+        { name:'Applications', headers:xlsxHeaders, rows:sheetRows, colWidths, merges:['A1:H1','A2:H2'], rowHeights },
+        { name:'Summary', headers:[], rows:s2rows, colWidths:[22,12,12,12,12,12], merges:['A1:F1','A2:F2'], rowHeights:s2heights }
+      ]);
+      const blob = new Blob([bytes], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = currentUser.name + '_' + todayISO() + '.xlsx';
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      URL.revokeObjectURL(url); showToast('Excel exported ✓');
+    } catch(err) { showToast('Export failed: ' + err.message, true); }
   });
 }
 
 // ── PRIVACY PAGE ──
 function renderPrivacy() {
+  // Quality fix #4: load local privacy.html — was using fragile external Vercel iframe URL
   document.getElementById('page-content').innerHTML = `
     <div style="max-width:700px;">
-      <iframe src="https://job-tracker-app-iota-beryl.vercel.app/privacy.html" style="width:100%;height:800px;border:none;border-radius:12px;"></iframe>
+      <iframe src="privacy.html" style="width:100%;height:800px;border:none;border-radius:12px;"></iframe>
     </div>`;
 }
 

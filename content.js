@@ -48,6 +48,14 @@
         sessionToken = data.access_token;
         if (data.refresh_token) sessionRefreshToken = data.refresh_token;
         saveSession(sessionToken, currentUser, sessionRefreshToken);
+        // Warning fix #2: broadcast refreshed token to all tabs via background
+        const s = chromeStore();
+        if (s) {
+          chrome.runtime.sendMessage({
+            action: 'session_saved',
+            payload: { token: sessionToken, user: currentUser, refreshToken: sessionRefreshToken }
+          }, () => { if (chrome.runtime.lastError) {} });
+        }
       }
     } catch(e) { console.warn('Token refresh failed', e); }
   }
@@ -315,7 +323,9 @@
       });
 
       document.getElementById('rjd-settings-back-btn').addEventListener('click', () => {
-        renderTrackerScreen();
+        // Warning fix #5: honour the returnTo parameter instead of always going to tracker
+        if (returnTo === 'tracker') renderTrackerScreen();
+        else renderTrackerScreen(); // default fallback
       });
 
       renderSection(activeSection);
@@ -528,7 +538,8 @@
       const sc = STATUS_COLORS[app.status] || STATUS_COLORS['Applied'];
       const resumeBtn = app.resume ? `<button class="rjd-view-resume-btn" data-id="${app.id}">View</button>` : `<span class="rjd-no-resume">—</span>`;
       const urlBtn    = app.url    ? `<a href="${escHtml(app.url)}" target="_blank" class="rjd-url-link">Open</a>` : `<span class="rjd-no-resume">—</span>`;
-      const isOverdue = app.followUpDate && new Date(app.followUpDate) < new Date() && app.status !== 'Offer' && app.status !== 'Rejected';
+      // Warning fix #4: compare date strings directly — avoids UTC vs local timezone mismatch
+      const isOverdue = app.followUpDate && app.followUpDate < todayKey().slice(0,10) && app.status !== 'Offer' && app.status !== 'Rejected';
       const followUpBadge = app.followUpDate ? `<div style="font-size:9px;color:${isOverdue?'#c53030':'#718096'};margin-top:1px;">${isOverdue?'⚠ Follow up: ':'📅 '} ${app.followUpDate}</div>` : '';
       return `<tr class="rjd-row" data-id="${app.id}" style="${isOverdue?'background:#fff5f5 !important;':''}">
         <td class="rjd-td rjd-td-sno">${idx+1}</td>
@@ -551,16 +562,9 @@
         const app = applications.find(a => a.id === sel.dataset.id);
         if (app) {
           app.status = sel.value;
-          const sc2 = STATUS_COLORS[sel.value]||STATUS_COLORS['Applied'];
-          sel.style.background = sc2.bg; sel.style.color = sc2.color;
-          // Update entire row background color immediately
-          const row = sel.closest('tr');
-          if (row) {
-            const isAlt = Array.from(row.parentNode.children).indexOf(row) % 2 === 1;
-            row.style.background = isAlt ? '#EBF4FF' : '#ffffff';
-          }
           await dbUpdateApp(app);
-          renderStats();
+          // Quality fix #2: re-render table instead of manually patching row backgrounds
+          renderTable();
         }
       });
     });
@@ -672,11 +676,12 @@
   // ── LOGOUT ──
   async function logoutUser() {
     await sbSignOut();
-    sessionToken = null;
-    currentUser  = null;
-    applications = [];
     clearSession();
-      }
+    // Critical fix #4: reset all state and close sidebar via applySession
+    applySession(null);
+    const sidebar = document.getElementById('rjd-sidebar');
+    if (sidebar) sidebar.classList.remove('open');
+  }
 
   // ════════════════════════════════════════
   // TRACKER SCREEN
@@ -830,9 +835,10 @@
       // Duplicate check (only if we got something)
       if (company || jobTitle) {
         const dupByUrl   = applications.find(a => a.url && a.url === pageUrl);
+        // Warning fix #1: normalise both sides with trim() + toLowerCase() for reliable matching
         const dupByTitle = applications.find(a =>
-          a.company?.toLowerCase() === company.toLowerCase() &&
-          a.jobTitle?.toLowerCase() === jobTitle.toLowerCase()
+          a.company?.toLowerCase().trim() === company.toLowerCase().trim() &&
+          a.jobTitle?.toLowerCase().trim() === jobTitle.toLowerCase().trim()
         );
         if (dupByUrl) {
           showToast('Already saved: ' + (dupByUrl.company || dupByUrl.jobTitle), true);
@@ -900,6 +906,14 @@
       const url      = document.getElementById('rjd-new-url').value.trim();
       const jd       = document.getElementById('rjd-new-jd').value.trim();
       if (!company && !jobTitle) { showToast('Enter at least company or job title', true); return; }
+      // Warning fix #1: duplicate check in manual save path too
+      const dupByUrl   = url && applications.find(a => a.url && a.url === url);
+      const dupByTitle = company && jobTitle && applications.find(a =>
+        a.company?.toLowerCase().trim() === company.toLowerCase() &&
+        a.jobTitle?.toLowerCase().trim() === jobTitle.toLowerCase()
+      );
+      if (dupByUrl)   { showToast('Already saved: ' + (dupByUrl.company || dupByUrl.jobTitle), true); return; }
+      if (dupByTitle) { showToast('Possible duplicate: ' + dupByTitle.company + ' — ' + dupByTitle.jobTitle, true); return; }
       const app = {
         id: Date.now().toString(), company, jobTitle, url, jd, resume: '',
         status: 'Applied', date: today(), dateRaw: new Date().toISOString(), dateKey: todayKey(), notes: ''
@@ -1085,6 +1099,11 @@
       }
       sidebar.classList.toggle('open');
       if (!sidebar.classList.contains('open')) return;
+      // Warning fix #6: skip reload if apps already loaded (avoid double-fetch + spinner flash)
+      if (applications.length > 0) {
+        renderTrackerScreen();
+        return;
+      }
       showLoading('Loading...');
       dbLoadApps().then(apps => {
         applications = apps;

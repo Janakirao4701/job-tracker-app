@@ -1,3 +1,5 @@
+// ── SHARED CONFIG ──
+// Single source of truth for Supabase credentials (Quality fix #1)
 const SUPABASE_URL = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucWJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
 
@@ -7,7 +9,13 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
     // Broadcast to all open tabs so content scripts update TRACK button immediately
     chrome.tabs.query({}, (tabs) => {
       tabs.forEach(tab => {
-        chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
+        chrome.tabs.sendMessage(tab.id, msg).catch(e => {
+          // Quality fix #3: only silence expected "no receiver" errors, log real ones
+          if (!e.message.includes('Receiving end does not exist') &&
+              !e.message.includes('Could not establish connection')) {
+            console.warn('[RJD] sendMessage error on tab', tab.id, e.message);
+          }
+        });
       });
     });
   }
@@ -46,13 +54,18 @@ scheduleNextCheck();
 
 async function checkInterviewsToday() {
   const { rjd_session } = await chrome.storage.local.get('rjd_session');
-  if (!rjd_session || !rjd_session.token) return;
+  if (!rjd_session) return;
+
+  // Critical fix #3: support both token formats — standardised format uses 'token',
+  // but guard against legacy 'access_token' key too
+  const token = rjd_session.token || rjd_session.access_token;
+  if (!token) return;
 
   const today = new Date().toLocaleDateString('en-CA');
   try {
     const res = await fetch(
       SUPABASE_URL + "/rest/v1/applications?status=eq.Interview Scheduled&select=company,job_title,follow_up_date",
-      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + rjd_session.token, 'Content-Type': 'application/json' } }
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' } }
     );
     if (!res.ok) return;
     const apps = await res.json();
