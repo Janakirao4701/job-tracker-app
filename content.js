@@ -25,6 +25,13 @@
   let filterDate   = '';
   let currentDetailId = null;
 
+  // ── DUAL PROFILE STATE ──
+  const PROFILES = {
+    jaswanth:   { name: 'Jaswanth',   token: null, refreshToken: null, user: null, resume: '', apps: [] },
+    chakradhar: { name: 'Chakradhar', token: null, refreshToken: null, user: null, resume: '', apps: [] },
+  };
+  let activeProfile = 'both'; // 'jaswanth' | 'chakradhar' | 'both'
+
   // ── SUPABASE HELPERS ──
   function sbHeaders() {
     return {
@@ -181,6 +188,104 @@
     }
   }
 
+  // ── DUAL PROFILE HELPERS ──
+  function sbHeadersFor(profileKey) {
+    const token = PROFILES[profileKey].token || SUPABASE_KEY;
+    return { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token };
+  }
+
+  async function dbLoadAppsFor(profileKey) {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/applications?select=*&order=created_at.asc', { headers: sbHeadersFor(profileKey) });
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    return data.map(r => ({
+      id: r.id, company: r.company, jobTitle: r.job_title, url: r.url,
+      jd: r.jd, resume: r.resume, status: r.status, date: r.date,
+      dateRaw: r.date_raw, dateKey: r.date_key, notes: r.notes,
+      followUpDate: r.follow_up_date || '', profile: profileKey,
+    }));
+  }
+
+  async function dbSaveAppFor(profileKey, app) {
+    const p = PROFILES[profileKey];
+    if (!p.user) return false;
+    const body = {
+      id: app.id, username: p.user.id,
+      company: app.company, job_title: app.jobTitle, url: app.url,
+      jd: app.jd, resume: p.resume || '',
+      status: app.status, date: app.date, date_raw: app.dateRaw,
+      date_key: app.dateKey, notes: app.notes || '', follow_up_date: app.followUpDate || null,
+    };
+    const res = await fetch(SUPABASE_URL + '/rest/v1/applications', {
+      method: 'POST',
+      headers: { ...sbHeadersFor(profileKey), 'Prefer': 'return=representation' },
+      body: JSON.stringify(body),
+    });
+    return res.ok;
+  }
+
+  async function dbUpdateAppFor(profileKey, app) {
+    const body = {
+      company: app.company, job_title: app.jobTitle, url: app.url,
+      jd: app.jd, resume: app.resume || '', status: app.status,
+      notes: app.notes || '', follow_up_date: app.followUpDate || null,
+    };
+    const res = await fetch(SUPABASE_URL + '/rest/v1/applications?id=eq.' + app.id, {
+      method: 'PATCH',
+      headers: { ...sbHeadersFor(profileKey), 'Prefer': 'return=representation' },
+      body: JSON.stringify(body),
+    });
+    return res.ok;
+  }
+
+  async function loadAllApps() {
+    const results = await Promise.allSettled([
+      dbLoadAppsFor('jaswanth'),
+      dbLoadAppsFor('chakradhar'),
+    ]);
+    PROFILES.jaswanth.apps   = results[0].status === 'fulfilled' ? results[0].value : [];
+    PROFILES.chakradhar.apps = results[1].status === 'fulfilled' ? results[1].value : [];
+    mergeApplications();
+  }
+
+  function mergeApplications() {
+    const j = PROFILES.jaswanth.apps.map(a => ({ ...a, profile: 'jaswanth' }));
+    const c = PROFILES.chakradhar.apps.map(a => ({ ...a, profile: 'chakradhar' }));
+    applications = [...j, ...c];
+  }
+
+  function getFilteredByProfile() {
+    if (activeProfile === 'both') return applications;
+    return applications.filter(a => a.profile === activeProfile);
+  }
+
+  function saveProfileSessions() {
+    const s = chromeStore();
+    if (!s) return;
+    s.set({
+      rjd_profile_jaswanth:   { token: PROFILES.jaswanth.token,   refreshToken: PROFILES.jaswanth.refreshToken,   user: PROFILES.jaswanth.user,   resume: PROFILES.jaswanth.resume   },
+      rjd_profile_chakradhar: { token: PROFILES.chakradhar.token, refreshToken: PROFILES.chakradhar.refreshToken, user: PROFILES.chakradhar.user, resume: PROFILES.chakradhar.resume },
+    });
+  }
+
+  function loadProfileSessions(cb) {
+    const s = chromeStore();
+    if (!s) { cb(); return; }
+    s.get(['rjd_profile_jaswanth', 'rjd_profile_chakradhar'], r => {
+      ['jaswanth', 'chakradhar'].forEach(key => {
+        const stored = r['rjd_profile_' + key];
+        if (stored && stored.token) {
+          PROFILES[key].token       = stored.token;
+          PROFILES[key].refreshToken = stored.refreshToken || '';
+          PROFILES[key].user        = stored.user;
+          PROFILES[key].resume      = stored.resume || '';
+        }
+      });
+      cb();
+    });
+  }
+
   // ── GEMINI KEY STORAGE ──
   function saveGeminiKey(key, cb) {
     const s = chromeStore();
@@ -314,6 +419,7 @@
             <!-- NAV -->
             <div style="width:130px;background:#f8fafc;border-right:1px solid #e2e8f0;flex-shrink:0;overflow-y:auto;padding:8px 0;">
               <div style="font-size:9px;font-weight:700;color:#a0aec0;text-transform:uppercase;letter-spacing:0.8px;padding:6px 12px 4px;">General</div>
+              <div class="rjd-settings-nav-item ${activeSection==='profiles'?'rjd-snav-active':''}" data-sec="profiles">👥 Profiles</div>
               <div class="rjd-settings-nav-item ${activeSection==='apikey'?'rjd-snav-active':''}" data-sec="apikey">🔑 API Key</div>
               <div style="font-size:9px;font-weight:700;color:#a0aec0;text-transform:uppercase;letter-spacing:0.8px;padding:10px 12px 4px;">Info</div>
               <div class="rjd-settings-nav-item ${activeSection==='shortcuts'?'rjd-snav-active':''}" data-sec="shortcuts">⌨️ Shortcuts</div>
@@ -349,7 +455,104 @@
       const panel = document.getElementById('rjd-settings-panel');
       if (!panel) return;
 
-      if (sec === 'apikey') {
+      if (sec === 'profiles') {
+        function renderProfileSection() {
+          panel.innerHTML = ['jaswanth','chakradhar'].map(key => {
+            const p = PROFILES[key];
+            const loggedIn = !!p.user;
+            return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:14px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                <div>
+                  <div style="font-size:13px;font-weight:700;color:#1F4E79;">${p.name}</div>
+                  <div style="font-size:10px;color:${loggedIn?'#276749':'#a0aec0'};">${loggedIn ? '✓ Logged in as ' + escHtml(p.user.email) : 'Not logged in'}</div>
+                </div>
+                ${loggedIn ? `<button class="rjd-profile-logout-btn" data-key="${key}" style="padding:4px 10px;font-size:11px;background:#fff5f5;border:1px solid #fed7d7;border-radius:5px;color:#c53030;cursor:pointer;font-family:inherit;">Logout</button>` : ''}
+              </div>
+              ${!loggedIn ? `
+                <div id="rjd-profile-msg-${key}" style="margin-bottom:6px;"></div>
+                <input type="email" id="rjd-profile-email-${key}" placeholder="Email" style="width:100%;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:11px;font-family:inherit;margin-bottom:6px;"/>
+                <input type="password" id="rjd-profile-pass-${key}" placeholder="Password" style="width:100%;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:11px;font-family:inherit;margin-bottom:8px;"/>
+                <button class="rjd-profile-login-btn rjd-primary-btn" data-key="${key}" style="width:100%;padding:7px;">Sign in as ${p.name}</button>
+              ` : `
+                <div style="margin-top:8px;">
+                  <div style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Resume <span style="color:${p.resume?'#276749':'#a0aec0'}">${p.resume?'(saved, '+p.resume.length+' chars)':'(not saved)'}</span></div>
+                  <div style="display:flex;gap:6px;">
+                    <button class="rjd-profile-resume-btn" data-key="${key}" style="flex:1;padding:6px;font-size:11px;background:#ebf4ff;border:1px solid #bee3f8;border-radius:5px;color:#2E75B6;cursor:pointer;font-family:inherit;">Paste Resume from Clipboard</button>
+                    ${p.resume ? `<button class="rjd-profile-resume-clear-btn" data-key="${key}" style="padding:6px 10px;font-size:11px;background:#fff5f5;border:1px solid #fed7d7;border-radius:5px;color:#c53030;cursor:pointer;font-family:inherit;">Clear</button>` : ''}
+                  </div>
+                </div>
+              `}
+            </div>`;
+          }).join('');
+
+          // Login buttons
+          panel.querySelectorAll('.rjd-profile-login-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const key   = btn.dataset.key;
+              const email = document.getElementById('rjd-profile-email-' + key).value.trim();
+              const pass  = document.getElementById('rjd-profile-pass-'  + key).value;
+              const msgEl = document.getElementById('rjd-profile-msg-' + key);
+              if (!email || !pass) { msgEl.innerHTML = '<div style="color:#c53030;font-size:11px;margin-bottom:6px;">Enter email and password</div>'; return; }
+              btn.textContent = 'Signing in...'; btn.disabled = true;
+              const res = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+                body: JSON.stringify({ email, password: pass }),
+              });
+              const data = await res.json();
+              if (data.access_token) {
+                PROFILES[key].token       = data.access_token;
+                PROFILES[key].refreshToken = data.refresh_token || '';
+                PROFILES[key].user        = { id: data.user.id, email: data.user.email, name: data.user.user_metadata?.full_name || email.split('@')[0] };
+                saveProfileSessions();
+                showToast(PROFILES[key].name + ' logged in ✓');
+                renderProfileSection();
+              } else {
+                msgEl.innerHTML = '<div style="color:#c53030;font-size:11px;margin-bottom:6px;">' + escHtml(data.error_description || 'Login failed') + '</div>';
+                btn.textContent = 'Sign in as ' + PROFILES[key].name; btn.disabled = false;
+              }
+            });
+          });
+
+          // Logout buttons
+          panel.querySelectorAll('.rjd-profile-logout-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const key = btn.dataset.key;
+              PROFILES[key].token = null; PROFILES[key].refreshToken = null;
+              PROFILES[key].user  = null;
+              saveProfileSessions();
+              showToast(PROFILES[key].name + ' logged out');
+              renderProfileSection();
+            });
+          });
+
+          // Paste resume buttons
+          panel.querySelectorAll('.rjd-profile-resume-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const key = btn.dataset.key;
+              try {
+                const text = await navigator.clipboard.readText();
+                if (!text.trim()) { showToast('Clipboard is empty', true); return; }
+                PROFILES[key].resume = text.trim();
+                saveProfileSessions();
+                showToast(PROFILES[key].name + "'s resume saved ✓");
+                renderProfileSection();
+              } catch(e) { showToast('Could not read clipboard', true); }
+            });
+          });
+
+          // Clear resume buttons
+          panel.querySelectorAll('.rjd-profile-resume-clear-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+              PROFILES[btn.dataset.key].resume = '';
+              saveProfileSessions();
+              renderProfileSection();
+            });
+          });
+        }
+        renderProfileSection();
+
+      } else if (sec === 'apikey') {
         panel.innerHTML = `
           <div style="font-size:14px;font-weight:700;color:#1F4E79;margin-bottom:3px;">Gemini API Key</div>
           <div style="font-size:11px;color:#718096;margin-bottom:12px;">Powers AI extraction. Free key from Google.</div>
@@ -559,7 +762,24 @@
   function renderTable() {
     renderStats();
     updateTrackBadge();
-    const filtered = getFiltered();
+    // Update profile count badge
+    const countEl = document.getElementById('rjd-profile-count');
+    if (countEl) {
+      const shown = getFilteredByProfile().length;
+      countEl.textContent = shown + ' app' + (shown !== 1 ? 's' : '');
+    }
+    // Update profile button styles
+    document.querySelectorAll('.rjd-profile-btn').forEach(btn => {
+      const isActive = btn.dataset.profile === activeProfile;
+      btn.style.background = isActive ? '#2E75B6' : '#0f2744';
+      btn.style.color = isActive ? '#fff' : '#90cdf4';
+    });
+    const profileFiltered = getFilteredByProfile();
+    // Apply search/status/date filters on top of profile filter
+    let filtered = profileFiltered;
+    if (filterStatus !== 'all') filtered = filtered.filter(a => a.status === filterStatus);
+    if (filterDate) filtered = filtered.filter(a => { if (!a.dateRaw) return false; return new Date(a.dateRaw).toLocaleDateString('en-CA') === filterDate; });
+    if (filterSearch.trim()) { const q = filterSearch.toLowerCase(); filtered = filtered.filter(a => (a.company||'').toLowerCase().includes(q) || (a.jobTitle||'').toLowerCase().includes(q)); }
     const tbody = document.getElementById('rjd-tbody');
     if (!tbody) return;
     if (filtered.length === 0) {
@@ -569,7 +789,7 @@
     tbody.innerHTML = filtered.map((app, idx) => {
       const sc = STATUS_COLORS[app.status] || STATUS_COLORS['Applied'];
       const resumeBtn = app.resume ? `<button class="rjd-view-resume-btn" data-id="${app.id}">View</button>` : `<span class="rjd-no-resume">—</span>`;
-      const urlBtn    = app.url    ? `<a href="${escHtml(app.url)}" target="_blank" class="rjd-url-link">Open</a><button class="rjd-copy-url-btn" data-url="${escHtml(app.url)}" style="margin-left:4px;padding:2px 6px;font-size:10px;background:#ebf4ff;border:1px solid #bee3f8;border-radius:4px;color:#2E75B6;cursor:pointer;font-family:inherit;">Copy</button>` : `<span class="rjd-no-resume">—</span>`;
+      const urlBtn    = app.url    ? `<a href="${escHtml(app.url)}" target="_blank" class="rjd-url-link">Open</a>` : `<span class="rjd-no-resume">—</span>`;
       // Warning fix #4: compare date strings directly — avoids UTC vs local timezone mismatch
       const isOverdue = app.followUpDate && app.followUpDate < todayKey().slice(0,10) && app.status !== 'Offer' && app.status !== 'Rejected';
       const followUpBadge = app.followUpDate ? `<div style="font-size:9px;color:${isOverdue?'#c53030':'#718096'};margin-top:1px;">${isOverdue?'⚠ Follow up: ':'📅 '} ${app.followUpDate}</div>` : '';
@@ -603,15 +823,6 @@
 
     tbody.querySelectorAll('.rjd-view-resume-btn').forEach(btn => {
       btn.addEventListener('click', (e) => { e.stopPropagation(); const app = applications.find(a=>a.id===btn.dataset.id); if(app) showResumeDetail(app); });
-    });
-
-    tbody.querySelectorAll('.rjd-copy-url-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        navigator.clipboard.writeText(btn.dataset.url).then(() => {
-          btn.textContent = '✓'; setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
-        }).catch(() => showToast('Copy failed', true));
-      });
     });
 
     tbody.querySelectorAll('.rjd-row').forEach(row => {
@@ -654,28 +865,6 @@
     document.getElementById('rjd-detail-title').textContent   = app.jobTitle || '—';
     document.getElementById('rjd-detail-url').href        = app.url || '#';
     document.getElementById('rjd-detail-url').textContent = app.url ? 'Open Job Link' : '—';
-    // Copy URL button
-    const copyUrlBtn = document.getElementById('rjd-copy-url-detail-btn');
-    if (copyUrlBtn) {
-      copyUrlBtn.style.display = app.url ? 'inline-block' : 'none';
-      copyUrlBtn.onclick = () => {
-        if (!app.url) return;
-        navigator.clipboard.writeText(app.url).then(() => {
-          copyUrlBtn.textContent = '✓'; setTimeout(() => { copyUrlBtn.textContent = 'Copy'; }, 1500);
-        }).catch(() => showToast('Copy failed', true));
-      };
-    }
-    // Copy JD button
-    const copyJdBtn = document.getElementById('rjd-copy-jd-btn');
-    if (copyJdBtn) {
-      copyJdBtn.onclick = () => {
-        const text = app.jd || '';
-        if (!text) { showToast('No JD to copy', true); return; }
-        navigator.clipboard.writeText(text).then(() => {
-          copyJdBtn.textContent = '✓ Copied'; setTimeout(() => { copyJdBtn.textContent = 'Copy JD'; }, 1500);
-        }).catch(() => showToast('Copy failed', true));
-      };
-    }
     document.getElementById('rjd-detail-date').textContent   = app.date   || '—';
     document.getElementById('rjd-detail-status').textContent = app.status || '—';
     document.getElementById('rjd-detail-jd').textContent     = app.jd     || 'No JD saved.';
@@ -763,7 +952,7 @@
               <div style="width:28px;height:28px;border-radius:50%;background:#fff;color:#1F4E79;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">${escHtml(initials)}</div>
               <span id="rjd-username-display">${escHtml(currentUser.name)}</span>
             </div>
-            <div style="display:flex;gap:6px;">
+            <div style="display:flex;gap:6px;align-items:center;">
               <button id="rjd-quick-extract-btn" class="rjd-primary-btn" style="background:#1F4E79;font-size:11px;padding:5px 10px;white-space:nowrap;">✦ Extract & Save</button>
               <button id="rjd-new-app-btn" class="rjd-primary-btn">+ New</button>
               <button id="rjd-settings-btn" title="Settings" style="background:rgba(255,255,255,0.2);border:none;color:#fff;font-size:14px;cursor:pointer;padding:5px 7px;border-radius:6px;line-height:1;">⚙</button>
@@ -771,6 +960,15 @@
           </div>
 
           <div id="rjd-stats"></div>
+
+          <!-- Profile Toggle -->
+          <div id="rjd-profile-bar" style="display:flex;align-items:center;gap:6px;padding:7px 12px;background:#162032;border-bottom:1px solid #2a4a7f;flex-shrink:0;">
+            <span style="font-size:10px;font-weight:700;color:#90cdf4;text-transform:uppercase;letter-spacing:0.5px;margin-right:4px;">View:</span>
+            <button class="rjd-profile-btn ${activeProfile==='jaswanth'?'rjd-profile-active':''}" data-profile="jaswanth" style="padding:4px 10px;font-size:11px;font-weight:600;border-radius:5px;border:1px solid #2E75B6;cursor:pointer;font-family:inherit;background:${activeProfile==='jaswanth'?'#2E75B6':'#0f2744'};color:${activeProfile==='jaswanth'?'#fff':'#90cdf4'};">Jaswanth</button>
+            <button class="rjd-profile-btn ${activeProfile==='chakradhar'?'rjd-profile-active':''}" data-profile="chakradhar" style="padding:4px 10px;font-size:11px;font-weight:600;border-radius:5px;border:1px solid #2E75B6;cursor:pointer;font-family:inherit;background:${activeProfile==='chakradhar'?'#2E75B6':'#0f2744'};color:${activeProfile==='chakradhar'?'#fff':'#90cdf4'};">Chakradhar</button>
+            <button class="rjd-profile-btn ${activeProfile==='both'?'rjd-profile-active':''}" data-profile="both" style="padding:4px 10px;font-size:11px;font-weight:600;border-radius:5px;border:1px solid #2E75B6;cursor:pointer;font-family:inherit;background:${activeProfile==='both'?'#2E75B6':'#0f2744'};color:${activeProfile==='both'?'#fff':'#90cdf4'};">Both</button>
+            <span id="rjd-profile-count" style="margin-left:auto;font-size:10px;color:#718096;"></span>
+          </div>
 
           <!-- Session Bar -->
           <div id="rjd-session-bar" style="padding:8px 12px;background:#1a365d;border-bottom:1px solid #2a4a7f;font-size:12px;color:#bee3f8;">
@@ -798,7 +996,6 @@
               ${STATUSES.map(s=>`<option value="${s}">${s}</option>`).join('')}
             </select>
             <input type="date" id="rjd-date-filter" title="Filter by date" />
-            <button id="rjd-refresh-btn" title="Refresh" style="padding:5px 9px;background:#1a365d;border:1px solid #2E75B6;color:#90cdf4;border-radius:5px;font-size:13px;cursor:pointer;font-family:inherit;" >⟳</button>
             <button id="rjd-export-csv-btn" title="Export Excel">Export XLSX</button>
           </div>
 
@@ -843,22 +1040,11 @@
           </div>
           <div class="rjd-panel-body">
             <div class="rjd-detail-row"><span class="rjd-detail-lbl">Job Title</span><span id="rjd-detail-title"></span></div>
-            <div class="rjd-detail-row"><span class="rjd-detail-lbl">URL</span>
-              <div style="display:flex;align-items:center;gap:6px;">
-                <a id="rjd-detail-url" target="_blank" class="rjd-url-link"></a>
-                <button id="rjd-copy-url-detail-btn" style="padding:2px 7px;font-size:10px;background:#ebf4ff;border:1px solid #bee3f8;border-radius:4px;color:#2E75B6;cursor:pointer;font-family:inherit;">Copy</button>
-              </div>
-            </div>
+            <div class="rjd-detail-row"><span class="rjd-detail-lbl">URL</span><a id="rjd-detail-url" target="_blank" class="rjd-url-link"></a></div>
             <div class="rjd-detail-row"><span class="rjd-detail-lbl">Date</span><span id="rjd-detail-date"></span></div>
             <div class="rjd-detail-row"><span class="rjd-detail-lbl">Status</span><span id="rjd-detail-status"></span></div>
             <div class="rjd-detail-section"><div class="rjd-detail-lbl">Resume</div><div id="rjd-detail-resume-section" style="margin-top:6px;"></div></div>
-            <div class="rjd-detail-section">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-                <div class="rjd-detail-lbl">Job Description</div>
-                <button id="rjd-copy-jd-btn" style="padding:2px 8px;font-size:10px;background:#ebf4ff;border:1px solid #bee3f8;border-radius:4px;color:#2E75B6;cursor:pointer;font-family:inherit;">Copy JD</button>
-              </div>
-              <pre id="rjd-detail-jd" class="rjd-jd-text"></pre>
-            </div>
+            <div class="rjd-detail-section"><div class="rjd-detail-lbl">Job Description</div><pre id="rjd-detail-jd" class="rjd-jd-text"></pre></div>
             <div class="rjd-detail-section">
               <div class="rjd-detail-lbl">Follow-up Date</div>
               <input type="date" id="rjd-detail-followup" style="width:100%;padding:6px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:12px;font-family:inherit;background:#fff !important;color:#1a202c !important;margin-top:4px;"/>
@@ -895,20 +1081,17 @@
     document.getElementById('rjd-detail-back').addEventListener('click', hideAppDetail);
     document.getElementById('rjd-resume-back').addEventListener('click', hideResumeDetail);
 
+    // Profile toggle
+    document.querySelectorAll('.rjd-profile-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeProfile = btn.dataset.profile;
+        renderTable();
+      });
+    });
+
     document.getElementById('rjd-search-input').addEventListener('input', (e) => { filterSearch = e.target.value; renderTable(); });
     document.getElementById('rjd-status-filter').addEventListener('change', (e) => { filterStatus = e.target.value; renderTable(); });
     document.getElementById('rjd-date-filter').addEventListener('change', (e) => { filterDate = e.target.value; renderTable(); });
-
-    document.getElementById('rjd-refresh-btn').addEventListener('click', async () => {
-      const btn = document.getElementById('rjd-refresh-btn');
-      btn.textContent = '...'; btn.disabled = true;
-      try {
-        applications = await dbLoadApps();
-        renderTable();
-        showToast('Refreshed ✓');
-      } catch(e) { showToast('Refresh failed', true); }
-      btn.textContent = '⟳'; btn.disabled = false;
-    });
 
     // ── WORKING DATE picker ──
     function setWorkingDate(iso) {
@@ -991,22 +1174,27 @@
         }
       }
 
-      // If we got company + title → save directly
+      // If we got company + title → save to BOTH profiles
       if (company && jobTitle) {
-        const app = {
-          id: Date.now().toString(), company, jobTitle,
-          url: pageUrl, jd: clipText, resume: '',
+        const baseApp = {
+          company, jobTitle, url: pageUrl, jd: clipText, resume: '',
           status: 'Applied', date: today(), dateRaw: new Date().toISOString(),
           dateKey: todayKey(), notes: '', followUpDate: ''
         };
-        const ok = await dbSaveApp(app);
-        if (ok) {
-          applications.push(app);
-          renderTable();
-          showToast('Saved: ' + company + ' — ' + jobTitle);
-        } else {
-          showToast('Save failed — check connection', true);
+        let savedCount = 0;
+        for (const profileKey of ['jaswanth', 'chakradhar']) {
+          const p = PROFILES[profileKey];
+          if (!p.user) continue;
+          const app = { ...baseApp, id: Date.now().toString() + '_' + profileKey, profile: profileKey };
+          const ok = await dbSaveAppFor(profileKey, app);
+          if (ok) { p.apps.push(app); savedCount++; }
+          await new Promise(r => setTimeout(r, 50)); // slight delay to avoid id collision
         }
+        mergeApplications();
+        renderTable();
+        if (savedCount === 2) showToast('Saved for both Jaswanth & Chakradhar ✓');
+        else if (savedCount === 1) showToast('Saved for 1 profile (other not logged in)', true);
+        else showToast('Save failed — check connections', true);
       } else {
         // Could not extract — open New Application form pre-filled with what we have
         showNewAppPanel(false);
@@ -1244,8 +1432,7 @@
         return;
       }
       showLoading('Loading...');
-      dbLoadApps().then(apps => {
-        applications = apps;
+      loadAllApps().then(() => {
         renderTrackerScreen();
       }).catch(() => renderTrackerScreen());
     });
@@ -1295,8 +1482,8 @@
       loadGeminiKey(k => { GEMINI_KEY = k || ''; });
       if (tog) tog.classList.add('rjd-visible');
       updateTrackBadge();
-      // Preload apps silently
-      dbLoadApps().then(apps => { applications = apps; updateTrackBadge(); }).catch(() => {});
+      // Preload apps from both profiles silently
+      loadAllApps().then(() => updateTrackBadge()).catch(() => {});
     } else {
       currentUser = null;
       applications = [];
@@ -1308,15 +1495,26 @@
   const hasChromeStorage = typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
   const hasChromeRuntime = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage;
 
-  // On page load — load working date AND session together so workingDate is set before any save
+  // On page load — load working date + dual profile sessions
   if (hasChromeStorage) {
-    chrome.storage.local.get(['rjd_session', 'rjd_working_date'], r => {
+    chrome.storage.local.get(['rjd_session', 'rjd_working_date', 'rjd_profile_jaswanth', 'rjd_profile_chakradhar'], r => {
       if (chrome.runtime.lastError) return;
-      // Set workingDate FIRST before applySession renders the sidebar
-      if (r.rjd_working_date) {
-        workingDate = r.rjd_working_date;
-      }
-      applySession(r.rjd_session || null);
+      if (r.rjd_working_date) workingDate = r.rjd_working_date;
+      // Load dual profiles
+      ['jaswanth', 'chakradhar'].forEach(key => {
+        const stored = r['rjd_profile_' + key];
+        if (stored && stored.token) {
+          PROFILES[key].token        = stored.token;
+          PROFILES[key].refreshToken = stored.refreshToken || '';
+          PROFILES[key].user         = stored.user;
+          PROFILES[key].resume       = stored.resume || '';
+        }
+      });
+      // Use Jaswanth's session as the primary for applySession (backward compat)
+      const primarySess = PROFILES.jaswanth.user
+        ? { token: PROFILES.jaswanth.token, user: PROFILES.jaswanth.user, refreshToken: PROFILES.jaswanth.refreshToken }
+        : (r.rjd_session || null);
+      applySession(primarySess);
     });
   }
 
