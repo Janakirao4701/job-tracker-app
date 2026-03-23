@@ -306,9 +306,20 @@ document.getElementById('forgot-submit').addEventListener('click', async () => {
 // ── SHOW APP ──
 async function showApp() {
   showSection('app-section');
+  // Sidebar user info
   document.getElementById('sb-avatar').textContent = initials(currentUser.name);
   document.getElementById('sb-name').textContent   = currentUser.name;
   document.getElementById('sb-email').textContent  = currentUser.email;
+  // Topbar user info
+  const ta = document.getElementById('topbar-avatar');
+  const tn = document.getElementById('topbar-name');
+  const te = document.getElementById('topbar-email');
+  if (ta) ta.textContent = initials(currentUser.name);
+  if (tn) tn.textContent = currentUser.name;
+  if (te) te.textContent = currentUser.email;
+  // Click topbar user → go to settings
+  const tb = document.getElementById('topbar-user-btn');
+  if (tb) tb.addEventListener('click', () => navigateTo('settings'));
   showLoading();
   apps = await loadApps();
   // Load and sync Gemini key to extension
@@ -336,10 +347,14 @@ document.querySelectorAll('.nav-item').forEach(item => {
 
 function navigateTo(page) {
   currentPage = page;
+  // Remove mobile FAB when changing pages
+  const fab = document.getElementById('mobile-fab');
+  if (fab && page !== 'applications') fab.remove();
   document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.page === page));
   const titles = { dashboard:'Overview', applications:'Applications', settings:'Settings', export:'Export', privacy:'Privacy Policy' };
   document.getElementById('page-title').textContent = titles[page] || page;
-  document.getElementById('add-app-btn').classList.toggle('hidden', page !== 'applications');
+  const addBtn = document.getElementById('add-app-btn');
+  if (addBtn) addBtn.classList.toggle('hidden', page !== 'applications');
   renderPage(page);
 }
 
@@ -452,6 +467,8 @@ function renderDashboard() {
 
 // ── APPLICATIONS TABLE ──
 function renderApplications() {
+  // Show mobile FAB for adding apps
+  const isMobile = window.innerWidth <= 768;
   let filtered = [...apps];
   if (filterStatus !== 'all') filtered = filtered.filter(a => a.status === filterStatus);
   if (filterDate)   filtered = filtered.filter(a => a.dateRaw && new Date(a.dateRaw).toLocaleDateString('en-CA') === filterDate);
@@ -497,6 +514,18 @@ function renderApplications() {
       </table>
       </div>
     </div>`;
+
+  // Mobile FAB button
+  if (window.innerWidth <= 768) {
+    const fab = document.createElement('button');
+    fab.id = 'mobile-fab';
+    fab.innerHTML = '+ Add';
+    fab.style.cssText = 'position:fixed;bottom:72px;right:16px;background:#1F4E79;color:#fff;border:none;border-radius:50px;padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(31,78,121,0.4);z-index:50;font-family:inherit;';
+    fab.addEventListener('click', () => document.getElementById('add-modal').classList.remove('hidden'));
+    const old = document.getElementById('mobile-fab');
+    if (old) old.remove();
+    document.body.appendChild(fab);
+  }
 
   document.getElementById('app-search').addEventListener('input', e => { filterSearch = e.target.value; renderApplications(); });
   document.getElementById('app-status-filter').addEventListener('change', e => { filterStatus = e.target.value; renderApplications(); });
