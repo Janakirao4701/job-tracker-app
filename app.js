@@ -502,7 +502,7 @@ function renderSettingsSection(sec) {
       <div class="settings-section-sub">Powers AI extraction in the Chrome extension. Free from Google.</div>
       <div class="settings-info-box">Your key is stored only in your browser. It is sent directly to Google Gemini — never to any other server.</div>
       <div id="settings-msg"></div>
-      <div class="settings-field"><label>API Key</label>
+      <div class="settings-field" style="max-width:480px;"><label>API Key</label>
         <div style="display:flex;gap:8px;margin-bottom:10px;">
           <input type="password" class="settings-input" id="key-input" value="${esc(savedKey)}" placeholder="AIzaSy..." style="flex:1;max-width:520px;"/>
           <button class="btn-new" id="show-key-btn" style="white-space:nowrap;padding:0 16px;height:42px;">Show</button>
