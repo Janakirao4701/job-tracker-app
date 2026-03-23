@@ -434,10 +434,6 @@ function renderDashboard() {
   const statusCounts = {};
   STATUSES.forEach(s => { statusCounts[s] = apps.filter(a => a.status === s).length; });
 
-  // Build activity heatmap data (last 12 weeks)
-  const heatmapData = {};
-  apps.forEach(a => { if (a.dateRaw) { const k = new Date(a.dateRaw).toLocaleDateString('en-CA'); heatmapData[k] = (heatmapData[k]||0)+1; } });
-
   // Build weekly progress data (last 6 weeks)
   const weeklyData = [];
   for (let i = 5; i >= 0; i--) {
@@ -447,8 +443,6 @@ function renderDashboard() {
     const count = apps.filter(a => { if (!a.dateRaw) return false; const d = new Date(a.dateRaw); return d >= start && d <= end; }).length;
     weeklyData.push({ label, count });
   }
-  const maxWeekly = Math.max(...weeklyData.map(w => w.count), 1);
-
   // Build calendar (current month)
   const calYear = now.getFullYear(), calMonth = now.getMonth();
   const firstDay = new Date(calYear, calMonth, 1).getDay();
@@ -483,91 +477,93 @@ function renderDashboard() {
 
       <div class="section-card">
         <div class="section-card-header"><div class="section-card-title">📅 Application Calendar</div></div>
-        <div style="padding:16px">
-          <div style="text-align:center;font-size:13px;font-weight:700;color:#1a202c;margin-bottom:10px;">${monthName}</div>
-          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;">
-            ${['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=>`<div style="font-size:10px;color:#a0aec0;font-weight:600;padding:2px 0;">${d}</div>`).join('')}
+        <div style="padding:12px 16px 16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <span style="font-size:13px;font-weight:600;color:#1a202c;">${monthName}</span>
+            <span style="font-size:12px;color:#718096;">${apps.filter(a=>a.dateRaw&&new Date(a.dateRaw).getMonth()===calMonth&&new Date(a.dateRaw).getFullYear()===calYear).length} applied this month</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">
+            ${['S','M','T','W','T','F','S'].map(d=>`<div style="font-size:10px;color:#a0aec0;font-weight:600;text-align:center;padding-bottom:4px;">${d}</div>`).join('')}
             ${Array(firstDay).fill(`<div></div>`).join('')}
             ${Array.from({length:daysInMonth},(_,i)=>{
               const d = i+1;
               const key = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
               const count = heatmapData[key]||0;
               const isToday = key === todayISO();
-              const bg = count > 0 ? '#1F4E79' : isToday ? '#EBF4FF' : '#f1f5f9';
-              const color = count > 0 ? '#fff' : isToday ? '#1F4E79' : '#4a5568';
-              const border = isToday ? '2px solid #1F4E79' : '2px solid transparent';
-              return `<div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${bg};color:${color};font-size:11px;font-weight:${count>0||isToday?'700':'400'};border:${border};cursor:default;" title="${count > 0 ? count+' app'+(count>1?'s':'') : ''}">${d}</div>`;
+              let bg = 'transparent', color = '#4a5568', fontWeight = '400', borderStyle = 'none';
+              if (count > 0) { bg = '#1F4E79'; color = '#fff'; fontWeight = '600'; }
+              else if (isToday) { bg = '#EBF4FF'; color = '#1F4E79'; fontWeight = '600'; borderStyle = '1.5px solid #1F4E79'; }
+              return `<div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${bg};color:${color};font-size:11px;font-weight:${fontWeight};border:${borderStyle || 'none'};position:relative;" title="${count>0?count+' application'+(count>1?'s':''):''}">${d}${count>1?`<span style="position:absolute;top:0;right:0;width:5px;height:5px;border-radius:50%;background:#4299e1;"></span>`:''}</div>`;
             }).join('')}
           </div>
-          <div style="display:flex;align-items:center;gap:12px;margin-top:12px;font-size:11px;color:#718096;">
-            <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#1F4E79;display:inline-block;"></span>Applied</span>
-            <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#EBF4FF;border:1.5px solid #1F4E79;display:inline-block;"></span>Today</span>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid #f1f5f9;">
+            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#718096;"><span style="width:8px;height:8px;border-radius:50%;background:#1F4E79;display:inline-block;"></span>Applied</div>
+            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#718096;"><span style="width:8px;height:8px;border-radius:50%;background:#EBF4FF;border:1.5px solid #1F4E79;display:inline-block;"></span>Today</div>
           </div>
         </div>
       </div>
 
       <div class="section-card">
         <div class="section-card-header"><div class="section-card-title">📊 Weekly Progress</div></div>
-        <div style="padding:16px">
-          <div style="display:flex;align-items:flex-end;gap:8px;height:120px;margin-bottom:8px;">
-            ${weeklyData.map(w => {
-              const pct = Math.round((w.count/maxWeekly)*100);
-              const isLast = w === weeklyData[weeklyData.length-1];
-              return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end;">
-                <div style="font-size:11px;font-weight:700;color:${w.count>0?'#1F4E79':'#a0aec0'}">${w.count||''}</div>
-                <div style="width:100%;background:${isLast?'#1F4E79':'#BFD7ED'};border-radius:4px 4px 0 0;height:${Math.max(pct,4)}%;min-height:4px;transition:height 0.3s;"></div>
-              </div>`;
-            }).join('')}
+        <div style="padding:12px 16px 16px;">
+          <div style="display:flex;gap:12px;margin-bottom:14px;">
+            <div style="flex:1;background:#f8fafc;border-radius:8px;padding:10px 12px;">
+              <div style="font-size:11px;color:#718096;margin-bottom:2px;">This week</div>
+              <div style="font-size:22px;font-weight:700;color:#1F4E79;">${weeklyData[weeklyData.length-1].count}</div>
+            </div>
+            <div style="flex:1;background:#f8fafc;border-radius:8px;padding:10px 12px;">
+              <div style="font-size:11px;color:#718096;margin-bottom:2px;">Last week</div>
+              <div style="font-size:22px;font-weight:700;color:#4a5568;">${weeklyData[weeklyData.length-2].count}</div>
+            </div>
+            <div style="flex:1;background:#f8fafc;border-radius:8px;padding:10px 12px;">
+              <div style="font-size:11px;color:#718096;margin-bottom:2px;">6-week total</div>
+              <div style="font-size:22px;font-weight:700;color:#4a5568;">${weeklyData.reduce((s,w)=>s+w.count,0)}</div>
+            </div>
           </div>
-          <div style="display:flex;gap:8px;">
-            ${weeklyData.map(w=>`<div style="flex:1;text-align:center;font-size:10px;color:#a0aec0;">${w.label}</div>`).join('')}
+          <div style="position:relative;height:120px;">
+            <canvas id="weekly-chart"></canvas>
           </div>
-          <div style="margin-top:12px;padding-top:12px;border-top:1px solid #f1f5f9;display:flex;gap:20px;">
-            <div><div style="font-size:11px;color:#718096;">This week</div><div style="font-size:18px;font-weight:700;color:#1F4E79;">${weeklyData[weeklyData.length-1].count}</div></div>
-            <div><div style="font-size:11px;color:#718096;">Last week</div><div style="font-size:18px;font-weight:700;color:#4a5568;">${weeklyData[weeklyData.length-2].count}</div></div>
-            <div><div style="font-size:11px;color:#718096;">6-wk total</div><div style="font-size:18px;font-weight:700;color:#4a5568;">${weeklyData.reduce((s,w)=>s+w.count,0)}</div></div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-
-    <div class="section-card" style="margin-bottom:24px;">
-      <div class="section-card-header"><div class="section-card-title">🔥 Activity Heatmap</div></div>
-      <div style="padding:16px;overflow-x:auto;">
-        <div style="display:flex;gap:3px;min-width:600px;">
-          ${(() => {
-            const weeks = 16;
-            const cells = [];
-            const startDate = new Date(now);
-            startDate.setDate(now.getDate() - (weeks*7) + 1);
-            // day labels
-            cells.push(`<div style="display:flex;flex-direction:column;gap:3px;margin-right:4px;">
-              ${['','Mon','','Wed','','Fri',''].map(l=>`<div style="height:13px;font-size:10px;color:#a0aec0;line-height:13px;">${l}</div>`).join('')}
-            </div>`);
-            for (let w = 0; w < weeks; w++) {
-              let col = `<div style="display:flex;flex-direction:column;gap:3px;">`;
-              for (let d = 0; d < 7; d++) {
-                const date = new Date(startDate);
-                date.setDate(startDate.getDate() + w*7 + d);
-                if (date > now) { col += `<div style="width:13px;height:13px;"></div>`; continue; }
-                const key = date.toLocaleDateString('en-CA');
-                const count = heatmapData[key]||0;
-                const bg = count === 0 ? '#edf2f7' : count === 1 ? '#BFD7ED' : count === 2 ? '#6BAED6' : '#1F4E79';
-                col += `<div style="width:13px;height:13px;border-radius:2px;background:${bg};" title="${key}: ${count} app${count!==1?'s':''}"></div>`;
+          <script>
+            (function() {
+              const el = document.getElementById('weekly-chart');
+              if (!el || el._chartBuilt) return;
+              el._chartBuilt = true;
+              const labels = ${JSON.stringify(weeklyData.map(w=>w.label))};
+              const data   = ${JSON.stringify(weeklyData.map(w=>w.count))};
+              function build() {
+                new Chart(el, {
+                  type: 'bar',
+                  data: {
+                    labels,
+                    datasets: [{
+                      data,
+                      backgroundColor: data.map((_,i) => i === data.length-1 ? '#1F4E79' : '#BFD7ED'),
+                      borderRadius: 4,
+                      borderSkipped: false,
+                    }]
+                  },
+                  options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed.y + ' apps' } } },
+                    scales: {
+                      x: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#a0aec0' } },
+                      y: { display: false, beginAtZero: true }
+                    }
+                  }
+                });
               }
-              col += `</div>`;
-              cells.push(col);
-            }
-            return cells.join('');
-          })()}
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;color:#718096;">
-          <span>Less</span>
-          ${['#edf2f7','#BFD7ED','#6BAED6','#1F4E79'].map(c=>`<div style="width:13px;height:13px;border-radius:2px;background:${c};"></div>`).join('')}
-          <span>More</span>
+              if (window.Chart) { build(); }
+              else {
+                const s = document.createElement('script');
+                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';
+                s.onload = build;
+                document.head.appendChild(s);
+              }
+            })();
+          <\/script>
         </div>
       </div>
+
     </div>
 
     <div style="margin-bottom:24px">
