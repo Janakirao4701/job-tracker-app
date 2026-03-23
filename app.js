@@ -494,16 +494,7 @@ function renderDashboard() {
               </tr>`).join('') || '<tr><td colspan="3" class="empty-row">No applications yet</td></tr>'}
           </tbody>
         </table>
-        ${apps.length > 6 
-  ? `
-    <div style="padding:10px 16px;border-top:1px solid #f1f5f9;text-align:center;">
-      <button class="auth-link" id="view-all-btn">
-        View all ${apps.length} →
-      </button>
-    </div>
-  `
-  : ''
-}
+        ${apps.length > 6 ? `<div style="padding:10px 16px;border-top:1px solid #f1f5f9;text-align:center;"><button class="auth-link" id="view-all-btn">View all ${apps.length} →</button></div>` : ''}
       </div>
     </div>
 
@@ -533,7 +524,6 @@ function renderDashboard() {
     const viewAllBtn = document.getElementById('view-all-btn');
     if (viewAllBtn) viewAllBtn.addEventListener('click', () => navigateTo('applications'));
   }
-}
 }
 
 // ── APPLICATIONS TABLE ──
