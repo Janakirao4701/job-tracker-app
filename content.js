@@ -1146,33 +1146,46 @@
     }
   }
 
+  // Safe chrome API check
+  const hasChromeStorage = typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
+  const hasChromeRuntime = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage;
+
   // On page load — check chrome.storage for existing session
-  chrome.storage.local.get('rjd_session', r => applySession(r.rjd_session || null));
-
-  // Listen for login/logout from background.js (forwarded from app.html)
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.action === 'session_saved') {
-      applySession(msg.payload);
-    } else if (msg.action === 'session_cleared') {
-      applySession(null);
-      const sidebar = document.getElementById('rjd-sidebar');
-      if (sidebar) sidebar.classList.remove('open');
-    }
-  });
-
-  // Fallback poll every 3 seconds — catches cases where message didn't arrive
-  setInterval(() => {
+  if (hasChromeStorage) {
     chrome.storage.local.get('rjd_session', r => {
-      const sess = r.rjd_session || null;
-      const tog  = document.getElementById('rjd-toggle');
-      if (sess && sess.token && sess.user && !currentUser) {
-        // Newly logged in — apply session
-        applySession(sess);
-      } else if ((!sess || !sess.token) && currentUser) {
-        // Logged out elsewhere — clear
+      if (chrome.runtime.lastError) return;
+      applySession(r.rjd_session || null);
+    });
+  }
+
+  // Listen for login/logout from background.js
+  if (hasChromeRuntime) {
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg.action === 'session_saved') {
+        applySession(msg.payload);
+      } else if (msg.action === 'session_cleared') {
         applySession(null);
+        const sidebar = document.getElementById('rjd-sidebar');
+        if (sidebar) sidebar.classList.remove('open');
       }
     });
-  }, 3000);
+  }
+
+  // Fallback poll every 3 seconds
+  if (hasChromeStorage) {
+    setInterval(() => {
+      try {
+        chrome.storage.local.get('rjd_session', r => {
+          if (chrome.runtime.lastError) return;
+          const sess = r.rjd_session || null;
+          if (sess && sess.token && sess.user && !currentUser) {
+            applySession(sess);
+          } else if ((!sess || !sess.token) && currentUser) {
+            applySession(null);
+          }
+        });
+      } catch(e) {}
+    }, 3000);
+  }
 
 })();
