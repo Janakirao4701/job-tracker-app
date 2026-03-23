@@ -279,11 +279,26 @@ function setMode(mode) {
   document.getElementById('auth-title').textContent = isSignIn ? 'Welcome back' : 'Create account';
   document.getElementById('auth-sub').textContent   = isSignIn ? 'Sign in to your account' : 'Start tracking your job search';
   document.getElementById('field-name').classList.toggle('hidden', isSignIn);
+  const fieldConfirm = document.getElementById('field-confirm');
+  if (fieldConfirm) fieldConfirm.classList.toggle('hidden', isSignIn);
   document.getElementById('forgot-row').classList.toggle('hidden', !isSignIn);
   document.getElementById('auth-submit').textContent = isSignIn ? 'Sign in' : 'Create account';
   document.getElementById('auth-switch-text').textContent = isSignIn ? "Don't have an account?" : 'Already have an account?';
   document.getElementById('auth-switch-btn').textContent  = isSignIn ? 'Sign up' : 'Sign in';
   document.getElementById('auth-msg').innerHTML = '';
+  // Clear all fields when switching — prevents signup data leaking into signin
+  document.getElementById('auth-email').value    = '';
+  document.getElementById('auth-password').value = '';
+  document.getElementById('auth-name').value     = '';
+  const cfmEl = document.getElementById('auth-confirm');
+  if (cfmEl) cfmEl.value = '';
+  const pwdInput = document.getElementById('auth-password');
+  if (pwdInput) pwdInput.type = 'password';
+  if (cfmEl)    cfmEl.type    = 'password';
+  const togglePwd = document.getElementById('toggle-password');
+  const toggleCfm = document.getElementById('toggle-confirm');
+  if (togglePwd) togglePwd.textContent = '👁';
+  if (toggleCfm) toggleCfm.textContent = '👁';
 }
 
 document.getElementById('auth-submit').addEventListener('click', async () => {
@@ -313,14 +328,13 @@ document.getElementById('auth-submit').addEventListener('click', async () => {
       return;
     }
 
-    // No token returned — shouldn't happen with email confirmation off, but handle gracefully
     if (!data.access_token || !data.user || !data.user.id) {
       showAuthMsg('Sign in failed. Please check your email and password.', true);
       btn.disabled = false; btn.textContent = authMode === 'signin' ? 'Sign in' : 'Create account';
       return;
     }
 
-    // Both signup and signin: log in immediately
+    // Signup and signin both log in immediately (no email confirmation required)
     session     = data;
     currentUser = {
       id:    data.user.id,
@@ -343,6 +357,22 @@ document.getElementById('auth-password').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('auth-submit').click();
 });
 
+// Show/hide password toggles
+(function() {
+  function setupToggle(toggleId, inputId) {
+    const btn = document.getElementById(toggleId);
+    const inp = document.getElementById(inputId);
+    if (!btn || !inp) return;
+    btn.addEventListener('click', () => {
+      const show   = inp.type === 'password';
+      inp.type     = show ? 'text' : 'password';
+      btn.textContent = show ? '🙈' : '👁';
+    });
+  }
+  setupToggle('toggle-password', 'auth-password');
+  setupToggle('toggle-confirm',  'auth-confirm');
+})();
+
 function showAuthMsg(msg, isError) {
   document.getElementById('auth-msg').innerHTML =
     `<div class="auth-msg ${isError?'error':'success'}">${esc(msg)}</div>`;
@@ -357,11 +387,17 @@ document.getElementById('back-to-signin').addEventListener('click', () => {
 });
 document.getElementById('forgot-submit').addEventListener('click', async () => {
   const email = document.getElementById('forgot-email').value.trim();
-  if (!email) { document.getElementById('forgot-msg').innerHTML = '<div class="auth-msg error">Enter your email</div>'; return; }
-  const ok = await forgotPassword(email);
-  document.getElementById('forgot-msg').innerHTML = ok
-    ? '<div class="auth-msg success">Reset link sent! Check your inbox.</div>'
-    : '<div class="auth-msg error">Something went wrong. Try again.</div>';
+  const msgEl = document.getElementById('forgot-msg');
+  if (!email) { msgEl.innerHTML = '<div class="auth-msg error">Enter your email.</div>'; return; }
+  if (!navigator.onLine) { msgEl.innerHTML = '<div class="auth-msg error">No internet connection. Please check your network.</div>'; return; }
+  try {
+    const ok = await forgotPassword(email);
+    msgEl.innerHTML = ok
+      ? '<div class="auth-msg success">Reset link sent! Check your inbox.</div>'
+      : '<div class="auth-msg error">Something went wrong. Try again.</div>';
+  } catch(e) {
+    msgEl.innerHTML = '<div class="auth-msg error">Could not connect. Please try again.</div>';
+  }
 });
 
 // ── SHOW APP ──
@@ -592,29 +628,49 @@ function renderDashboard() {
   function buildWeeklyChart() {
     const el = document.getElementById('weekly-chart');
     if (!el) return;
-    const labels = ${JSON.stringify(weeklyData.map(w=>w.label))};
-    const data   = ${JSON.stringify(weeklyData.map(w=>w.count))};
-    new Chart(el, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{ data, backgroundColor: data.map((_,i) => i===data.length-1?'#1F4E79':'#BFD7ED'), borderRadius:4, borderSkipped:false }]
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{display:false}, tooltip:{callbacks:{label:ctx=>ctx.parsed.y+' apps'}} },
-        scales:{ x:{grid:{display:false},ticks:{font:{size:11},color:'#a0aec0'}}, y:{display:false,beginAtZero:true} }
+    const labels = weeklyData.map(w => w.label);
+    const data   = weeklyData.map(w => w.count);
+    const wrap = document.getElementById('weekly-chart-wrap');
+    const W = wrap ? wrap.offsetWidth || 300 : 300;
+    const H = 120;
+    el.width  = W;
+    el.height = H;
+    const ctx = el.getContext('2d');
+    const max   = Math.max(...data, 1);
+    const n     = data.length;
+    const padL  = 4, padR = 4, padT = 8, padB = 28;
+    const totalW = W - padL - padR;
+    const barW  = Math.floor(totalW / n * 0.55);
+    const gap   = Math.floor(totalW / n);
+    const chartH = H - padT - padB;
+    data.forEach((val, i) => {
+      const isLast = i === n - 1;
+      const x   = padL + i * gap + (gap - barW) / 2;
+      const barH = val === 0 ? 2 : Math.max(4, Math.round((val / max) * chartH));
+      const y   = padT + chartH - barH;
+      const r   = Math.min(4, barW / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + barW - r, y);
+      ctx.quadraticCurveTo(x + barW, y, x + barW, y + r);
+      ctx.lineTo(x + barW, y + barH);
+      ctx.lineTo(x, y + barH);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+      ctx.fillStyle = isLast ? '#1F4E79' : '#BFD7ED';
+      ctx.fill();
+      ctx.fillStyle = '#a0aec0';
+      ctx.font = '10px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(labels[i], x + barW / 2, H - 8);
+      if (val > 0) {
+        ctx.fillStyle = isLast ? '#1F4E79' : '#718096';
+        ctx.fillText(val, x + barW / 2, y - 3);
       }
     });
   }
-  if (window.Chart) {
-    buildWeeklyChart();
-  } else {
-    const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';
-    s.onload = buildWeeklyChart;
-    document.head.appendChild(s);
-  }
+  buildWeeklyChart();
 
   if (apps.length > 6) {
     const viewAllBtn = document.getElementById('view-all-btn');
