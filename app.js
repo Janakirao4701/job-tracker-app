@@ -705,6 +705,7 @@ function renderApplications() {
       <div class="section-card-header">
         <div class="section-card-title">All Applications (${filtered.length})</div>
         <div class="filters-row">
+          <button id="refresh-apps-btn" class="btn-new" style="font-size:12px;padding:6px 12px;display:flex;align-items:center;gap:5px;">⟳ Refresh</button>
           <input class="filter-input" id="app-search" placeholder="Search..." value="${esc(filterSearch)}" style="width:160px"/>
           <select class="filter-select" id="app-status-filter">
             <option value="all" ${filterStatus==='all'?'selected':''}>All Statuses</option>
@@ -766,6 +767,16 @@ function renderApplications() {
   document.getElementById('app-search').addEventListener('input', e => { filterSearch = e.target.value; renderApplications(); });
   document.getElementById('app-status-filter').addEventListener('change', e => { filterStatus = e.target.value; renderApplications(); });
   document.getElementById('app-date-filter').addEventListener('change', e => { filterDate = e.target.value; renderApplications(); });
+
+  document.getElementById('refresh-apps-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('refresh-apps-btn');
+    btn.textContent = '⟳ Refreshing...';
+    btn.disabled = true;
+    apps = await loadApps();
+    renderApplications();
+    updateBadge();
+    showToast('Applications refreshed ✓');
+  });
 
   document.querySelectorAll('.status-select').forEach(sel => {
     sel.addEventListener('change', async () => {
@@ -897,10 +908,37 @@ function openDetailModal(app) {
     statusSel.style.color      = (STATUS_BG[statusSel.value]||STATUS_BG.Applied).color;
   });
 
-  // URL button
-  const urlLink = document.getElementById('detail-url-link');
+  // URL input + button
+  const urlInput = document.getElementById('detail-url-input');
+  const urlLink  = document.getElementById('detail-url-link');
+  const urlCopy  = document.getElementById('detail-url-copy');
+  urlInput.value = app.url || '';
   if (app.url) { urlLink.href = app.url; urlLink.style.display = 'inline-flex'; }
   else         { urlLink.style.display = 'none'; }
+  urlInput.addEventListener('input', () => {
+    const val = urlInput.value.trim();
+    if (val) { urlLink.href = val; urlLink.style.display = 'inline-flex'; }
+    else     { urlLink.style.display = 'none'; }
+  });
+  urlCopy.addEventListener('click', () => {
+    const val = urlInput.value.trim();
+    if (!val) { showToast('No URL to copy', true); return; }
+    navigator.clipboard.writeText(val).then(() => { showToast('URL copied ✓'); }).catch(() => { showToast('Copy failed', true); });
+  });
+
+  // Copy JD button
+  document.getElementById('copy-jd-btn').addEventListener('click', () => {
+    const text = document.getElementById('detail-jd-text').textContent;
+    if (!text || text.startsWith('No job')) { showToast('No JD to copy', true); return; }
+    navigator.clipboard.writeText(text).then(() => showToast('JD copied ✓')).catch(() => showToast('Copy failed', true));
+  });
+
+  // Copy Resume button
+  document.getElementById('copy-resume-btn').addEventListener('click', () => {
+    const text = document.getElementById('detail-resume-text').textContent;
+    if (!text || text.startsWith('No resume')) { showToast('No resume to copy', true); return; }
+    navigator.clipboard.writeText(text).then(() => showToast('Resume copied ✓')).catch(() => showToast('Copy failed', true));
+  });
 
   // Default to JD tab (or resume if no JD)
   switchDetailTab(app.jd ? 'jd' : (app.resume ? 'resume' : 'notes'));
@@ -913,6 +951,7 @@ function openDetailModal(app) {
     app.notes        = document.getElementById('detail-notes-input').value.trim();
     app.followUpDate = document.getElementById('detail-followup-input').value;
     app.status       = document.getElementById('detail-status-sel').value;
+    app.url          = document.getElementById('detail-url-input').value.trim();
     // Save session date if changed
     const newSessionDate = document.getElementById('detail-session-date-input')?.value;
     if (newSessionDate) {
