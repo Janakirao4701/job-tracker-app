@@ -182,6 +182,7 @@ async function updateApp(app) {
     body: JSON.stringify({
       company:app.company, job_title:app.jobTitle, url:app.url,
       jd:app.jd, resume:app.resume||'', status:app.status,
+      date:app.date||'', date_key:app.dateKey||'',
       notes:app.notes||'', follow_up_date:app.followUpDate||null
     })
   });
@@ -684,7 +685,6 @@ function renderDashboard() {
 
 // ── APPLICATIONS TABLE ──
 function renderApplications() {
-  // Show mobile FAB for adding apps
   const isMobile = window.innerWidth <= 768;
   let filtered = [...apps];
   if (filterStatus !== 'all') filtered = filtered.filter(a => a.status === filterStatus);
@@ -692,6 +692,15 @@ function renderApplications() {
   if (filterSearch) { const q = filterSearch.toLowerCase(); filtered = filtered.filter(a => (a.company+a.jobTitle+a.url).toLowerCase().includes(q)); }
 
   document.getElementById('page-content').innerHTML = `
+    <!-- Bulk Action Bar (hidden until selection) -->
+    <div id="bulk-bar" style="display:none;align-items:center;gap:12px;background:#1F4E79;color:#fff;padding:10px 16px;border-radius:10px;margin-bottom:12px;flex-wrap:wrap;">
+      <span id="bulk-count" style="font-size:13px;font-weight:700;">0 selected</span>
+      <span style="font-size:13px;">→ Reassign to session:</span>
+      <input type="date" id="bulk-session-date" style="padding:5px 10px;border-radius:6px;border:none;font-size:13px;font-family:inherit;background:#fff;color:#1a202c;"/>
+      <button id="bulk-reassign-btn" style="padding:6px 16px;background:#2E75B6;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Reassign</button>
+      <button id="bulk-clear-btn" style="padding:6px 12px;background:rgba(255,255,255,0.15);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;">✕ Clear</button>
+    </div>
+
     <div class="section-card">
       <div class="section-card-header">
         <div class="section-card-title">All Applications (${filtered.length})</div>
@@ -706,12 +715,16 @@ function renderApplications() {
       </div>
       <div style="overflow-x:auto">
       <table>
-        <thead><tr><th>#</th><th>Company</th><th>Job Title</th><th>URL</th><th>Status</th><th>Date</th><th>Notes</th><th>Actions</th></tr></thead>
+        <thead><tr>
+          <th style="width:36px;"><input type="checkbox" id="select-all-chk" title="Select all"/></th>
+          <th>#</th><th>Company</th><th>Job Title</th><th>URL</th><th>Status</th><th>Session Date</th><th>Notes</th><th>Actions</th>
+        </tr></thead>
         <tbody>
           ${filtered.length === 0
-            ? '<tr><td colspan="8" class="empty-row">No applications match your filters</td></tr>'
+            ? '<tr><td colspan="9" class="empty-row">No applications match your filters</td></tr>'
             : filtered.map((a,i) => `
               <tr data-id="${a.id}">
+                <td><input type="checkbox" class="app-chk" data-id="${a.id}"/></td>
                 <td style="color:#a0aec0;font-size:12px;">${i+1}</td>
                 <td><div style="font-weight:600;font-size:13px;">${esc(a.company||'—')}</div>
                     <div style="margin-top:3px;display:flex;gap:4px;">
@@ -726,7 +739,7 @@ function renderApplications() {
                     ${STATUSES.map(s=>`<option value="${s}" ${a.status===s?'selected':''}>${s}</option>`).join('')}
                   </select>
                 </td>
-                <td style="font-size:12px;color:#718096;white-space:nowrap;">${esc(a.date||'—')}</td>
+                <td style="font-size:12px;color:#718096;white-space:nowrap;">${esc(a.dateKey||a.date||'—')}</td>
                 <td style="font-size:12px;color:#718096;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(a.notes||'—')}</td>
                 <td style="white-space:nowrap;">
                   <button class="auth-link view-btn" data-id="${a.id}" style="color:#2E75B6;font-size:12px;margin-right:8px;">View</button>
@@ -776,6 +789,73 @@ function renderApplications() {
       if (app) openDetailModal(app);
     });
   });
+
+  // ── BULK SELECTION ──
+  function getSelectedIds() {
+    return [...document.querySelectorAll('.app-chk:checked')].map(c => c.dataset.id);
+  }
+  function updateBulkBar() {
+    const ids = getSelectedIds();
+    const bar = document.getElementById('bulk-bar');
+    const countEl = document.getElementById('bulk-count');
+    if (!bar) return;
+    if (ids.length > 0) {
+      bar.style.display = 'flex';
+      countEl.textContent = ids.length + ' selected';
+    } else {
+      bar.style.display = 'none';
+    }
+  }
+
+  // Select all checkbox
+  document.getElementById('select-all-chk').addEventListener('change', e => {
+    document.querySelectorAll('.app-chk').forEach(c => c.checked = e.target.checked);
+    updateBulkBar();
+  });
+
+  // Individual checkboxes
+  document.querySelectorAll('.app-chk').forEach(chk => {
+    chk.addEventListener('change', () => {
+      const all = document.querySelectorAll('.app-chk');
+      const allChk = document.getElementById('select-all-chk');
+      if (allChk) allChk.checked = [...all].every(c => c.checked);
+      updateBulkBar();
+    });
+  });
+
+  // Clear selection
+  document.getElementById('bulk-clear-btn').addEventListener('click', () => {
+    document.querySelectorAll('.app-chk').forEach(c => c.checked = false);
+    const allChk = document.getElementById('select-all-chk');
+    if (allChk) allChk.checked = false;
+    updateBulkBar();
+  });
+
+  // Bulk reassign to session date
+  document.getElementById('bulk-reassign-btn').addEventListener('click', async () => {
+    const ids = getSelectedIds();
+    const newDate = document.getElementById('bulk-session-date').value;
+    if (!newDate) { showToast('Pick a session date first', true); return; }
+    if (!ids.length) { showToast('No apps selected', true); return; }
+    const d = new Date(newDate + 'T12:00:00');
+    const displayDate = d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+    const btn = document.getElementById('bulk-reassign-btn');
+    btn.textContent = 'Saving...'; btn.disabled = true;
+    let successCount = 0;
+    await Promise.all(ids.map(async id => {
+      const app = apps.find(a => a.id === id);
+      if (app) {
+        app.dateKey = newDate;
+        app.date    = displayDate;
+        const ok = await updateApp(app);
+        if (ok) successCount++;
+      }
+    }));
+    btn.textContent = '✓ Reassign'; btn.disabled = false;
+    showToast(successCount + ' apps moved to ' + newDate + ' ✓');
+    renderApplications();
+    updateBadge();
+  });
 }
 
 // ── DETAIL MODAL ──
@@ -797,6 +877,17 @@ function openDetailModal(app) {
   // Notes tab
   document.getElementById('detail-notes-input').value    = app.notes || '';
   document.getElementById('detail-followup-input').value = app.followUpDate || '';
+  // Session date — use dateKey (YYYY-MM-DD) or derive from dateRaw
+  const sessionDateInput = document.getElementById('detail-session-date-input');
+  if (sessionDateInput) {
+    let sd = app.dateKey || '';
+    // normalize in case old format YYYY-M-D
+    if (sd && sd.split('-').length === 3) {
+      const p = sd.split('-');
+      sd = p[0] + '-' + p[1].padStart(2,'0') + '-' + p[2].padStart(2,'0');
+    }
+    sessionDateInput.value = sd;
+  }
   const statusSel = document.getElementById('detail-status-sel');
   statusSel.innerHTML = STATUSES.map(s => `<option value="${s}" ${app.status===s?'selected':''}>${s}</option>`).join('');
   statusSel.style.background = (STATUS_BG[app.status]||STATUS_BG.Applied).bg;
@@ -819,9 +910,17 @@ function openDetailModal(app) {
 
   // Save changes
   document.getElementById('detail-modal-save').onclick = async () => {
-    app.notes       = document.getElementById('detail-notes-input').value.trim();
-    app.followUpDate= document.getElementById('detail-followup-input').value;
-    app.status      = document.getElementById('detail-status-sel').value;
+    app.notes        = document.getElementById('detail-notes-input').value.trim();
+    app.followUpDate = document.getElementById('detail-followup-input').value;
+    app.status       = document.getElementById('detail-status-sel').value;
+    // Save session date if changed
+    const newSessionDate = document.getElementById('detail-session-date-input')?.value;
+    if (newSessionDate) {
+      app.dateKey = newSessionDate;
+      // Also update the display date
+      const d = new Date(newSessionDate + 'T12:00:00');
+      app.date = d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+    }
     const ok = await updateApp(app);
     if (ok) { showToast('Saved ✓'); document.getElementById('detail-modal').classList.add('hidden'); renderPage(currentPage); }
     else    { showToast('Save failed', true); }
