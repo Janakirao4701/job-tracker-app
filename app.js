@@ -54,6 +54,8 @@ function showToast(msg, isError) {
 
 function headers(extra) {
   const token = (session && (session.access_token || session.token)) || SUPABASE_KEY;
+  console.log('TOKEN TYPE:', token === SUPABASE_KEY ? 'ANON KEY (BAD)' : 'USER JWT (GOOD)');
+  console.log('TOKEN START:', token ? token.substring(0,20) : 'NULL');
   return { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+token, ...extra };
 }
 
@@ -228,6 +230,8 @@ function setupAuth() {
     const user = stored.user || null;
 
     // Validate token looks like a JWT (starts with eyJ)
+    console.log('STORED TOKEN:', token ? token.substring(0,30) : 'NULL');
+    console.log('STORED USER:', user ? user.email : 'NULL');
     if (token && token.startsWith('eyJ') && user && user.id) {
       session = { access_token: token, refresh_token: refresh };
       currentUser = { 
@@ -235,6 +239,7 @@ function setupAuth() {
         email: user.email, 
         name: user.name || user.email.split('@')[0] 
       };
+      console.log('SESSION SET - access_token:', session.access_token.substring(0,20));
       showApp();
       return;
     }
