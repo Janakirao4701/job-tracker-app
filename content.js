@@ -366,101 +366,6 @@
           });
         });
 
-      } else if (sec === 'account') {
-        panel.innerHTML = `
-          <div style="font-size:14px;font-weight:700;color:#1F4E79;margin-bottom:3px;">Account</div>
-          <div style="font-size:11px;color:#718096;margin-bottom:14px;">Your profile and login details.</div>
-          <div style="display:flex;align-items:center;gap:10px;background:#f8fafc;border-radius:10px;padding:12px;margin-bottom:16px;border:1px solid #e2e8f0;">
-            <div style="width:36px;height:36px;border-radius:50%;background:#1F4E79;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;">${escHtml(getInitials(currentUser ? currentUser.name : ''))}</div>
-            <div>
-              <div style="font-size:13px;font-weight:700;color:#1F4E79;">${escHtml(currentUser ? currentUser.name : '')}</div>
-              <div style="font-size:10px;color:#a0aec0;">${escHtml(currentUser ? currentUser.email : '')}</div>
-            </div>
-          </div>
-          <div style="background:#fff8f0;border:1px solid #fbd38d;border-radius:7px;padding:10px;margin-bottom:14px;font-size:10px;color:#975a16;line-height:1.6;">
-            To change your password, use the Forgot Password option on the sign-in screen.
-          </div>
-          <div style="border-top:1px solid #f1f5f9;padding-top:14px;">
-            <div style="font-size:11px;font-weight:600;color:#c53030;margin-bottom:8px;">Danger Zone</div>
-
-          </div>`;
-
-        document.getElementById('rjd-signout-btn').addEventListener('click', logoutUser);
-
-      } else if (sec === 'data') {
-        const total = applications.length;
-        const withResume = applications.filter(a => a.resume).length;
-        const withJD = applications.filter(a => a.jd).length;
-        panel.innerHTML = `
-          <div style="font-size:14px;font-weight:700;color:#1F4E79;margin-bottom:3px;">My Data</div>
-          <div style="font-size:11px;color:#718096;margin-bottom:14px;">Overview of your stored data.</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;">
-            <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e2e8f0;">
-              <div style="font-size:20px;font-weight:700;color:#1F4E79;">${total}</div>
-              <div style="font-size:9px;color:#a0aec0;text-transform:uppercase;">Applications</div>
-            </div>
-            <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e2e8f0;">
-              <div style="font-size:20px;font-weight:700;color:#276749;">${withResume}</div>
-              <div style="font-size:9px;color:#a0aec0;text-transform:uppercase;">With Resume</div>
-            </div>
-            <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e2e8f0;">
-              <div style="font-size:20px;font-weight:700;color:#2E75B6;">${withJD}</div>
-              <div style="font-size:9px;color:#a0aec0;text-transform:uppercase;">With JD</div>
-            </div>
-          </div>
-          <div style="font-size:11px;color:#4a5568;background:#f8fafc;border-radius:7px;padding:10px;line-height:1.7;margin-bottom:16px;border:1px solid #e2e8f0;">
-            Data is stored in <strong>Supabase cloud</strong> and accessible from any device. Row Level Security ensures only you can see your data.
-          </div>
-          <div style="border-top:1px solid #f1f5f9;padding-top:14px;">
-            <div style="font-size:11px;font-weight:600;color:#c53030;margin-bottom:8px;">Danger Zone</div>
-            <button id="rjd-clear-data-btn" style="width:100%;padding:8px;background:#fff5f5;border:1px solid #fed7d7;border-radius:7px;font-size:11px;color:#c53030;cursor:pointer;font-family:inherit;">Delete all my applications</button>
-          </div>`;
-
-        document.getElementById('rjd-clear-data-btn').addEventListener('click', () => {
-          if (confirm('Delete ALL your applications? This cannot be undone.')) {
-            Promise.all(applications.map(a => dbDeleteApp(a.id))).then(() => {
-              applications = [];
-              renderTrackerScreen();
-              showToast('All data deleted');
-            });
-          }
-        });
-
-      } else if (sec === 'export') {
-        panel.innerHTML = `
-          <div style="font-size:14px;font-weight:700;color:#1F4E79;margin-bottom:3px;">Export</div>
-          <div style="font-size:11px;color:#718096;margin-bottom:14px;">Download your data in different formats.</div>
-          <div style="display:flex;flex-direction:column;gap:10px;">
-            <div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
-              <div style="font-size:12px;font-weight:700;color:#1a202c;margin-bottom:3px;">Excel Report (.xlsx)</div>
-              <div style="font-size:11px;color:#718096;margin-bottom:10px;">Professional color-coded spreadsheet with Applications + Summary sheets.</div>
-              <button id="rjd-export-xlsx-btn" class="rjd-primary-btn" style="width:100%;padding:8px;">Download Excel</button>
-            </div>
-            <div style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
-              <div style="font-size:12px;font-weight:700;color:#1a202c;margin-bottom:3px;">CSV (.csv)</div>
-              <div style="font-size:11px;color:#718096;margin-bottom:10px;">Simple comma-separated file. Open in any spreadsheet app.</div>
-              <button id="rjd-export-csv-btn2" style="width:100%;padding:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;color:#1F4E79;font-family:inherit;">Download CSV</button>
-            </div>
-          </div>`;
-
-        document.getElementById('rjd-export-xlsx-btn').addEventListener('click', () => {
-          document.getElementById('rjd-export-csv-btn') && document.getElementById('rjd-export-csv-btn').click();
-          renderTrackerScreen();
-          setTimeout(() => document.getElementById('rjd-export-csv-btn') && document.getElementById('rjd-export-csv-btn').click(), 100);
-        });
-
-        document.getElementById('rjd-export-csv-btn2').addEventListener('click', () => {
-          if (applications.length === 0) { showToast('No applications to export', true); return; }
-          const headers = ['#','Company','Job Title','URL','Status','Date','Notes'];
-          const rows = applications.map((a,i) => [i+1, a.company||'', a.jobTitle||'', a.url||'', a.status||'', a.date||'', (a.notes||'').replace(/"/g,'""')].map(v => '"'+v+'"').join(','));
-          const csv = [headers.join(','), ...rows].join('\n');
-          const blob = new Blob([csv], { type: 'text/csv' });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url; link.download = (currentUser.name||'applications') + '_' + new Date().toISOString().slice(0,10) + '.csv';
-          document.body.appendChild(link); link.click(); document.body.removeChild(link);
-          URL.revokeObjectURL(url); showToast('CSV exported');
-        });
 
       } else if (sec === 'shortcuts') {
         panel.innerHTML = `
@@ -1001,7 +906,7 @@
       };
       const ok = await dbSaveApp(app);
       if (ok) {
-        applications.unshift(app);
+        applications.push(app);
         hideNewAppPanel();
         renderTable();
         showToast('Application saved');
