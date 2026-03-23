@@ -1,3 +1,4 @@
+
 const SUPABASE_URL = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
 // Extension ID - update this after publishing to Chrome Web Store
 // For now using runtime detection
@@ -53,9 +54,7 @@ function showToast(msg, isError) {
 }
 
 function headers(extra) {
-  const token = (session && (session.access_token || session.token)) || SUPABASE_KEY;
-  console.log('TOKEN TYPE:', token === SUPABASE_KEY ? 'ANON KEY (BAD)' : 'USER JWT (GOOD)');
-  console.log('TOKEN START:', token ? token.substring(0,20) : 'NULL');
+  const token = session?.access_token || session?.token || SUPABASE_KEY;
   return { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+token, ...extra };
 }
 
@@ -87,21 +86,48 @@ async function signOut() {
 
 // ── SUPABASE DB ──
 async function loadApps() {
-  try {
-    // Add 10 second timeout to prevent infinite spinner
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-    const r = await fetch(
-      SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc',
-      { headers:headers(), signal: controller.signal }
-    );
-    clearTimeout(timeout);
-    if (!r.ok) return [];
-    const data = await r.json();
-    return Array.isArray(data) ? data.map(mapRow) : [];
-  } catch(e) {
-    return [];
+  let r = await fetch(SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc', { headers:headers() });
+  // If 401 — try refresh token
+  if (r.status === 401 && session?.refresh_token) {
+    const refreshed = await refreshToken();
+    if (refreshed) {
+      r = await fetch(SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc', { headers:headers() });
+    } else {
+      // Token refresh failed — sign out
+      clearStoredSession();
+      session = null; currentUser = null; apps = [];
+      showSection('auth-section'); setMode('signin');
+      return [];
+    }
   }
+  if (!r.ok) return [];
+  const data = await r.json();
+  return Array.isArray(data) ? data.map(mapRow) : [];
+}
+
+async function refreshToken() {
+  if (!session?.refresh_token) return false;
+  try {
+    const r = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ refresh_token: session.refresh_token })
+    });
+    const data = await r.json();
+    if (data.access_token) {
+      session = { access_token: data.access_token, refresh_token: data.refresh_token || session.refresh_token };
+      // Update stored session
+      const stored = loadStoredSession();
+      if (stored) {
+        stored.token = data.access_token;
+        stored.access_token = data.access_token;
+        if (data.refresh_token) stored.refreshToken = data.refresh_token;
+        localStorage.setItem('rjd_web_session', JSON.stringify(stored));
+      }
+      return true;
+    }
+  } catch(e) {}
+  return false;
 }
 function mapRow(r) {
   return { id:r.id, company:r.company||'', jobTitle:r.job_title||'', url:r.url||'',
@@ -185,10 +211,8 @@ async function loadGeminiKeyDB() {
 
 function saveSession(data) {
   const payload = {
-    token:         data.access_token,
-    access_token:  data.access_token,
-    refresh_token: data.refresh_token || '',
-    refreshToken:  data.refresh_token || '',
+    token: data.access_token,
+    refreshToken: data.refresh_token || '',
     user: {
       id:    data.user.id,
       email: data.user.email,
@@ -224,28 +248,16 @@ function clearStoredSession() {
 // ── AUTH SETUP ──
 function setupAuth() {
   const stored = loadStoredSession();
-  if (stored) {
-    const token = stored.access_token || stored.token || null;
-    const refresh = stored.refresh_token || stored.refreshToken || '';
-    const user = stored.user || null;
-
-    // Validate token looks like a JWT (starts with eyJ)
-    console.log('STORED TOKEN:', token ? token.substring(0,30) : 'NULL');
-    console.log('STORED USER:', user ? user.email : 'NULL');
-    if (token && token.startsWith('eyJ') && user && user.id) {
-      session = { access_token: token, refresh_token: refresh };
-      currentUser = { 
-        id: user.id, 
-        email: user.email, 
-        name: user.name || user.email.split('@')[0] 
-      };
-      console.log('SESSION SET - access_token:', session.access_token.substring(0,20));
-      showApp();
-      return;
-    }
+  if (stored && (stored.access_token || stored.token)) {
+    // Support both old format (access_token) and new format (token)
+    session = stored.access_token
+      ? { access_token: stored.access_token, refresh_token: stored.refresh_token }
+      : { access_token: stored.token, refresh_token: stored.refreshToken };
+    currentUser = stored.user
+      ? { id: stored.user.id, email: stored.user.email, name: stored.user.name || stored.user.email.split('@')[0] }
+      : null;
+    if (currentUser) { showApp(); return; }
   }
-  // No valid session — clear and show login
-  clearStoredSession();
   showSection('auth-section');
 }
 
