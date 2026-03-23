@@ -302,23 +302,39 @@ document.getElementById('auth-submit').addEventListener('click', async () => {
     const data = authMode === 'signin' ? await signIn(email, password) : await signUp(email, password, name);
 
     if (data.error || data.error_description) {
-      showAuthMsg(data.error_description || data.error || 'Something went wrong', true);
+      const raw = data.error_description || data.error || '';
+      let friendly = 'Something went wrong. Please try again.';
+      if (/invalid.*(login|credentials)/i.test(raw))          friendly = 'Incorrect email or password.';
+      else if (/already.*registered|user.*exists/i.test(raw)) friendly = 'An account with this email already exists. Try signing in.';
+      else if (/password.*characters/i.test(raw))             friendly = 'Password must be at least 6 characters.';
+      else if (raw)                                            friendly = raw;
+      showAuthMsg(friendly, true);
       btn.disabled = false; btn.textContent = authMode === 'signin' ? 'Sign in' : 'Create account';
       return;
     }
 
-    if (authMode === 'signup' && !data.access_token) {
-      showAuthMsg('Account created! Check your email to confirm, then sign in.', false);
-      setMode('signin'); btn.disabled = false; return;
+    // No token returned — shouldn't happen with email confirmation off, but handle gracefully
+    if (!data.access_token || !data.user || !data.user.id) {
+      showAuthMsg('Sign in failed. Please check your email and password.', true);
+      btn.disabled = false; btn.textContent = authMode === 'signin' ? 'Sign in' : 'Create account';
+      return;
     }
 
+    // Both signup and signin: log in immediately
     session     = data;
-    currentUser = { id: data.user.id, email: data.user.email,
-      name: data.user.user_metadata?.full_name || data.user.email.split('@')[0] };
+    currentUser = {
+      id:    data.user.id,
+      email: data.user.email,
+      name:  data.user.user_metadata?.full_name || data.user.email.split('@')[0]
+    };
     saveSession(data);
     showApp();
   } catch(e) {
-    showAuthMsg('Connection error. Check your internet.', true);
+    if (!navigator.onLine) {
+      showAuthMsg('No internet connection. Please check your network and try again.', true);
+    } else {
+      showAuthMsg('Could not connect to the server. Please try again.', true);
+    }
     btn.disabled = false; btn.textContent = authMode === 'signin' ? 'Sign in' : 'Create account';
   }
 });
@@ -576,8 +592,8 @@ function renderDashboard() {
   function buildWeeklyChart() {
     const el = document.getElementById('weekly-chart');
     if (!el) return;
-    const labels = weeklyData.map(w => w.label);
-    const data   = weeklyData.map(w => w.count);
+    const labels = ${JSON.stringify(weeklyData.map(w=>w.label))};
+    const data   = ${JSON.stringify(weeklyData.map(w=>w.count))};
     new Chart(el, {
       type: 'bar',
       data: {
