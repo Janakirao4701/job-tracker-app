@@ -486,18 +486,18 @@ function renderDashboard() {
             <span style="font-size:13px;font-weight:600;color:#1a202c;">${monthName}</span>
             <span style="font-size:12px;color:#718096;">${apps.filter(a=>a.dateRaw&&new Date(a.dateRaw).getMonth()===calMonth&&new Date(a.dateRaw).getFullYear()===calYear).length} applied this month</span>
           </div>
-          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">
-            ${['S','M','T','W','T','F','S'].map(d=>`<div style="font-size:10px;color:#a0aec0;font-weight:600;text-align:center;padding-bottom:4px;">${d}</div>`).join('')}
-            ${Array(firstDay).fill(`<div></div>`).join('')}
+          <div style="display:grid;grid-template-columns:repeat(7,32px);gap:2px;justify-content:space-between;">
+            ${['S','M','T','W','T','F','S'].map(d=>`<div style="width:32px;height:20px;font-size:10px;color:#a0aec0;font-weight:600;text-align:center;line-height:20px;">${d}</div>`).join('')}
+            ${Array(firstDay).fill(`<div style="width:32px;height:32px;"></div>`).join('')}
             ${Array.from({length:daysInMonth},(_,i)=>{
               const d = i+1;
               const key = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
               const count = calendarData[key]||0;
               const isToday = key === todayISO();
-              let bg = 'transparent', color = '#4a5568', fontWeight = '400', borderStyle = 'none';
+              let bg = 'transparent', color = '#4a5568', fontWeight = '400', border = 'none';
               if (count > 0) { bg = '#1F4E79'; color = '#fff'; fontWeight = '600'; }
-              else if (isToday) { bg = '#EBF4FF'; color = '#1F4E79'; fontWeight = '600'; borderStyle = '1.5px solid #1F4E79'; }
-              return `<div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${bg};color:${color};font-size:11px;font-weight:${fontWeight};border:${borderStyle || 'none'};position:relative;" title="${count>0?count+' application'+(count>1?'s':''):''}">${d}${count>1?`<span style="position:absolute;top:0;right:0;width:5px;height:5px;border-radius:50%;background:#4299e1;"></span>`:''}</div>`;
+              else if (isToday) { bg = '#EBF4FF'; color = '#1F4E79'; fontWeight = '600'; border = '1.5px solid #1F4E79'; }
+              return `<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${bg};color:${color};font-size:11px;font-weight:${fontWeight};border:${border};" title="${count>0?count+' application'+(count>1?'s':''):''}">${d}</div>`;
             }).join('')}
           </div>
           <div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid #f1f5f9;">
@@ -524,47 +524,9 @@ function renderDashboard() {
               <div style="font-size:22px;font-weight:700;color:#4a5568;">${weeklyData.reduce((s,w)=>s+w.count,0)}</div>
             </div>
           </div>
-          <div style="position:relative;height:120px;">
+          <div style="position:relative;height:120px;" id="weekly-chart-wrap">
             <canvas id="weekly-chart"></canvas>
           </div>
-          <script>
-            (function() {
-              const el = document.getElementById('weekly-chart');
-              if (!el || el._chartBuilt) return;
-              el._chartBuilt = true;
-              const labels = ${JSON.stringify(weeklyData.map(w=>w.label))};
-              const data   = ${JSON.stringify(weeklyData.map(w=>w.count))};
-              function build() {
-                new Chart(el, {
-                  type: 'bar',
-                  data: {
-                    labels,
-                    datasets: [{
-                      data,
-                      backgroundColor: data.map((_,i) => i === data.length-1 ? '#1F4E79' : '#BFD7ED'),
-                      borderRadius: 4,
-                      borderSkipped: false,
-                    }]
-                  },
-                  options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed.y + ' apps' } } },
-                    scales: {
-                      x: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#a0aec0' } },
-                      y: { display: false, beginAtZero: true }
-                    }
-                  }
-                });
-              }
-              if (window.Chart) { build(); }
-              else {
-                const s = document.createElement('script');
-                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';
-                s.onload = build;
-                document.head.appendChild(s);
-              }
-            })();
-          <\/script>
         </div>
       </div>
 
@@ -607,8 +569,36 @@ function renderDashboard() {
       </table>
     </div>` : ''}`;
 
-  // Critical fix #2: dashHTML was built but never inserted — dashboard showed spinner forever
+  // Critical fix: render chart after innerHTML is set — scripts inside innerHTML don't execute
   document.getElementById('page-content').innerHTML = dashHTML;
+
+  // Build weekly chart
+  function buildWeeklyChart() {
+    const el = document.getElementById('weekly-chart');
+    if (!el) return;
+    const labels = ${JSON.stringify(weeklyData.map(w=>w.label))};
+    const data   = ${JSON.stringify(weeklyData.map(w=>w.count))};
+    new Chart(el, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ data, backgroundColor: data.map((_,i) => i===data.length-1?'#1F4E79':'#BFD7ED'), borderRadius:4, borderSkipped:false }]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false}, tooltip:{callbacks:{label:ctx=>ctx.parsed.y+' apps'}} },
+        scales:{ x:{grid:{display:false},ticks:{font:{size:11},color:'#a0aec0'}}, y:{display:false,beginAtZero:true} }
+      }
+    });
+  }
+  if (window.Chart) {
+    buildWeeklyChart();
+  } else {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';
+    s.onload = buildWeeklyChart;
+    document.head.appendChild(s);
+  }
 
   if (apps.length > 6) {
     const viewAllBtn = document.getElementById('view-all-btn');
