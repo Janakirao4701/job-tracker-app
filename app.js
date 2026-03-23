@@ -434,6 +434,10 @@ function renderDashboard() {
   const statusCounts = {};
   STATUSES.forEach(s => { statusCounts[s] = apps.filter(a => a.status === s).length; });
 
+  // Build calendar day lookup
+  const calendarData = {};
+  apps.forEach(a => { if (a.dateRaw) { const k = new Date(a.dateRaw).toLocaleDateString('en-CA'); calendarData[k] = (calendarData[k]||0)+1; } });
+
   // Build weekly progress data (last 6 weeks)
   const weeklyData = [];
   for (let i = 5; i >= 0; i--) {
@@ -488,7 +492,7 @@ function renderDashboard() {
             ${Array.from({length:daysInMonth},(_,i)=>{
               const d = i+1;
               const key = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-              const count = heatmapData[key]||0;
+              const count = calendarData[key]||0;
               const isToday = key === todayISO();
               let bg = 'transparent', color = '#4a5568', fontWeight = '400', borderStyle = 'none';
               if (count > 0) { bg = '#1F4E79'; color = '#fff'; fontWeight = '600'; }
