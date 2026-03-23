@@ -576,8 +576,8 @@ function renderDashboard() {
   function buildWeeklyChart() {
     const el = document.getElementById('weekly-chart');
     if (!el) return;
-    const labels = ${JSON.stringify(weeklyData.map(w=>w.label))};
-    const data   = ${JSON.stringify(weeklyData.map(w=>w.count))};
+    const labels = weeklyData.map(w => w.label);
+    const data   = weeklyData.map(w => w.count);
     new Chart(el, {
       type: 'bar',
       data: {
