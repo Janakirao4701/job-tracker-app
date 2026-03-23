@@ -128,6 +128,48 @@ async function deleteApp(id) {
 }
 
 // ── SESSION ──
+// ── GEMINI KEY — stored in Supabase per user ──
+async function saveGeminiKeyDB(key) {
+  // Save to Supabase
+  try {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/user_settings', {
+      method: 'POST',
+      headers: headers({'Prefer': 'resolution=merge-duplicates,return=representation'}),
+      body: JSON.stringify({ username: currentUser.id, gemini_key: key })
+    });
+    if (res.ok) {
+      // Also save locally for fast access
+      localStorage.setItem('rjd_gemini_key_' + currentUser.id, key);
+      return true;
+    }
+  } catch(e) {}
+  // Fallback to localStorage only
+  localStorage.setItem('rjd_gemini_key_' + currentUser.id, key);
+  return false;
+}
+
+async function loadGeminiKeyDB() {
+  // Try localStorage first (fast)
+  const localKey = localStorage.getItem('rjd_gemini_key_' + currentUser.id);
+  if (localKey) return localKey;
+  // Load from Supabase
+  try {
+    const res = await fetch(
+      SUPABASE_URL + '/rest/v1/user_settings?username=eq.' + currentUser.id + '&select=gemini_key',
+      { headers: headers() }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data[0] && data[0].gemini_key) {
+        const key = data[0].gemini_key;
+        localStorage.setItem('rjd_gemini_key_' + currentUser.id, key);
+        return key;
+      }
+    }
+  } catch(e) {}
+  return '';
+}
+
 function saveSession(data) {
   const payload = {
     token: data.access_token,
@@ -269,6 +311,11 @@ async function showApp() {
   document.getElementById('sb-email').textContent  = currentUser.email;
   showLoading();
   apps = await loadApps();
+  // Load and sync Gemini key to extension
+  const geminiKey = await loadGeminiKeyDB();
+  if (geminiKey && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.set({ rjd_gemini_key: geminiKey });
+  }
   navigateTo('dashboard');
 }
 
@@ -496,7 +543,7 @@ function renderSettingsSection(sec) {
   if (!panel) return;
 
   if (sec === 'apikey') {
-    const savedKey = localStorage.getItem('rjd_gemini_key') || '';
+    const savedKey = localStorage.getItem('rjd_gemini_key_' + (currentUser?.id||'')) || '';
     panel.innerHTML = `
       <div class="settings-section-title">Gemini API Key</div>
       <div class="settings-section-sub">Powers AI extraction in the Chrome extension. Free from Google.</div>
@@ -528,9 +575,10 @@ function renderSettingsSection(sec) {
       const key = document.getElementById('key-input').value.trim();
       if (!key) { document.getElementById('settings-msg').innerHTML='<div class="auth-msg error">Enter your API key</div>'; return; }
       if (!key.startsWith('AIza')) { document.getElementById('settings-msg').innerHTML='<div class="auth-msg error">Key should start with AIza...</div>'; return; }
-      localStorage.setItem('rjd_gemini_key', key);
-      document.getElementById('settings-msg').innerHTML='<div class="auth-msg success">Key saved ✓</div>';
-      setTimeout(() => { const el=document.getElementById('settings-msg'); if(el) el.innerHTML=''; }, 3000);
+      saveGeminiKeyDB(key).then(saved => {
+        document.getElementById('settings-msg').innerHTML='<div class="auth-msg success">Key saved ' + (saved ? '& synced ✓' : '(locally) ✓') + '</div>';
+        setTimeout(() => { const el=document.getElementById('settings-msg'); if(el) el.innerHTML=''; }, 3000);
+      });
     });
 
   } else if (sec === 'account') {
