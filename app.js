@@ -606,27 +606,44 @@ function renderDashboard() {
   // Critical fix: render chart after innerHTML is set — scripts inside innerHTML don't execute
   document.getElementById('page-content').innerHTML = dashHTML;
 
-  // Build weekly chart — wait for Chart.js to load if not ready yet
+  // Build weekly chart — pure canvas, no Chart.js dependency
   function buildWeeklyChart() {
     const el = document.getElementById('weekly-chart');
     if (!el) return;
-    if (typeof Chart === 'undefined') {
-      setTimeout(buildWeeklyChart, 50);
-      return;
-    }
     const labels = weeklyData.map(w => w.label);
     const data   = weeklyData.map(w => w.count);
-    new Chart(el, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{ data, backgroundColor: data.map((_,i) => i===data.length-1?'#1F4E79':'#BFD7ED'), borderRadius:4, borderSkipped:false }]
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{display:false}, tooltip:{callbacks:{label:ctx=>ctx.parsed.y+' apps'}} },
-        scales:{ x:{grid:{display:false},ticks:{font:{size:11},color:'#a0aec0'}}, y:{display:false,beginAtZero:true} }
+    const max    = Math.max(...data, 1);
+    const W = el.parentElement.offsetWidth || 340;
+    const H = 120;
+    el.width  = W;
+    el.height = H;
+    const ctx = el.getContext('2d');
+    const n   = data.length;
+    const barW  = Math.floor((W - 20) / n * 0.55);
+    const gap   = Math.floor((W - 20) / n);
+    const padB  = 22, padT = 10;
+    const chartH = H - padB - padT;
+    ctx.clearRect(0, 0, W, H);
+    data.forEach((val, i) => {
+      const x   = 10 + i * gap + (gap - barW) / 2;
+      const bH  = val > 0 ? Math.max(4, Math.round((val / max) * chartH)) : 0;
+      const y   = padT + chartH - bH;
+      ctx.fillStyle = i === n - 1 ? '#1F4E79' : '#BFD7ED';
+      ctx.beginPath();
+      ctx.roundRect(x, y, barW, bH, 3);
+      ctx.fill();
+      // value label on top
+      if (val > 0) {
+        ctx.fillStyle = '#4a5568';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(val, x + barW / 2, y - 3);
       }
+      // x-axis label
+      ctx.fillStyle = '#a0aec0';
+      ctx.font = '9px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(labels[i], x + barW / 2, H - 5);
     });
   }
   buildWeeklyChart();
