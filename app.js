@@ -366,11 +366,13 @@ async function showApp() {
       await refreshToken();
     }, 50 * 60 * 1000);
   }
-  // Load and sync Gemini key to extension
-  const geminiKey = await loadGeminiKeyDB();
-  if (geminiKey && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    chrome.storage.local.set({ rjd_gemini_key: geminiKey });
-  }
+  // Load and sync Gemini key to extension (non-blocking)
+  try {
+    const geminiKey = await loadGeminiKeyDB();
+    if (geminiKey && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.set({ rjd_gemini_key: geminiKey });
+    }
+  } catch(e) {}
   navigateTo('dashboard');
 }
 
@@ -429,7 +431,7 @@ function renderDashboard() {
   const statusCounts = {};
   STATUSES.forEach(s => { statusCounts[s] = apps.filter(a => a.status === s).length; });
 
-  document.getElementById('page-content').innerHTML = `
+  const dashHTML = `
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-card-label">Total Applications</div>
@@ -485,7 +487,7 @@ function renderDashboard() {
               </tr>`).join('') || '<tr><td colspan="3" class="empty-row">No applications yet</td></tr>'}
           </tbody>
         </table>
-        ${apps.length > 6 ? `<div style="padding:10px 16px;border-top:1px solid #f1f5f9;text-align:center;"><button class="auth-link" onclick="navigateTo('applications')">View all ${apps.length} →</button></div>` : ''}
+        ${apps.length > 6 ? `<div style="padding:10px 16px;border-top:1px solid #f1f5f9;text-align:center;"><button class="auth-link" id="view-all-btn">View all ${apps.length} →</button></div>` : ''}
       </div>
     </div>
 
