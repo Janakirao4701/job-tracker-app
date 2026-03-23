@@ -385,6 +385,24 @@ async function showApp() {
       await refreshToken();
     }, 50 * 60 * 1000);
   }
+  // ── BACKGROUND SYNC: poll for changes from other browsers/sessions ──
+  if (!window._appSyncTimer) {
+    window._appSyncTimer = setInterval(async () => {
+      if (!session || !currentUser) return;
+      try {
+        const fresh = await loadApps();
+        const oldIds  = apps.map(a => a.id).sort().join(',');
+        const newIds  = fresh.map(a => a.id).sort().join(',');
+        const oldSigs = apps.map(a => a.id + a.status + a.notes + a.followUpDate).sort().join('|');
+        const newSigs = fresh.map(a => a.id + a.status + a.notes + a.followUpDate).sort().join('|');
+        if (oldIds !== newIds || oldSigs !== newSigs) {
+          apps = fresh;
+          updateBadge();
+          renderPage(currentPage);
+        }
+      } catch(e) {}
+    }, 20 * 1000); // poll every 20 seconds
+  }
   // Load and sync Gemini key to extension (non-blocking)
   try {
     const geminiKey = await loadGeminiKeyDB();
@@ -963,6 +981,8 @@ document.getElementById('signout-btn').addEventListener('click', async () => {
   await signOut();
   clearStoredSession();
   session = null; currentUser = null; apps = [];
+  if (window._appSyncTimer)    { clearInterval(window._appSyncTimer);    window._appSyncTimer    = null; }
+  if (window._appRefreshTimer) { clearInterval(window._appRefreshTimer); window._appRefreshTimer = null; }
   const fields = ['auth-email','auth-password','auth-name','forgot-email'];
   fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('auth-msg').innerHTML = '';
