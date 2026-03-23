@@ -85,48 +85,21 @@ async function signOut() {
 
 // ── SUPABASE DB ──
 async function loadApps() {
-  let r = await fetch(SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc', { headers:headers() });
-  // If 401 — try refresh token
-  if (r.status === 401 && session?.refresh_token) {
-    const refreshed = await refreshToken();
-    if (refreshed) {
-      r = await fetch(SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc', { headers:headers() });
-    } else {
-      // Token refresh failed — sign out
-      clearStoredSession();
-      session = null; currentUser = null; apps = [];
-      showSection('auth-section'); setMode('signin');
-      return [];
-    }
-  }
-  if (!r.ok) return [];
-  const data = await r.json();
-  return Array.isArray(data) ? data.map(mapRow) : [];
-}
-
-async function refreshToken() {
-  if (!session?.refresh_token) return false;
   try {
-    const r = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-      body: JSON.stringify({ refresh_token: session.refresh_token })
-    });
+    // Add 10 second timeout to prevent infinite spinner
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const r = await fetch(
+      SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc',
+      { headers:headers(), signal: controller.signal }
+    );
+    clearTimeout(timeout);
+    if (!r.ok) return [];
     const data = await r.json();
-    if (data.access_token) {
-      session = { access_token: data.access_token, refresh_token: data.refresh_token || session.refresh_token };
-      // Update stored session
-      const stored = loadStoredSession();
-      if (stored) {
-        stored.token = data.access_token;
-        stored.access_token = data.access_token;
-        if (data.refresh_token) stored.refreshToken = data.refresh_token;
-        localStorage.setItem('rjd_web_session', JSON.stringify(stored));
-      }
-      return true;
-    }
-  } catch(e) {}
-  return false;
+    return Array.isArray(data) ? data.map(mapRow) : [];
+  } catch(e) {
+    return [];
+  }
 }
 function mapRow(r) {
   return { id:r.id, company:r.company||'', jobTitle:r.job_title||'', url:r.url||'',
