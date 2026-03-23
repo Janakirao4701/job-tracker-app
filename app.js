@@ -1017,13 +1017,8 @@ function renderExport() {
   // Use dateKey (working date chosen in extension) if available, else fallback to workday from dateRaw
   const dateCounts = {};
   apps.forEach(a => {
-    let k = '';
-    if (a.dateKey) {
-      const parts = a.dateKey.split('-');
-      k = parts[0] + '-' + String(parts[1]).padStart(2,'0') + '-' + String(parts[2]).padStart(2,'0');
-    } else if (a.dateRaw) {
-      k = getWorkDayISO(a.dateRaw);
-    }
+    // dateKey is YYYY-MM-DD (zero-padded) — use directly
+    const k = a.dateKey || (a.dateRaw ? getWorkDayISO(a.dateRaw) : '');
     if (k) dateCounts[k] = (dateCounts[k]||0)+1;
   });
   const uniqueDates = Object.keys(dateCounts).sort().reverse().slice(0, 7);
@@ -1073,14 +1068,9 @@ function renderExport() {
 
   function getFilteredApps() {
     if (!exportDate) return apps;
-    // Match by dateKey (set to working date in extension) OR fallback to dateRaw-based workday
+    // dateKey is now always YYYY-MM-DD (zero-padded), direct match
     return apps.filter(a => {
-      if (a.dateKey) {
-        // dateKey format is "YYYY-M-D", normalize it
-        const parts = a.dateKey.split('-');
-        const normalized = parts[0] + '-' + String(parts[1]).padStart(2,'0') + '-' + String(parts[2]).padStart(2,'0');
-        return normalized === exportDate;
-      }
+      if (a.dateKey) return a.dateKey === exportDate;
       return a.dateRaw && getWorkDayISO(a.dateRaw) === exportDate;
     });
   }
