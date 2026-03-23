@@ -80,7 +80,7 @@ async function signOut() {
 
 // ── SUPABASE DB ──
 async function loadApps() {
-  const r = await fetch(SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.desc', { headers:headers() });
+  const r = await fetch(SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc', { headers:headers() });
   if (!r.ok) return [];
   const data = await r.json();
   return Array.isArray(data) ? data.map(mapRow) : [];
@@ -813,7 +813,7 @@ document.getElementById('modal-save').addEventListener('click', async () => {
   };
   const ok = await saveApp(app);
   if (ok) {
-    apps.unshift(app);
+    apps.push(app);
     document.getElementById('add-modal').classList.add('hidden');
     ['m-company','m-title','m-url','m-jd','m-notes'].forEach(id => document.getElementById(id).value='');
     updateBadge();

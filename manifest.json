@@ -1,0 +1,85 @@
+{
+  "manifest_version": 3,
+  "name": "Job Application Tracker",
+  "version": "4.2.0",
+  "description": "Track job applications with AI extraction, cloud sync, and Supabase auth",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "clipboardRead",
+    "tabs",
+    "notifications"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "https://generativelanguage.googleapis.com/",
+    "https://dxsdvzhnqbynicrvbcfi.supabase.co/",
+    "https://job-tracker-app-iota-beryl.vercel.app/"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "commands": {
+    "toggle_sidebar": {
+      "suggested_key": {
+        "default": "Alt+Shift+T",
+        "mac": "Alt+Shift+T"
+      },
+      "description": "Open or close the tracker sidebar"
+    },
+    "extract_save": {
+      "suggested_key": {
+        "default": "Alt+Shift+E",
+        "mac": "Alt+Shift+E"
+      },
+      "description": "Extract & Save current job"
+    },
+    "new_app": {
+      "suggested_key": {
+        "default": "Alt+Shift+N",
+        "mac": "Alt+Shift+N"
+      },
+      "description": "Open new application form"
+    },
+    "open_settings": {
+      "suggested_key": {
+        "default": "Alt+Shift+S",
+        "mac": "Alt+Shift+S"
+      },
+      "description": "Open settings"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "xlsxbuilder.js",
+        "content.js"
+      ],
+      "css": [
+        "sidebar.css"
+      ]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "externally_connectable": {
+    "matches": [
+      "https://job-tracker-app-iota-beryl.vercel.app/*"
+    ]
+  }
+}
