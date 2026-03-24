@@ -661,14 +661,35 @@
     document.getElementById('rjd-detail-followup').value     = app.followUpDate || '';
     const resumeSection = document.getElementById('rjd-detail-resume-section');
     if (app.resume) {
-      resumeSection.innerHTML = `<button id="rjd-view-resume-detail" class="rjd-action-btn">View Resume</button>
-        <button id="rjd-update-resume-btn" class="rjd-action-btn rjd-secondary-btn">Update Resume</button>`;
+      resumeSection.innerHTML = `
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button id="rjd-view-resume-detail" class="rjd-action-btn">View Resume</button>
+          <button id="rjd-copy-resume-btn" class="rjd-action-btn rjd-secondary-btn">Copy Resume</button>
+          <button id="rjd-update-resume-btn" class="rjd-action-btn rjd-secondary-btn">Update Resume</button>
+        </div>`;
       document.getElementById('rjd-view-resume-detail').addEventListener('click', () => showResumeDetail(app));
+      document.getElementById('rjd-copy-resume-btn').addEventListener('click', () => {
+        navigator.clipboard.writeText(app.resume).then(() => showToast('Resume copied')).catch(() => showToast('Copy failed', true));
+      });
       document.getElementById('rjd-update-resume-btn').addEventListener('click',  () => saveResumeFromClipboard(app.id));
     } else {
       resumeSection.innerHTML = `<button id="rjd-add-resume-btn" class="rjd-action-btn">+ Add Resume from Clipboard</button>`;
       document.getElementById('rjd-add-resume-btn').addEventListener('click', () => saveResumeFromClipboard(app.id));
     }
+    // Copy JD button
+    const copyJdBtn = document.getElementById('rjd-copy-jd-btn');
+    if (copyJdBtn) copyJdBtn.addEventListener('click', () => {
+      const jd = app.jd || '';
+      if (!jd) { showToast('No JD saved', true); return; }
+      navigator.clipboard.writeText(jd).then(() => showToast('JD copied')).catch(() => showToast('Copy failed', true));
+    });
+    // Copy URL button
+    const copyUrlBtn = document.getElementById('rjd-copy-url-btn');
+    if (copyUrlBtn) copyUrlBtn.addEventListener('click', () => {
+      const v = document.getElementById('rjd-detail-url-input')?.value.trim() || '';
+      if (!v) { showToast('No URL saved', true); return; }
+      navigator.clipboard.writeText(v).then(() => showToast('URL copied')).catch(() => showToast('Copy failed', true));
+    });
   }
 
   function hideAppDetail() {
@@ -744,6 +765,7 @@
             <div style="display:flex;gap:6px;">
               <button id="rjd-quick-extract-btn" class="rjd-primary-btn" style="background:#1F4E79;font-size:11px;padding:5px 10px;white-space:nowrap;">✦ Extract & Save</button>
               <button id="rjd-new-app-btn" class="rjd-primary-btn">+ New</button>
+              <button id="rjd-refresh-btn" title="Refresh" style="background:rgba(255,255,255,0.2);border:none;color:#fff;font-size:14px;cursor:pointer;padding:5px 7px;border-radius:6px;line-height:1;">↻</button>
               <button id="rjd-settings-btn" title="Settings" style="background:rgba(255,255,255,0.2);border:none;color:#fff;font-size:14px;cursor:pointer;padding:5px 7px;border-radius:6px;line-height:1;">⚙</button>
             </div>
           </div>
@@ -824,12 +846,19 @@
               <div style="display:flex;gap:6px;align-items:center;flex:1;">
                 <input type="url" id="rjd-detail-url-input" style="flex:1;padding:4px 8px;border:1px solid #cbd5e0;border-radius:5px;font-size:12px;font-family:inherit;background:#fff;color:#1a202c;" placeholder="https://..."/>
                 <a id="rjd-detail-url" target="_blank" class="rjd-url-link" style="white-space:nowrap;flex-shrink:0;">Open</a>
+                <button id="rjd-copy-url-btn" style="padding:3px 8px;border:1px solid #e2e8f0;border-radius:5px;font-size:11px;background:#f8fafc;color:#4a5568;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;">Copy</button>
               </div>
             </div>
             <div class="rjd-detail-row"><span class="rjd-detail-lbl">Date</span><span id="rjd-detail-date"></span></div>
             <div class="rjd-detail-row"><span class="rjd-detail-lbl">Status</span><span id="rjd-detail-status"></span></div>
-            <div class="rjd-detail-section"><div class="rjd-detail-lbl">Resume</div><div id="rjd-detail-resume-section" style="margin-top:6px;"></div></div>
-            <div class="rjd-detail-section"><div class="rjd-detail-lbl">Job Description</div><pre id="rjd-detail-jd" class="rjd-jd-text"></pre></div>
+            <div class="rjd-detail-section"><div class="rjd-detail-lbl" style="display:flex;align-items:center;justify-content:space-between;">Resume</div><div id="rjd-detail-resume-section" style="margin-top:6px;"></div></div>
+            <div class="rjd-detail-section">
+              <div class="rjd-detail-lbl" style="display:flex;align-items:center;justify-content:space-between;">
+                <span>Job Description</span>
+                <button id="rjd-copy-jd-btn" style="padding:3px 8px;border:1px solid #e2e8f0;border-radius:5px;font-size:11px;background:#f8fafc;color:#4a5568;cursor:pointer;font-family:inherit;">Copy JD</button>
+              </div>
+              <pre id="rjd-detail-jd" class="rjd-jd-text"></pre>
+            </div>
             <div class="rjd-detail-section">
               <div class="rjd-detail-lbl">Follow-up Date</div>
               <input type="date" id="rjd-detail-followup" style="width:100%;padding:6px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:12px;font-family:inherit;background:#fff !important;color:#1a202c !important;margin-top:4px;"/>
@@ -861,6 +890,20 @@
 
   function bindTrackerEvents() {
     document.getElementById('rjd-settings-btn').addEventListener('click', () => renderSettingsScreen('tracker'));
+    document.getElementById('rjd-refresh-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('rjd-refresh-btn');
+      btn.style.opacity = '0.5';
+      btn.disabled = true;
+      try {
+        applications = await dbLoadApps();
+        renderTable();
+        showToast('Refreshed ✓');
+      } catch(e) {
+        showToast('Refresh failed', true);
+      }
+      btn.style.opacity = '1';
+      btn.disabled = false;
+    });
     document.getElementById('rjd-new-app-btn').addEventListener('click', () => showNewAppPanel(false));
     document.getElementById('rjd-new-back').addEventListener('click', hideNewAppPanel);
     document.getElementById('rjd-detail-back').addEventListener('click', hideAppDetail);
@@ -1125,6 +1168,8 @@
       .rjd-settings-nav-item{padding:7px 12px;font-size:11px;color:#718096;cursor:pointer;border-left:2px solid transparent;display:flex;align-items:center;gap:6px;}
       .rjd-settings-nav-item:hover{background:#f1f5f9;color:#1F4E79;}
       .rjd-snav-active{background:#ebf4ff !important;color:#1F4E79 !important;border-left-color:#1F4E79 !important;font-weight:600;}
+      .rjd-td-sno{width:24px !important;min-width:24px !important;max-width:24px !important;padding:5px 4px !important;text-align:center !important;}
+      #rjd-table thead tr th:first-child{width:24px !important;padding:5px 4px !important;text-align:center !important;}
       #rjd-sidebar[data-theme=dark]{background:#1a202c !important;color:#e2e8f0 !important;border-left-color:#2d3748 !important;}
       #rjd-sidebar[data-theme=dark] #rjd-header{background:#1F4E79 !important;}
       #rjd-sidebar[data-theme=dark] #rjd-toolbar{background:#2d3748 !important;border-bottom-color:#4a5568 !important;}

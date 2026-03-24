@@ -56,6 +56,9 @@ function getWorkDayStart() {
 function saveWorkDayStart(hour) {
   localStorage.setItem('rjd_workday_start', String(hour));
 }
+// Aliases used by the Settings UI (Night Shift Cutoff)
+function getWorkDayCutoff() { return parseInt(localStorage.getItem('rjd_workday_cutoff') || '0', 10); }
+function saveWorkDayCutoff(hour) { localStorage.setItem('rjd_workday_cutoff', String(hour)); }
 // Returns the ISO work-day string (YYYY-MM-DD) for a given dateRaw timestamp
 // Logic: if hour >= workDayStart → work day = today (the session just started)
 //        if hour <  workDayStart → work day = yesterday (still in last night's session)
@@ -406,6 +409,20 @@ async function showApp() {
   // Click topbar user → go to settings
   const tb = document.getElementById('topbar-user-btn');
   if (tb) tb.addEventListener('click', () => navigateTo('settings'));
+  // Refresh button
+  const refreshBtn = document.getElementById('refresh-btn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async () => {
+      refreshBtn.textContent = '↻ Refreshing...';
+      refreshBtn.disabled = true;
+      apps = await loadApps();
+      updateBadge();
+      renderPage(currentPage);
+      refreshBtn.textContent = '↻ Refresh';
+      refreshBtn.disabled = false;
+      showToast('Refreshed ✓');
+    });
+  }
   showLoading();
   apps = await loadApps();
   // Auto-refresh token every 50 minutes
@@ -467,6 +484,8 @@ function navigateTo(page) {
   document.getElementById('page-title').textContent = titles[page] || page;
   const addBtn = document.getElementById('add-app-btn');
   if (addBtn) addBtn.classList.toggle('hidden', page !== 'applications');
+  const refreshBtn = document.getElementById('refresh-btn');
+  if (refreshBtn) refreshBtn.style.display = '';
   renderPage(page);
 }
 
