@@ -280,6 +280,7 @@ function saveSession(data) {
   const payload = {
     token: data.access_token,
     refreshToken: data.refresh_token || '',
+    refresh_token: data.refresh_token || '',  // both keys for cross-file compat
     user: {
       id:    data.user.id,
       email: data.user.email,
@@ -287,16 +288,16 @@ function saveSession(data) {
     }
   };
 
-  // Issue #16: chrome.storage.local is the canonical session store.
-  // localStorage is kept only as a fallback for non-extension web contexts.
+  // Write localStorage synchronously so it's available immediately on page refresh.
   localStorage.setItem('rjd_web_session', JSON.stringify(payload));
 
-  // Save to chrome.storage — works because app.html is an extension page
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    // Write chrome.storage first, then broadcast — content scripts read from chrome.storage.
     chrome.storage.local.set({ rjd_session: payload }, () => {
-      // Tell background to push to all tabs
+      // Broadcast AFTER storage is confirmed written so content scripts
+      // that re-read storage on receiving this message get the fresh value.
       chrome.runtime.sendMessage({ action: 'session_saved', payload }, () => {
-        if (chrome.runtime.lastError) {} // ignore
+        if (chrome.runtime.lastError) {} // ignore — background may not be awake yet
       });
     });
   }
@@ -315,18 +316,36 @@ function clearStoredSession() {
 
 // ── AUTH SETUP ──
 function setupAuth() {
+  // Try localStorage first (synchronous — fastest path).
   const stored = loadStoredSession();
-  if (stored && (stored.access_token || stored.token)) {
-    // Support both old format (access_token) and new format (token)
-    session = stored.access_token
-      ? { access_token: stored.access_token, refresh_token: stored.refresh_token }
-      : { access_token: stored.token, refresh_token: stored.refreshToken };
-    currentUser = stored.user
-      ? { id: stored.user.id, email: stored.user.email, name: stored.user.name || stored.user.email.split('@')[0] }
-      : null;
-    if (currentUser) { showApp(); return; }
+  if (stored && (stored.access_token || stored.token) && stored.user) {
+    session = { access_token: stored.access_token || stored.token,
+                refresh_token: stored.refresh_token || stored.refreshToken || '' };
+    currentUser = { id: stored.user.id, email: stored.user.email,
+                    name: stored.user.name || stored.user.email.split('@')[0] };
+    showApp();
+    return;
   }
-  showSection('auth-section');
+  // Bug fix: localStorage may be absent (cleared by browser, different origin).
+  // Fall back to chrome.storage — this is the canonical store.
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.get('rjd_session', r => {
+      const s = r.rjd_session || null;
+      if (s && (s.access_token || s.token) && s.user) {
+        session = { access_token: s.access_token || s.token,
+                    refresh_token: s.refresh_token || s.refreshToken || '' };
+        currentUser = { id: s.user.id, email: s.user.email,
+                        name: s.user.name || s.user.email.split('@')[0] };
+        // Also re-sync localStorage so next load is fast again.
+        localStorage.setItem('rjd_web_session', JSON.stringify(s));
+        showApp();
+      } else {
+        showSection('auth-section');
+      }
+    });
+  } else {
+    showSection('auth-section');
+  }
 }
 
 document.getElementById('tab-signin').addEventListener('click', () => setMode('signin'));

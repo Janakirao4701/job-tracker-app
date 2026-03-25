@@ -1353,9 +1353,11 @@
   // ── SESSION MANAGEMENT ──
   function applySession(sess) {
     const tog = document.getElementById('rjd-toggle');
+    // Normalise: accept both {token} (our format) and {access_token} (raw Supabase format).
+    if (sess && (sess.token || sess.access_token)) sess = { ...sess, token: sess.token || sess.access_token };
     if (sess && sess.token && sess.user) {
       sessionToken        = sess.token;
-      sessionRefreshToken = sess.refreshToken || '';
+      sessionRefreshToken = sess.refreshToken || sess.refresh_token || '';
       currentUser         = sess.user;
       loadGeminiKey(k => { GEMINI_KEY = k || ''; });
       if (tog) tog.classList.add('rjd-visible');
@@ -1366,6 +1368,10 @@
       currentUser = null;
       applications = [];
       if (tog) tog.classList.remove('rjd-visible');
+      // Bug fix: also close the sidebar when session is cleared so it
+      // doesn't stay open on the screen after logout/session expiry.
+      const _sb = document.getElementById('rjd-sidebar');
+      if (_sb) _sb.classList.remove('open');
     }
   }
 
@@ -1398,14 +1404,15 @@
     });
   }
 
-  // Fallback poll every 3 seconds
+  // Poll chrome.storage to catch login/logout events that arrive while tab is open.
+  // Fast poll (500ms) for the first 10s after page load catches login without message delay.
+  // Then settles to 3s to reduce overhead.
   if (hasChromeStorage) {
-    const _poll = setInterval(() => {
+    function _checkSession() {
       try {
-        // Stop polling if extension context is gone (happens after extension reload)
-        if (!chrome.runtime || !chrome.runtime.id) { clearInterval(_poll); return; }
+        if (!chrome.runtime || !chrome.runtime.id) return false;
         chrome.storage.local.get('rjd_session', r => {
-          if (chrome.runtime.lastError) { clearInterval(_poll); return; }
+          if (chrome.runtime.lastError) return;
           const sess = r.rjd_session || null;
           if (sess && sess.token && sess.user && !currentUser) {
             applySession(sess);
@@ -1413,8 +1420,17 @@
             applySession(null);
           }
         });
-      } catch(e) { clearInterval(_poll); }
-    }, 3000);
+        return true;
+      } catch(e) { return false; }
+    }
+
+    // Fast poll for first 10s (catches login without relying on message delivery).
+    // Then drops to slow poll to reduce overhead.
+    const _fastPoll = setInterval(() => { if (!_checkSession()) clearInterval(_fastPoll); }, 500);
+    setTimeout(() => {
+      clearInterval(_fastPoll);
+      setInterval(() => { _checkSession(); }, 3000);
+    }, 10000);
   }
 
 })();

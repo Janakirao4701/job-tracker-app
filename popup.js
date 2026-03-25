@@ -104,7 +104,17 @@ function renderLoggedIn(user, apps) {
 // ── INIT ──
 document.addEventListener('DOMContentLoaded', () => {
   chrome.storage.local.get('rjd_session', async (res) => {
-    const session = res.rjd_session || null;
+    // Bug fix: also check localStorage in case chrome.storage write is still in-flight.
+    let session = res.rjd_session || null;
+    if (!session || !session.token || !session.user) {
+      try {
+        const ls = JSON.parse(localStorage.getItem('rjd_web_session') || 'null');
+        if (ls && (ls.token || ls.access_token) && ls.user) {
+          session = { token: ls.token || ls.access_token, user: ls.user,
+                      refreshToken: ls.refreshToken || ls.refresh_token || '' };
+        }
+      } catch(e) {}
+    }
     if (!session || !session.token || !session.user) {
       renderNotLoggedIn();
       return;
