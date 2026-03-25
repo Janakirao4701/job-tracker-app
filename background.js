@@ -1,11 +1,8 @@
 // ── SHARED CONFIG ──
-// Issue #1 fix: anon key is no longer hardcoded in source.
-// It is stored in chrome.storage.local at install time (set via options/setup page).
+// The Supabase anon key is a PUBLIC key — safe to ship in client code.
+// Security is enforced by Row Level Security (RLS) policies on the Supabase project.
 const SUPABASE_URL = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
-async function getSupabaseKey() {
-  const { rjd_anon_key } = await chrome.storage.local.get('rjd_anon_key');
-  return rjd_anon_key || '';
-}
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucUJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
 
 // ── FORWARD SESSION EVENTS TO ALL TABS ──
 chrome.runtime.onMessage.addListener((msg, sender) => {
@@ -80,9 +77,6 @@ async function checkInterviewsToday() {
   // guard against legacy 'access_token' key too.
   const token = rjd_session.token || rjd_session.access_token;
   if (!token) return;
-
-  const SUPABASE_KEY = await getSupabaseKey();
-  if (!SUPABASE_KEY) return;
 
   const today = new Date().toLocaleDateString('en-CA');
   try {

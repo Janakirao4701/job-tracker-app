@@ -4,12 +4,9 @@
   // ── CONFIG ──
   let GEMINI_KEY = ''; // loaded from storage
   const SUPABASE_URL  = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
-  // Issue #1 fix: key is no longer hardcoded — read from chrome.storage at runtime.
-  let SUPABASE_KEY = '';
-  (async () => {
-    const { rjd_anon_key } = await chrome.storage.local.get('rjd_anon_key');
-    SUPABASE_KEY = rjd_anon_key || '';
-  })();
+  // The Supabase anon key is a PUBLIC key — safe to ship in client code.
+  // Security comes from RLS policies on the Supabase project, not from hiding this key.
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucUJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
 
   const STATUSES = ['Applied','Interview Scheduled','Interview Done','Offer','Rejected','Skipped'];
   const STATUS_COLORS = {

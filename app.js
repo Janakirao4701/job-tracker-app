@@ -6,14 +6,11 @@ const SUPABASE_URL = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
 // chrome.runtime.id works when page is opened FROM the extension
 // For external pages (Vercel), we use externally_connectable messaging
 const EXT_ID = null; // Will be provided via URL parameter
-// Issue #1 fix: anon key loaded from chrome.storage at runtime — not hardcoded.
-let SUPABASE_KEY = '';
-(async () => {
-  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    const { rjd_anon_key } = await chrome.storage.local.get('rjd_anon_key');
-    SUPABASE_KEY = rjd_anon_key || '';
-  }
-})();
+// The Supabase anon key is intentionally kept here — it is a PUBLIC key designed
+// to be shipped in client code. Security is enforced by Row Level Security (RLS)
+// policies on the Supabase project, not by hiding this key.
+// Do NOT store service-role keys here.
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucWJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
 
 const STATUS_COLORS = {
   'Applied':             's-applied',
