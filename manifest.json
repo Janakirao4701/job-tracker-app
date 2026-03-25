@@ -9,12 +9,8 @@
     "scripting",
     "clipboardRead",
     "tabs",
-    "notifications",
-    "alarms"
+    "notifications"
   ],
-  "content_security_policy": {
-    "extension_pages": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https://dxsdvzhnqbynicrvbcfi.supabase.co https://generativelanguage.googleapis.com https://job-tracker-app-iota-beryl.vercel.app; img-src 'self' data:; font-src 'self' data:"
-  },
   "host_permissions": [
     "<all_urls>",
     "https://generativelanguage.googleapis.com/",
@@ -68,17 +64,12 @@
         "<all_urls>"
       ],
       "js": [
+        "xlsxbuilder.js",
         "content.js"
       ],
       "css": [
         "sidebar.css"
       ]
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["xlsxbuilder.js", "privacy.html", "icons/*.png"],
-      "matches": ["<all_urls>"]
     }
   ],
   "icons": {

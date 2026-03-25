@@ -6,10 +6,6 @@ const SUPABASE_URL = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
 // chrome.runtime.id works when page is opened FROM the extension
 // For external pages (Vercel), we use externally_connectable messaging
 const EXT_ID = null; // Will be provided via URL parameter
-// The Supabase anon key is intentionally kept here — it is a PUBLIC key designed
-// to be shipped in client code. Security is enforced by Row Level Security (RLS)
-// policies on the Supabase project, not by hiding this key.
-// Do NOT store service-role keys here.
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucWJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
 
 const STATUS_COLORS = {
@@ -121,49 +117,27 @@ async function signOut() {
 
 // ── SUPABASE DB ──
 async function loadApps() {
-  // Issue #14 fix: paginate in 1000-row pages — Supabase silently caps at 1000 rows.
-  const PAGE = 1000;
-  let all = [];
-  let page = 0;
-  while (true) {
-    const from = page * PAGE;
-    const to   = from + PAGE - 1;
-    let r = await fetch(SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc', {
-      headers: headers({ 'Range-Unit': 'items', 'Range': from + '-' + to })
-    });
-    // If 401 on first page — try refresh token
-    if (r.status === 401 && session?.refresh_token && page === 0) {
-      const refreshed = await refreshToken();
-      if (refreshed) {
-        r = await fetch(SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc', {
-          headers: headers({ 'Range-Unit': 'items', 'Range': from + '-' + to })
-        });
-      } else {
-        clearStoredSession();
-        session = null; currentUser = null; apps = [];
-        showSection('auth-section'); setMode('signin');
-        return [];
-      }
+  let r = await fetch(SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc', { headers:headers() });
+  // If 401 — try refresh token
+  if (r.status === 401 && session?.refresh_token) {
+    const refreshed = await refreshToken();
+    if (refreshed) {
+      r = await fetch(SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc', { headers:headers() });
+    } else {
+      // Token refresh failed — sign out
+      clearStoredSession();
+      session = null; currentUser = null; apps = [];
+      showSection('auth-section'); setMode('signin');
+      return [];
     }
-    if (!r.ok) break;
-    const data = await r.json();
-    if (!Array.isArray(data) || data.length === 0) break;
-    all = all.concat(data.map(mapRow));
-    if (data.length < PAGE) break;
-    page++;
   }
-  return all;
+  if (!r.ok) return [];
+  const data = await r.json();
+  return Array.isArray(data) ? data.map(mapRow) : [];
 }
 
-// Issue #15 fix: singleton promise prevents concurrent refresh calls racing.
-let _appRefreshPromise = null;
 async function refreshToken() {
   if (!session?.refresh_token) return false;
-  if (_appRefreshPromise) return _appRefreshPromise;
-  _appRefreshPromise = _doRefreshToken().finally(() => { _appRefreshPromise = null; });
-  return _appRefreshPromise;
-}
-async function _doRefreshToken() {
   try {
     const r = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
       method: 'POST',
@@ -227,9 +201,6 @@ async function deleteApp(id) {
 // ── SESSION ──
 // ── GEMINI KEY — stored in Supabase per user ──
 async function saveGeminiKeyDB(key) {
-  // Issue #19 note: the Gemini API key is stored in plain text in Supabase.
-  // Users should treat it as sensitive. A server-side proxy would eliminate
-  // this exposure entirely — flag as a known limitation in the README.
   // Save to Supabase
   try {
     const res = await fetch(SUPABASE_URL + '/rest/v1/user_settings', {
@@ -280,7 +251,6 @@ function saveSession(data) {
   const payload = {
     token: data.access_token,
     refreshToken: data.refresh_token || '',
-    refresh_token: data.refresh_token || '',  // both keys for cross-file compat
     user: {
       id:    data.user.id,
       email: data.user.email,
@@ -288,16 +258,15 @@ function saveSession(data) {
     }
   };
 
-  // Write localStorage synchronously so it's available immediately on page refresh.
+  // Save to localStorage for web app
   localStorage.setItem('rjd_web_session', JSON.stringify(payload));
 
+  // Save to chrome.storage — works because app.html is an extension page
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    // Write chrome.storage first, then broadcast — content scripts read from chrome.storage.
     chrome.storage.local.set({ rjd_session: payload }, () => {
-      // Broadcast AFTER storage is confirmed written so content scripts
-      // that re-read storage on receiving this message get the fresh value.
+      // Tell background to push to all tabs
       chrome.runtime.sendMessage({ action: 'session_saved', payload }, () => {
-        if (chrome.runtime.lastError) {} // ignore — background may not be awake yet
+        if (chrome.runtime.lastError) {} // ignore
       });
     });
   }
@@ -316,36 +285,18 @@ function clearStoredSession() {
 
 // ── AUTH SETUP ──
 function setupAuth() {
-  // Try localStorage first (synchronous — fastest path).
   const stored = loadStoredSession();
-  if (stored && (stored.access_token || stored.token) && stored.user) {
-    session = { access_token: stored.access_token || stored.token,
-                refresh_token: stored.refresh_token || stored.refreshToken || '' };
-    currentUser = { id: stored.user.id, email: stored.user.email,
-                    name: stored.user.name || stored.user.email.split('@')[0] };
-    showApp();
-    return;
+  if (stored && (stored.access_token || stored.token)) {
+    // Support both old format (access_token) and new format (token)
+    session = stored.access_token
+      ? { access_token: stored.access_token, refresh_token: stored.refresh_token }
+      : { access_token: stored.token, refresh_token: stored.refreshToken };
+    currentUser = stored.user
+      ? { id: stored.user.id, email: stored.user.email, name: stored.user.name || stored.user.email.split('@')[0] }
+      : null;
+    if (currentUser) { showApp(); return; }
   }
-  // Bug fix: localStorage may be absent (cleared by browser, different origin).
-  // Fall back to chrome.storage — this is the canonical store.
-  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    chrome.storage.local.get('rjd_session', r => {
-      const s = r.rjd_session || null;
-      if (s && (s.access_token || s.token) && s.user) {
-        session = { access_token: s.access_token || s.token,
-                    refresh_token: s.refresh_token || s.refreshToken || '' };
-        currentUser = { id: s.user.id, email: s.user.email,
-                        name: s.user.name || s.user.email.split('@')[0] };
-        // Also re-sync localStorage so next load is fast again.
-        localStorage.setItem('rjd_web_session', JSON.stringify(s));
-        showApp();
-      } else {
-        showSection('auth-section');
-      }
-    });
-  } else {
-    showSection('auth-section');
-  }
+  showSection('auth-section');
 }
 
 document.getElementById('tab-signin').addEventListener('click', () => setMode('signin'));
@@ -1391,7 +1342,7 @@ document.getElementById('modal-save').addEventListener('click', async () => {
   if (!company && !jobTitle) { showToast('Enter company or job title', true); return; }
   const now = new Date();
   const app = {
-    id: crypto.randomUUID(), company, jobTitle, url, jd, resume:'',
+    id: Date.now().toString(), company, jobTitle, url, jd, resume:'',
     status, date: today(), dateRaw: now.toISOString(),
     dateKey: `${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`,
     notes, followUpDate:''

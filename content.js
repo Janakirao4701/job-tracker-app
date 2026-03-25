@@ -4,9 +4,7 @@
   // ── CONFIG ──
   let GEMINI_KEY = ''; // loaded from storage
   const SUPABASE_URL  = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
-  // The Supabase anon key is a PUBLIC key — safe to ship in client code.
-  // Security comes from RLS policies on the Supabase project, not from hiding this key.
-  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucUJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
+  const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucWJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
 
   const STATUSES = ['Applied','Interview Scheduled','Interview Done','Offer','Rejected','Skipped'];
   const STATUS_COLORS = {
@@ -37,15 +35,8 @@
   }
 
   // Auto-refresh session token before it expires
-  // Issue #15 fix: singleton promise prevents concurrent refresh calls racing each other.
-  let _refreshPromise = null;
   async function refreshSession() {
     if (!sessionToken) return;
-    if (_refreshPromise) return _refreshPromise;
-    _refreshPromise = _doRefreshSession().finally(() => { _refreshPromise = null; });
-    return _refreshPromise;
-  }
-  async function _doRefreshSession() {
     try {
       const res = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
         method: 'POST',
@@ -87,113 +78,79 @@
     });
   }
 
-  function _mapRow(r) {
-    return {
-      id:          r.id,
-      company:     r.company,
-      jobTitle:    r.job_title,
-      url:         r.url,
-      jd:          r.jd,
-      resume:      r.resume,
-      status:      r.status,
-      date:        r.date,
-      dateRaw:     r.date_raw,
-      dateKey:     r.date_key,
+  async function dbLoadApps() {
+    const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?select=*&order=created_at.asc', {
+      headers: sbHeaders(),
+    });
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    return data.map(r => ({
+      id:       r.id,
+      company:  r.company,
+      jobTitle: r.job_title,
+      url:      r.url,
+      jd:       r.jd,
+      resume:   r.resume,
+      status:   r.status,
+      date:     r.date,
+      dateRaw:  r.date_raw,
+      dateKey:  r.date_key,
       notes:       r.notes,
       followUpDate: r.follow_up_date || '',
-    };
-  }
-
-  async function dbLoadApps() {
-    // Issue #14 fix: paginate in 1000-row pages so users with >1000 applications
-    // don't silently lose records (Supabase default cap is 1000 rows).
-    const PAGE = 1000;
-    let all = [];
-    let page = 0;
-    while (true) {
-      const from = page * PAGE;
-      const to   = from + PAGE - 1;
-      const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?select=*&order=created_at.asc', {
-        headers: { ...sbHeaders(), 'Range-Unit': 'items', 'Range': from + '-' + to },
-      });
-      const data = await res.json();
-      if (!Array.isArray(data) || data.length === 0) break;
-      all = all.concat(data.map(_mapRow));
-      if (data.length < PAGE) break;   // last page
-      page++;
-    }
-    return all;
+    }));
   }
 
   async function dbSaveApp(app) {
-    // Issue #5 fix: wrap in try/catch so network/parse errors surface as toasts.
     if (!navigator.onLine) { showToast('No internet — cannot save', true); return false; }
-    try {
-      const body = {
-        id:        app.id,
-        username:  currentUser.id,
-        company:   app.company,
-        job_title: app.jobTitle,
-        url:       app.url,
-        jd:        app.jd,
-        resume:    app.resume || '',
-        status:    app.status,
-        date:      app.date,
-        date_raw:  app.dateRaw,
-        date_key:  app.dateKey,
-        notes:          app.notes || '',
-        follow_up_date: app.followUpDate || null,
-      };
-      const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications', {
-        method: 'POST',
-        headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
-        body: JSON.stringify(body),
-      });
-      return res.ok;
-    } catch(e) {
-      showToast('Save failed: ' + (e.message || 'unknown error'), true);
-      return false;
-    }
+    const body = {
+      id:        app.id,
+      username:  currentUser.id,
+      company:   app.company,
+      job_title: app.jobTitle,
+      url:       app.url,
+      jd:        app.jd,
+      resume:    app.resume || '',
+      status:    app.status,
+      date:      app.date,
+      date_raw:  app.dateRaw,
+      date_key:  app.dateKey,
+      notes:          app.notes || '',
+      follow_up_date: app.followUpDate || null,
+    };
+    const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications', {
+      method: 'POST',
+      headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
+      body: JSON.stringify(body),
+    });
+    return res.ok;
   }
 
   async function dbUpdateApp(app) {
-    // Issue #5 fix: try/catch for update errors.
     if (!navigator.onLine) { showToast('No internet — change will sync when online', true); return false; }
-    try {
-      const body = {
-        company:   app.company,
-        job_title: app.jobTitle,
-        url:       app.url,
-        jd:        app.jd,
-        resume:          app.resume || '',
-        status:          app.status,
-        notes:           app.notes || '',
-        follow_up_date:  app.followUpDate || null,
-      };
-      const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?id=eq.' + app.id, {
-        method: 'PATCH',
-        headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
-        body: JSON.stringify(body),
-      });
-      return res.ok;
-    } catch(e) {
-      showToast('Update failed: ' + (e.message || 'unknown error'), true);
-      return false;
-    }
+    const body = {
+      company:   app.company,
+      job_title: app.jobTitle,
+      url:       app.url,
+      jd:        app.jd,
+      resume:          app.resume || '',
+      status:          app.status,
+      notes:           app.notes || '',
+      follow_up_date:  app.followUpDate || null,
+    };
+    const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?id=eq.' + app.id, {
+      method: 'PATCH',
+      headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
+      body: JSON.stringify(body),
+    });
+    return res.ok;
   }
 
   async function dbDeleteApp(id) {
-    // Issue #5 fix: try/catch for delete errors.
-    try {
-      const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?id=eq.' + id, {
-        method: 'DELETE',
-        headers: sbHeaders(),
-      });
-      return res.ok;
-    } catch(e) {
-      showToast('Delete failed: ' + (e.message || 'unknown error'), true);
-      return false;
-    }
+    const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?id=eq.' + id, {
+      method: 'DELETE',
+      headers: sbHeaders(),
+    });
+    return res.ok;
   }
 
   // ── SESSION PERSISTENCE ──
@@ -202,10 +159,8 @@
   }
 
   function saveSession(token, user, refreshToken) {
-    // Issue #4 fix: store under BOTH keys so background.js (refresh_token) and
-    // content.js legacy readers (refreshToken) both find the value.
     const s = chromeStore();
-    if (s) s.set({ rjd_session: { token, user, refreshToken: refreshToken||'', refresh_token: refreshToken||'' } });
+    if (s) s.set({ rjd_session: { token, user, refreshToken: refreshToken||'' } });
   }
 
   function clearSession() {
@@ -300,7 +255,7 @@
   async function extractWithGemini(jdText, pageUrl) {
     if (!GEMINI_KEY || !GEMINI_KEY.trim()) throw new Error('Gemini API key not set — open Settings to add it');
     const prompt = `Extract from this job description. Return ONLY valid JSON, no markdown.\n{"company_name":"","job_title":""}\n\n${jdText.substring(0,3000)}`;
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=' + GEMINI_KEY, {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + GEMINI_KEY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 150 } })
@@ -694,10 +649,8 @@
     if (urlInput) urlInput.value = app.url || '';
     function syncDetailUrlLink() {
       const v = urlInput ? urlInput.value.trim() : '';
-      // Issue #12 fix: only allow http/https URLs to prevent javascript: injection.
-      const isSafeUrl = v && /^https?:\/\//i.test(v);
-      if (isSafeUrl) { urlLink.href = v; urlLink.style.opacity = '1'; urlLink.style.pointerEvents = 'auto'; }
-      else           { urlLink.href = '#'; urlLink.style.opacity = '0.4'; urlLink.style.pointerEvents = 'none'; }
+      if (v) { urlLink.href = v; urlLink.style.opacity = '1'; urlLink.style.pointerEvents = 'auto'; }
+      else   { urlLink.href = '#'; urlLink.style.opacity = '0.4'; urlLink.style.pointerEvents = 'none'; }
     }
     syncDetailUrlLink();
     if (urlInput) { urlInput.removeEventListener('input', syncDetailUrlLink); urlInput.addEventListener('input', syncDetailUrlLink); }
@@ -1044,7 +997,7 @@
       // If we got company + title → save directly
       if (company && jobTitle) {
         const app = {
-          id: crypto.randomUUID(), company, jobTitle,
+          id: Date.now().toString(), company, jobTitle,
           url: pageUrl, jd: clipText, resume: '',
           status: 'Applied', date: today(), dateRaw: new Date().toISOString(),
           dateKey: todayKey(), notes: '', followUpDate: ''
@@ -1089,14 +1042,7 @@
     document.getElementById('rjd-extract-btn').addEventListener('click', () => runExtract());
 
     // Save new app
-    // Issue #17 fix: guard against double-submit while async save is in flight.
-    let _savingApp = false;
     document.getElementById('rjd-save-app-btn').addEventListener('click', async () => {
-      if (_savingApp) return;
-      _savingApp = true;
-      const btn = document.getElementById('rjd-save-app-btn');
-      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-      try {
       const company  = document.getElementById('rjd-new-company').value.trim();
       const jobTitle = document.getElementById('rjd-new-title').value.trim();
       const url      = document.getElementById('rjd-new-url').value.trim();
@@ -1111,7 +1057,7 @@
       if (dupByUrl)   { showToast('Already saved: ' + (dupByUrl.company || dupByUrl.jobTitle), true); return; }
       if (dupByTitle) { showToast('Possible duplicate: ' + dupByTitle.company + ' — ' + dupByTitle.jobTitle, true); return; }
       const app = {
-        id: crypto.randomUUID(), company, jobTitle, url, jd, resume: '',
+        id: Date.now().toString(), company, jobTitle, url, jd, resume: '',
         status: 'Applied', date: today(), dateRaw: new Date().toISOString(), dateKey: todayKey(), notes: ''
       };
       const ok = await dbSaveApp(app);
@@ -1121,10 +1067,6 @@
         renderTable();
         showToast('Application saved');
       } else { showToast('Save failed — check connection', true); }
-      } finally {
-        _savingApp = false;
-        if (btn) { btn.disabled = false; btn.textContent = 'Save Application'; }
-      }
     });
 
     // Detail panel events
@@ -1295,14 +1237,9 @@
 
     toggle.addEventListener('click', () => {
       if (!currentUser) {
-        // Not logged in — ask background to open app.html (chrome.tabs is not available in content scripts)
-        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-          chrome.runtime.sendMessage({ action: 'open_app' }, () => {
-            if (chrome.runtime.lastError) {
-              // Fallback: open directly if background didn't handle it
-              try { window.open(chrome.runtime.getURL('app.html')); } catch(e) {}
-            }
-          });
+        // Not logged in — open extension's app.html which can write to chrome.storage
+        if (typeof chrome !== 'undefined' && chrome.runtime) {
+          chrome.tabs.create({ url: chrome.runtime.getURL('app.html') });
         }
         return;
       }
@@ -1358,11 +1295,9 @@
   // ── SESSION MANAGEMENT ──
   function applySession(sess) {
     const tog = document.getElementById('rjd-toggle');
-    // Normalise: accept both {token} (our format) and {access_token} (raw Supabase format).
-    if (sess && (sess.token || sess.access_token)) sess = { ...sess, token: sess.token || sess.access_token };
     if (sess && sess.token && sess.user) {
       sessionToken        = sess.token;
-      sessionRefreshToken = sess.refreshToken || sess.refresh_token || '';
+      sessionRefreshToken = sess.refreshToken || '';
       currentUser         = sess.user;
       loadGeminiKey(k => { GEMINI_KEY = k || ''; });
       if (tog) tog.classList.add('rjd-visible');
@@ -1373,10 +1308,6 @@
       currentUser = null;
       applications = [];
       if (tog) tog.classList.remove('rjd-visible');
-      // Bug fix: also close the sidebar when session is cleared so it
-      // doesn't stay open on the screen after logout/session expiry.
-      const _sb = document.getElementById('rjd-sidebar');
-      if (_sb) _sb.classList.remove('open');
     }
   }
 
@@ -1409,15 +1340,14 @@
     });
   }
 
-  // Poll chrome.storage to catch login/logout events that arrive while tab is open.
-  // Fast poll (500ms) for the first 10s after page load catches login without message delay.
-  // Then settles to 3s to reduce overhead.
+  // Fallback poll every 3 seconds
   if (hasChromeStorage) {
-    function _checkSession() {
+    const _poll = setInterval(() => {
       try {
-        if (!chrome.runtime || !chrome.runtime.id) return false;
+        // Stop polling if extension context is gone (happens after extension reload)
+        if (!chrome.runtime || !chrome.runtime.id) { clearInterval(_poll); return; }
         chrome.storage.local.get('rjd_session', r => {
-          if (chrome.runtime.lastError) return;
+          if (chrome.runtime.lastError) { clearInterval(_poll); return; }
           const sess = r.rjd_session || null;
           if (sess && sess.token && sess.user && !currentUser) {
             applySession(sess);
@@ -1425,17 +1355,8 @@
             applySession(null);
           }
         });
-        return true;
-      } catch(e) { return false; }
-    }
-
-    // Fast poll for first 10s (catches login without relying on message delivery).
-    // Then drops to slow poll to reduce overhead.
-    const _fastPoll = setInterval(() => { if (!_checkSession()) clearInterval(_fastPoll); }, 500);
-    setTimeout(() => {
-      clearInterval(_fastPoll);
-      setInterval(() => { _checkSession(); }, 3000);
-    }, 10000);
+      } catch(e) { clearInterval(_poll); }
+    }, 3000);
   }
 
 })();

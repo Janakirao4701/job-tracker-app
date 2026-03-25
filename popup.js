@@ -1,8 +1,7 @@
 // ── CONFIG ── (Quality note: popup runs in its own isolated context — cannot import from background.js)
 // These must match background.js exactly. If rotating keys, update all 4 files: app.js, content.js, background.js, popup.js
 const SUPABASE_URL = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
-// The Supabase anon key is a PUBLIC key — safe to ship in client code.
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucUJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucWJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function initials(n) { return (n||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
@@ -104,17 +103,7 @@ function renderLoggedIn(user, apps) {
 // ── INIT ──
 document.addEventListener('DOMContentLoaded', () => {
   chrome.storage.local.get('rjd_session', async (res) => {
-    // Bug fix: also check localStorage in case chrome.storage write is still in-flight.
-    let session = res.rjd_session || null;
-    if (!session || !session.token || !session.user) {
-      try {
-        const ls = JSON.parse(localStorage.getItem('rjd_web_session') || 'null');
-        if (ls && (ls.token || ls.access_token) && ls.user) {
-          session = { token: ls.token || ls.access_token, user: ls.user,
-                      refreshToken: ls.refreshToken || ls.refresh_token || '' };
-        }
-      } catch(e) {}
-    }
+    const session = res.rjd_session || null;
     if (!session || !session.token || !session.user) {
       renderNotLoggedIn();
       return;
@@ -122,7 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Show logged in with empty stats first, then load
     renderLoggedIn(session.user, []);
     try {
-      const r = await fetch(SUPABASE_URL + '/rest/v1/applications?username=eq.' + session.user.id + '&select=*&order=created_at.desc', {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/applications?select=*&order=created_at.desc', {
         headers: { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+session.token }
       });
       if (!r.ok) return;
