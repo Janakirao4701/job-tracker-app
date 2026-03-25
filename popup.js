@@ -1,7 +1,9 @@
 // ── CONFIG ── (Quality note: popup runs in its own isolated context — cannot import from background.js)
 // These must match background.js exactly. If rotating keys, update all 4 files: app.js, content.js, background.js, popup.js
 const SUPABASE_URL = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucWJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
+// Issue #1 fix: key loaded from chrome.storage, not hardcoded.
+let SUPABASE_KEY = '';
+chrome.storage.local.get('rjd_anon_key', r => { SUPABASE_KEY = r.rjd_anon_key || ''; });
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function initials(n) { return (n||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
@@ -111,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Show logged in with empty stats first, then load
     renderLoggedIn(session.user, []);
     try {
-      const r = await fetch(SUPABASE_URL + '/rest/v1/applications?select=*&order=created_at.desc', {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/applications?username=eq.' + session.user.id + '&select=*&order=created_at.desc', {
         headers: { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+session.token }
       });
       if (!r.ok) return;

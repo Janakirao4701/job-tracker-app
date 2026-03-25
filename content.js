@@ -4,7 +4,12 @@
   // ── CONFIG ──
   let GEMINI_KEY = ''; // loaded from storage
   const SUPABASE_URL  = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
-  const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucWJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
+  // Issue #1 fix: key is no longer hardcoded — read from chrome.storage at runtime.
+  let SUPABASE_KEY = '';
+  (async () => {
+    const { rjd_anon_key } = await chrome.storage.local.get('rjd_anon_key');
+    SUPABASE_KEY = rjd_anon_key || '';
+  })();
 
   const STATUSES = ['Applied','Interview Scheduled','Interview Done','Offer','Rejected','Skipped'];
   const STATUS_COLORS = {
@@ -35,8 +40,15 @@
   }
 
   // Auto-refresh session token before it expires
+  // Issue #15 fix: singleton promise prevents concurrent refresh calls racing each other.
+  let _refreshPromise = null;
   async function refreshSession() {
     if (!sessionToken) return;
+    if (_refreshPromise) return _refreshPromise;
+    _refreshPromise = _doRefreshSession().finally(() => { _refreshPromise = null; });
+    return _refreshPromise;
+  }
+  async function _doRefreshSession() {
     try {
       const res = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
         method: 'POST',
@@ -78,85 +90,113 @@
     });
   }
 
-  async function dbLoadApps() {
-    const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?select=*&order=created_at.asc', {
-      headers: sbHeaders(),
-    });
-    const data = await res.json();
-    if (!Array.isArray(data)) return [];
-    return data.map(r => ({
-      id:       r.id,
-      company:  r.company,
-      jobTitle: r.job_title,
-      url:      r.url,
-      jd:       r.jd,
-      resume:   r.resume,
-      resumeP1: r.resume_p1 || '',
-      resumeP2: r.resume_p2 || '',
-      status:   r.status,
-      date:     r.date,
-      dateRaw:  r.date_raw,
-      dateKey:  r.date_key,
+  function _mapRow(r) {
+    return {
+      id:          r.id,
+      company:     r.company,
+      jobTitle:    r.job_title,
+      url:         r.url,
+      jd:          r.jd,
+      resume:      r.resume,
+      status:      r.status,
+      date:        r.date,
+      dateRaw:     r.date_raw,
+      dateKey:     r.date_key,
       notes:       r.notes,
       followUpDate: r.follow_up_date || '',
-    }));
+    };
+  }
+
+  async function dbLoadApps() {
+    // Issue #14 fix: paginate in 1000-row pages so users with >1000 applications
+    // don't silently lose records (Supabase default cap is 1000 rows).
+    const PAGE = 1000;
+    let all = [];
+    let page = 0;
+    while (true) {
+      const from = page * PAGE;
+      const to   = from + PAGE - 1;
+      const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?select=*&order=created_at.asc', {
+        headers: { ...sbHeaders(), 'Range-Unit': 'items', 'Range': from + '-' + to },
+      });
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) break;
+      all = all.concat(data.map(_mapRow));
+      if (data.length < PAGE) break;   // last page
+      page++;
+    }
+    return all;
   }
 
   async function dbSaveApp(app) {
+    // Issue #5 fix: wrap in try/catch so network/parse errors surface as toasts.
     if (!navigator.onLine) { showToast('No internet — cannot save', true); return false; }
-    const body = {
-      id:        app.id,
-      username:  currentUser.id,
-      company:   app.company,
-      job_title: app.jobTitle,
-      url:       app.url,
-      jd:        app.jd,
-      resume:    app.resume || '',
-      resume_p1: app.resumeP1 || '',
-      resume_p2: app.resumeP2 || '',
-      status:    app.status,
-      date:      app.date,
-      date_raw:  app.dateRaw,
-      date_key:  app.dateKey,
-      notes:          app.notes || '',
-      follow_up_date: app.followUpDate || null,
-    };
-    const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications', {
-      method: 'POST',
-      headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
-      body: JSON.stringify(body),
-    });
-    return res.ok;
+    try {
+      const body = {
+        id:        app.id,
+        username:  currentUser.id,
+        company:   app.company,
+        job_title: app.jobTitle,
+        url:       app.url,
+        jd:        app.jd,
+        resume:    app.resume || '',
+        status:    app.status,
+        date:      app.date,
+        date_raw:  app.dateRaw,
+        date_key:  app.dateKey,
+        notes:          app.notes || '',
+        follow_up_date: app.followUpDate || null,
+      };
+      const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications', {
+        method: 'POST',
+        headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
+        body: JSON.stringify(body),
+      });
+      return res.ok;
+    } catch(e) {
+      showToast('Save failed: ' + (e.message || 'unknown error'), true);
+      return false;
+    }
   }
 
   async function dbUpdateApp(app) {
+    // Issue #5 fix: try/catch for update errors.
     if (!navigator.onLine) { showToast('No internet — change will sync when online', true); return false; }
-    const body = {
-      company:   app.company,
-      job_title: app.jobTitle,
-      url:       app.url,
-      jd:        app.jd,
-      resume:          app.resume || '',
-      resume_p1:       app.resumeP1 || '',
-      resume_p2:       app.resumeP2 || '',
-      status:          app.status,
-      notes:           app.notes || '',
-      follow_up_date:  app.followUpDate || null,
-    };
-    const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?id=eq.' + app.id, {
-      method: 'PATCH',
-      headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
-      body: JSON.stringify(body),
-    });
-    return res.ok;
+    try {
+      const body = {
+        company:   app.company,
+        job_title: app.jobTitle,
+        url:       app.url,
+        jd:        app.jd,
+        resume:          app.resume || '',
+        status:          app.status,
+        notes:           app.notes || '',
+        follow_up_date:  app.followUpDate || null,
+      };
+      const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?id=eq.' + app.id, {
+        method: 'PATCH',
+        headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
+        body: JSON.stringify(body),
+      });
+      return res.ok;
+    } catch(e) {
+      showToast('Update failed: ' + (e.message || 'unknown error'), true);
+      return false;
+    }
   }
 
   async function dbDeleteApp(id) {
-    const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?id=eq.' + id, {
-      method: 'DELETE',
-      headers: sbHeaders(),
-    });
-    return res.ok;
+    // Issue #5 fix: try/catch for delete errors.
+    try {
+      const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?id=eq.' + id, {
+        method: 'DELETE',
+        headers: sbHeaders(),
+      });
+      return res.ok;
+    } catch(e) {
+      showToast('Delete failed: ' + (e.message || 'unknown error'), true);
+      return false;
+    }
   }
 
   // ── SESSION PERSISTENCE ──
@@ -165,8 +205,10 @@
   }
 
   function saveSession(token, user, refreshToken) {
+    // Issue #4 fix: store under BOTH keys so background.js (refresh_token) and
+    // content.js legacy readers (refreshToken) both find the value.
     const s = chromeStore();
-    if (s) s.set({ rjd_session: { token, user, refreshToken: refreshToken||'' } });
+    if (s) s.set({ rjd_session: { token, user, refreshToken: refreshToken||'', refresh_token: refreshToken||'' } });
   }
 
   function clearSession() {
@@ -200,27 +242,6 @@
       s.get('rjd_gemini_key', r => cb(r.rjd_gemini_key || ''));
     } else {
       cb('');
-    }
-  }
-
-  // ── PERSON LABEL STORAGE ──
-  let personLabels = { p1: 'Person 1', p2: 'Person 2' };
-
-  function savePersonLabels(labels, cb) {
-    const s = chromeStore();
-    if (s) s.set({ rjd_person_labels: labels }, cb || (() => {}));
-    personLabels = labels;
-  }
-
-  function loadPersonLabels(cb) {
-    const s = chromeStore();
-    if (s) {
-      s.get('rjd_person_labels', r => {
-        if (r.rjd_person_labels) personLabels = r.rjd_person_labels;
-        cb(personLabels);
-      });
-    } else {
-      cb(personLabels);
     }
   }
 
@@ -278,192 +299,39 @@
     return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
   }
 
-  // ── EXTRACTION ENGINE ──
-
-  // Step 1: Scrape meaningful text from the current page
-  function scrapePageContent() {
-    // Try to grab the most relevant container first (avoids nav/footer noise)
-    const selectors = [
-      'main', 'article', '[role="main"]',
-      '.job-description', '.jobsearch-JobComponent',
-      '.job-view-layout', '.jobs-description',
-      '#job-details', '#jobDescriptionText',
-      '.description__text', '.show-more-less-html',
-    ];
-    let container = null;
-    for (const sel of selectors) {
-      const el = document.querySelector(sel);
-      if (el && el.innerText && el.innerText.trim().length > 200) { container = el; break; }
-    }
-    const rawText = container ? container.innerText : document.body.innerText;
-
-    // Clean: collapse whitespace, remove lines that are just symbols/numbers (nav links etc)
-    const lines = rawText.split('\n')
-      .map(l => l.trim())
-      .filter(l => l.length > 2 && !/^[\d\s\W]+$/.test(l));
-    return lines.join('\n').substring(0, 8000);
-  }
-
-  // Step 2: Extract company hint from URL domain
-  function companyHintFromUrl(url) {
-    try {
-      const hostname = new URL(url).hostname.replace(/^www\./, '');
-      // careers.google.com → Google, jobs.microsoft.com → Microsoft
-      const parts = hostname.split('.');
-      // If subdomain like "careers" or "jobs", use next part; else use first part
-      const skipWords = ['careers', 'jobs', 'work', 'apply', 'hire', 'talent', 'recruit'];
-      const name = skipWords.includes(parts[0]) ? parts[1] : parts[0];
-      return name ? name.charAt(0).toUpperCase() + name.slice(1) : '';
-    } catch { return ''; }
-  }
-
-  // Step 3: Extract h1 text as job title hint
-  function titleHintFromPage() {
-    const h1 = document.querySelector('h1');
-    return h1 ? h1.innerText.trim().substring(0, 150) : '';
-  }
-
-  // Step 4: Parse company from page <title> tag
-  // e.g. "Senior Engineer | Google Careers" → "Google"
-  function companyHintFromTitle() {
-    const title = document.title || '';
-    // Split on common separators and look for company-like token
-    const parts = title.split(/[|\-–—·,]/);
-    if (parts.length >= 2) {
-      // Usually company is the last meaningful part
-      for (let i = parts.length - 1; i >= 0; i--) {
-        const p = parts[i].trim().replace(/careers?|jobs?|hiring/gi, '').trim();
-        if (p.length > 1 && p.length < 60) return p;
-      }
-    }
-    return '';
-  }
-
-  // Step 5: Safe JSON parser — strips markdown, handles extra text
-  function safeParseJSON(text) {
-    if (!text) return null;
-    // Strip markdown fences
-    let cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-    // Find the first { ... } block
-    const start = cleaned.indexOf('{');
-    const end   = cleaned.lastIndexOf('}');
-    if (start === -1 || end === -1) return null;
-    cleaned = cleaned.substring(start, end + 1);
-    try { return JSON.parse(cleaned); } catch { return null; }
-  }
-
-  // Step 6: Call Gemini with rich context
-  async function extractWithGemini(pageText, pageUrl, clipText) {
+  // ── GEMINI EXTRACTION ──
+  async function extractWithGemini(jdText, pageUrl) {
     if (!GEMINI_KEY || !GEMINI_KEY.trim()) throw new Error('Gemini API key not set — open Settings to add it');
-
-    const urlHint      = companyHintFromUrl(pageUrl);
-    const titleHint    = titleHintFromPage();
-    const pageTitleHint = companyHintFromTitle();
-
-    // Build the context block — page content first, clipboard as supplement
-    const context = [
-      `PAGE URL: ${pageUrl}`,
-      urlHint      ? `URL COMPANY HINT: ${urlHint}` : '',
-      pageTitleHint ? `PAGE TITLE COMPANY HINT: ${pageTitleHint}` : '',
-      titleHint    ? `PAGE H1 (likely job title): ${titleHint}` : '',
-      '',
-      '=== PAGE CONTENT (primary source) ===',
-      pageText ? pageText.substring(0, 6000) : '(no page content)',
-      clipText && clipText.trim() ? '\n=== CLIPBOARD TEXT (supplementary) ===\n' + clipText.substring(0, 2000) : '',
-    ].filter(Boolean).join('\n');
-
-    const prompt = `You are extracting job application details from a career page.
-
-TASK: Extract the company name and job title from the content below.
-
-RULES:
-- Return ONLY a valid JSON object. No markdown, no explanation, no extra text.
-- Use the URL hint and page title hint to identify the company if the text is unclear.
-- The H1 text is very likely the job title — use it unless something more specific is found.
-- If you genuinely cannot find a value, use an empty string "".
-- Clean up the job title — remove location, salary, or extra details (e.g. "Software Engineer (Remote, India)" → "Software Engineer").
-- Company name should be the brand name only (e.g. "Google" not "Google LLC India Private Limited").
-
-EXAMPLE OUTPUT:
-{"company_name":"Atlassian","job_title":"Senior Software Engineer"}
-
-CONTENT:
-${context}`;
-
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + GEMINI_KEY, {
+    const prompt = `Extract from this job description. Return ONLY valid JSON, no markdown.\n{"company_name":"","job_title":""}\n\n${jdText.substring(0,3000)}`;
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=' + GEMINI_KEY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 200 }
-      })
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 150 } })
     });
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => ({}));
-      throw new Error('Gemini API error ' + res.status + (errBody.error?.message ? ': ' + errBody.error.message : ''));
-    }
-    const data  = await res.json();
-    const raw   = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const parsed = safeParseJSON(raw);
-    if (!parsed) throw new Error('Gemini returned unparseable response — try again');
-    return {
-      company_name: (parsed.company_name || '').trim(),
-      job_title:    (parsed.job_title    || '').trim(),
-      url:          pageUrl,
-    };
-  }
-
-  // Step 7: Master extract function — page first, clipboard fallback
-  async function smartExtract() {
-    const pageUrl  = window.location.href;
-    const pageText = scrapePageContent();
-    let clipText   = '';
-    try { clipText = await navigator.clipboard.readText(); } catch { /* clipboard permission denied — ok */ }
-
-    // If page has barely any text, rely more on clipboard
-    const useClip = !pageText || pageText.length < 300;
-
-    if (!GEMINI_KEY || !GEMINI_KEY.trim()) {
-      // No Gemini key — try heuristic fallback only
-      const company  = companyHintFromTitle() || companyHintFromUrl(pageUrl);
-      const jobTitle = titleHintFromPage();
-      return { company_name: company, job_title: jobTitle, url: pageUrl, jd: clipText || pageText, source: 'heuristic' };
-    }
-
-    const result = await extractWithGemini(
-      useClip ? '' : pageText,
-      pageUrl,
-      clipText
-    );
-    result.jd = clipText || pageText; // save whatever we have as JD
-    result.source = 'gemini';
-    return result;
+    if (!res.ok) throw new Error('Gemini API error: ' + res.status);
+    const data = await res.json();
+    const text = (data.candidates?.[0]?.content?.parts?.[0]?.text || '{}').replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(text);
+    parsed.url = pageUrl;
+    return parsed;
   }
 
   async function runExtract() {
     const statusEl = document.getElementById('rjd-extract-status');
     if (!statusEl) return;
-    statusEl.textContent = 'Extracting from page...';
+    statusEl.textContent = 'Auto-extracting...';
     statusEl.style.color = '#2E75B6';
     try {
-      const result = await smartExtract();
+      const clipText = await navigator.clipboard.readText();
+      if (!clipText.trim()) { statusEl.textContent = 'Clipboard empty — paste JD and click Extract.'; statusEl.style.color = '#c53030'; return; }
+      const result = await extractWithGemini(clipText, window.location.href);
       document.getElementById('rjd-new-company').value = result.company_name || '';
       document.getElementById('rjd-new-title').value   = result.job_title   || '';
       document.getElementById('rjd-new-url').value     = result.url         || '';
-      document.getElementById('rjd-new-jd').value      = result.jd          || '';
-
-      const missing = !result.company_name && !result.job_title;
-      if (missing) {
-        statusEl.textContent = '⚠ Could not extract — fill in manually';
-        statusEl.style.color = '#975a16';
-      } else if (!result.company_name || !result.job_title) {
-        statusEl.textContent = '✓ Partially extracted — review the empty fields';
-        statusEl.style.color = '#975a16';
-      } else {
-        statusEl.textContent = '✓ Extracted from page — review and save';
-        statusEl.style.color = '#276749';
-        setTimeout(() => { statusEl.textContent = ''; }, 4000);
-      }
+      document.getElementById('rjd-new-jd').value      = clipText;
+      statusEl.textContent = '✓ Extracted — review and save';
+      statusEl.style.color = '#276749';
+      setTimeout(() => { statusEl.textContent = ''; }, 4000);
     } catch(err) {
       statusEl.textContent = err.message || 'Extraction failed';
       statusEl.style.color = '#c53030';
@@ -495,7 +363,6 @@ ${context}`;
             <div style="width:130px;background:#f8fafc;border-right:1px solid #e2e8f0;flex-shrink:0;overflow-y:auto;padding:8px 0;">
               <div style="font-size:9px;font-weight:700;color:#a0aec0;text-transform:uppercase;letter-spacing:0.8px;padding:6px 12px 4px;">General</div>
               <div class="rjd-settings-nav-item ${activeSection==='apikey'?'rjd-snav-active':''}" data-sec="apikey">🔑 API Key</div>
-              <div class="rjd-settings-nav-item ${activeSection==='persons'?'rjd-snav-active':''}" data-sec="persons">👥 Person Names</div>
               <div style="font-size:9px;font-weight:700;color:#a0aec0;text-transform:uppercase;letter-spacing:0.8px;padding:10px 12px 4px;">Info</div>
               <div class="rjd-settings-nav-item ${activeSection==='shortcuts'?'rjd-snav-active':''}" data-sec="shortcuts">⌨️ Shortcuts</div>
               <div class="rjd-settings-nav-item ${activeSection==='privacy'?'rjd-snav-active':''}" data-sec="privacy">🛡️ Privacy</div>
@@ -571,35 +438,6 @@ ${context}`;
           });
         });
 
-
-      } else if (sec === 'persons') {
-        panel.innerHTML = `
-          <div style="font-size:14px;font-weight:700;color:#1F4E79;margin-bottom:3px;">Person Names</div>
-          <div style="font-size:11px;color:#718096;margin-bottom:12px;">Label the two people sharing this tracker. Used as column headers and in exports.</div>
-          <div id="rjd-persons-msg"></div>
-          <div class="rjd-field-group" style="margin-bottom:10px;">
-            <label class="rjd-label">Person 1 Name</label>
-            <input type="text" id="rjd-p1-name" placeholder="e.g. Jaswanth" style="width:100%;padding:8px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:12px;font-family:inherit;background:#fff !important;color:#1a202c !important;"/>
-          </div>
-          <div class="rjd-field-group" style="margin-bottom:14px;">
-            <label class="rjd-label">Person 2 Name</label>
-            <input type="text" id="rjd-p2-name" placeholder="e.g. Chakradhar" style="width:100%;padding:8px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:12px;font-family:inherit;background:#fff !important;color:#1a202c !important;"/>
-          </div>
-          <button id="rjd-persons-save" class="rjd-primary-btn" style="width:100%;padding:8px;">Save Names</button>
-          <div style="margin-top:12px;background:#ebf4ff;border-radius:7px;padding:10px;font-size:10px;color:#2E75B6;line-height:1.6;">
-            Each application can have a separate resume for each person.<br>
-            Export filters by person — only apps with that person's resume are included.
-          </div>`;
-        document.getElementById('rjd-p1-name').value = personLabels.p1;
-        document.getElementById('rjd-p2-name').value = personLabels.p2;
-        document.getElementById('rjd-persons-save').addEventListener('click', () => {
-          const p1 = document.getElementById('rjd-p1-name').value.trim() || 'Person 1';
-          const p2 = document.getElementById('rjd-p2-name').value.trim() || 'Person 2';
-          savePersonLabels({ p1, p2 }, () => {
-            const msg = document.getElementById('rjd-persons-msg');
-            if (msg) msg.innerHTML = `<div style="padding:7px 10px;border-radius:6px;font-size:11px;margin-bottom:10px;background:#f0fff4;color:#276749;border:1px solid #c6f6d5;">Names saved ✓ — refresh the tracker to see updated headers</div>`;
-          });
-        });
 
       } else if (sec === 'shortcuts') {
         panel.innerHTML = `
@@ -773,19 +611,14 @@ ${context}`;
     const tbody = document.getElementById('rjd-tbody');
     if (!tbody) return;
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="rjd-empty-row">No applications yet. Click "✦ Extract & Save" to start.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" class="rjd-empty-row">No applications yet. Click "✦ Extract & Save" to start.</td></tr>`;
       return;
     }
     tbody.innerHTML = filtered.map((app, idx) => {
-      const p1Btn = app.resumeP1
-        ? `<button class="rjd-p-resume-btn rjd-p-has" data-id="${app.id}" data-p="1" title="View ${personLabels.p1} resume">✓</button>`
-        : `<button class="rjd-p-resume-btn rjd-p-add" data-id="${app.id}" data-p="1" title="Paste ${personLabels.p1} resume from clipboard">+</button>`;
-      const p2Btn = app.resumeP2
-        ? `<button class="rjd-p-resume-btn rjd-p-has" data-id="${app.id}" data-p="2" title="View ${personLabels.p2} resume">✓</button>`
-        : `<button class="rjd-p-resume-btn rjd-p-add" data-id="${app.id}" data-p="2" title="Paste ${personLabels.p2} resume from clipboard">+</button>`;
-      const urlBtn = app.url
-        ? `<a href="${escHtml(app.url)}" target="_blank" class="rjd-url-link">Open</a><button class="rjd-copy-url-btn" data-url="${escHtml(app.url)}" style="margin-left:4px;padding:2px 6px;font-size:10px;background:#ebf4ff;border:1px solid #bee3f8;border-radius:4px;color:#2E75B6;cursor:pointer;font-family:inherit;">Copy</button>`
-        : `<span class="rjd-no-resume">—</span>`;
+      const sc = STATUS_COLORS[app.status] || STATUS_COLORS['Applied'];
+      const resumeBtn = app.resume ? `<button class="rjd-view-resume-btn" data-id="${app.id}">View</button>` : `<span class="rjd-no-resume">—</span>`;
+      const urlBtn    = app.url    ? `<a href="${escHtml(app.url)}" target="_blank" class="rjd-url-link">Open</a>` : `<span class="rjd-no-resume">—</span>`;
+      // Warning fix #4: compare date strings directly — avoids UTC vs local timezone mismatch
       const isOverdue = app.followUpDate && app.followUpDate < todayKey().slice(0,10) && app.status !== 'Offer' && app.status !== 'Rejected';
       const followUpBadge = app.followUpDate ? `<div style="font-size:9px;color:${isOverdue?'#c53030':'#718096'};margin-top:1px;">${isOverdue?'⚠ Follow up: ':'📅 '} ${app.followUpDate}</div>` : '';
       return `<tr class="rjd-row" data-id="${app.id}" style="${isOverdue?'background:#fff5f5 !important;':''}">
@@ -793,54 +626,36 @@ ${context}`;
         <td class="rjd-td rjd-td-company"><div>${escHtml(app.company||'—')}</div>${followUpBadge}</td>
         <td class="rjd-td rjd-td-title">${escHtml(app.jobTitle||'—')}</td>
         <td class="rjd-td rjd-td-url">${urlBtn}</td>
-        <td class="rjd-td rjd-td-p1" style="text-align:center;">${p1Btn}</td>
-        <td class="rjd-td rjd-td-p2" style="text-align:center;">${p2Btn}</td>
+        <td class="rjd-td rjd-td-resume">${resumeBtn}</td>
+        <td class="rjd-td rjd-td-date">${escHtml(app.date||'—')}</td>
+        <td class="rjd-td rjd-td-status">
+          <select class="rjd-status-sel" data-id="${app.id}" style="background:${sc.bg};color:${sc.color}">
+            ${STATUSES.map(s=>`<option value="${s}" ${app.status===s?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </td>
       </tr>`;
     }).join('');
 
-    // Update column header labels
-    const th1 = document.getElementById('rjd-th-p1');
-    const th2 = document.getElementById('rjd-th-p2');
-    if (th1) th1.textContent = personLabels.p1;
-    if (th2) th2.textContent = personLabels.p2;
-
-    // P1 / P2 resume buttons
-    tbody.querySelectorAll('.rjd-p-resume-btn').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+    tbody.querySelectorAll('.rjd-status-sel').forEach(sel => {
+      sel.addEventListener('change', async (e) => {
         e.stopPropagation();
-        const app = applications.find(a => a.id === btn.dataset.id);
-        if (!app) return;
-        const pKey = btn.dataset.p === '1' ? 'resumeP1' : 'resumeP2';
-        const pLabel = btn.dataset.p === '1' ? personLabels.p1 : personLabels.p2;
-        if (btn.classList.contains('rjd-p-has')) {
-          // View resume
-          showPersonResumeDetail(app, btn.dataset.p);
-        } else {
-          // Paste from clipboard
-          try {
-            const text = await navigator.clipboard.readText();
-            if (!text.trim()) { showToast('Clipboard empty — copy resume text first', true); return; }
-            app[pKey] = text.trim();
-            await dbUpdateApp(app);
-            showToast(pLabel + ' resume saved ✓');
-            renderTable();
-          } catch { showToast('Could not read clipboard', true); }
+        const app = applications.find(a => a.id === sel.dataset.id);
+        if (app) {
+          app.status = sel.value;
+          await dbUpdateApp(app);
+          // Quality fix #2: re-render table instead of manually patching row backgrounds
+          renderTable();
         }
       });
     });
 
-    tbody.querySelectorAll('.rjd-copy-url-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        navigator.clipboard.writeText(btn.dataset.url).then(() => {
-          btn.textContent = '✓'; setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
-        }).catch(() => showToast('Copy failed', true));
-      });
+    tbody.querySelectorAll('.rjd-view-resume-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); const app = applications.find(a=>a.id===btn.dataset.id); if(app) showResumeDetail(app); });
     });
 
     tbody.querySelectorAll('.rjd-row').forEach(row => {
       row.addEventListener('click', (e) => {
-        if (['rjd-p-resume-btn','rjd-url-link','rjd-copy-url-btn'].some(c=>e.target.classList.contains(c))) return;
+        if (['rjd-status-sel','rjd-view-resume-btn','rjd-url-link'].some(c=>e.target.classList.contains(c))) return;
         const app = applications.find(a=>a.id===row.dataset.id);
         if (app) showAppDetail(app);
       });
@@ -876,82 +691,54 @@ ${context}`;
     panel.style.display = 'flex';
     document.getElementById('rjd-detail-company').textContent = app.company  || '—';
     document.getElementById('rjd-detail-title').textContent   = app.jobTitle || '—';
-    document.getElementById('rjd-detail-url').href        = app.url || '#';
-    document.getElementById('rjd-detail-url').textContent = app.url ? 'Open Job Link' : '—';
-    // Copy URL button
-    const copyUrlBtn = document.getElementById('rjd-copy-url-detail-btn');
-    if (copyUrlBtn) {
-      copyUrlBtn.style.display = app.url ? 'inline-block' : 'none';
-      copyUrlBtn.onclick = () => {
-        if (!app.url) return;
-        navigator.clipboard.writeText(app.url).then(() => {
-          copyUrlBtn.textContent = '✓'; setTimeout(() => { copyUrlBtn.textContent = 'Copy'; }, 1500);
-        }).catch(() => showToast('Copy failed', true));
-      };
+    // URL — populate editable input and sync Open link
+    const urlInput = document.getElementById('rjd-detail-url-input');
+    const urlLink  = document.getElementById('rjd-detail-url');
+    if (urlInput) urlInput.value = app.url || '';
+    function syncDetailUrlLink() {
+      const v = urlInput ? urlInput.value.trim() : '';
+      // Issue #12 fix: only allow http/https URLs to prevent javascript: injection.
+      const isSafeUrl = v && /^https?:\/\//i.test(v);
+      if (isSafeUrl) { urlLink.href = v; urlLink.style.opacity = '1'; urlLink.style.pointerEvents = 'auto'; }
+      else           { urlLink.href = '#'; urlLink.style.opacity = '0.4'; urlLink.style.pointerEvents = 'none'; }
     }
-    // Copy JD button
-    const copyJdBtn = document.getElementById('rjd-copy-jd-btn');
-    if (copyJdBtn) {
-      copyJdBtn.onclick = () => {
-        const text = app.jd || '';
-        if (!text) { showToast('No JD to copy', true); return; }
-        navigator.clipboard.writeText(text).then(() => {
-          copyJdBtn.textContent = '✓ Copied'; setTimeout(() => { copyJdBtn.textContent = 'Copy JD'; }, 1500);
-        }).catch(() => showToast('Copy failed', true));
-      };
-    }
+    syncDetailUrlLink();
+    if (urlInput) { urlInput.removeEventListener('input', syncDetailUrlLink); urlInput.addEventListener('input', syncDetailUrlLink); }
     document.getElementById('rjd-detail-date').textContent   = app.date   || '—';
     document.getElementById('rjd-detail-status').textContent = app.status || '—';
     document.getElementById('rjd-detail-jd').textContent     = app.jd     || 'No JD saved.';
     document.getElementById('rjd-detail-notes').value        = app.notes  || '';
     document.getElementById('rjd-detail-followup').value     = app.followUpDate || '';
     const resumeSection = document.getElementById('rjd-detail-resume-section');
-    function buildResumeSlot(pNum) {
-      const pKey   = pNum === 1 ? 'resumeP1' : 'resumeP2';
-      const pLabel = pNum === 1 ? personLabels.p1 : personLabels.p2;
-      const hasRes = !!app[pKey];
-      return `<div style="margin-bottom:8px;">
-        <div style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">${escHtml(pLabel)}</div>
-        ${hasRes
-          ? `<div style="display:flex;gap:6px;">
-               <button class="rjd-action-btn rjd-view-p-btn" data-p="${pNum}">View Resume</button>
-               <button class="rjd-action-btn rjd-secondary-btn rjd-update-p-btn" data-p="${pNum}">Update</button>
-               <button class="rjd-action-btn rjd-secondary-btn rjd-remove-p-btn" data-p="${pNum}" style="color:#c53030;border-color:#fed7d7;">Remove</button>
-             </div>`
-          : `<button class="rjd-action-btn rjd-add-p-btn" data-p="${pNum}">+ Add from Clipboard</button>`}
-      </div>`;
+    if (app.resume) {
+      resumeSection.innerHTML = `
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button id="rjd-view-resume-detail" class="rjd-action-btn">View Resume</button>
+          <button id="rjd-copy-resume-btn" class="rjd-action-btn rjd-secondary-btn">Copy Resume</button>
+          <button id="rjd-update-resume-btn" class="rjd-action-btn rjd-secondary-btn">Update Resume</button>
+        </div>`;
+      document.getElementById('rjd-view-resume-detail').addEventListener('click', () => showResumeDetail(app));
+      document.getElementById('rjd-copy-resume-btn').addEventListener('click', () => {
+        navigator.clipboard.writeText(app.resume).then(() => showToast('Resume copied')).catch(() => showToast('Copy failed', true));
+      });
+      document.getElementById('rjd-update-resume-btn').addEventListener('click',  () => saveResumeFromClipboard(app.id));
+    } else {
+      resumeSection.innerHTML = `<button id="rjd-add-resume-btn" class="rjd-action-btn">+ Add Resume from Clipboard</button>`;
+      document.getElementById('rjd-add-resume-btn').addEventListener('click', () => saveResumeFromClipboard(app.id));
     }
-    resumeSection.innerHTML = buildResumeSlot(1) + buildResumeSlot(2);
-
-    resumeSection.querySelectorAll('.rjd-view-p-btn').forEach(btn => {
-      btn.addEventListener('click', () => showPersonResumeDetail(app, String(btn.dataset.p)));
+    // Copy JD button
+    const copyJdBtn = document.getElementById('rjd-copy-jd-btn');
+    if (copyJdBtn) copyJdBtn.addEventListener('click', () => {
+      const jd = app.jd || '';
+      if (!jd) { showToast('No JD saved', true); return; }
+      navigator.clipboard.writeText(jd).then(() => showToast('JD copied')).catch(() => showToast('Copy failed', true));
     });
-    resumeSection.querySelectorAll('.rjd-add-p-btn, .rjd-update-p-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const pKey   = btn.dataset.p == 1 ? 'resumeP1' : 'resumeP2';
-        const pLabel = btn.dataset.p == 1 ? personLabels.p1 : personLabels.p2;
-        try {
-          const text = await navigator.clipboard.readText();
-          if (!text.trim()) { showToast('Clipboard empty — copy resume text first', true); return; }
-          app[pKey] = text.trim();
-          await dbUpdateApp(app);
-          showToast(pLabel + ' resume saved ✓');
-          renderTable();
-          showAppDetail(app); // refresh detail panel
-        } catch { showToast('Could not read clipboard', true); }
-      });
-    });
-    resumeSection.querySelectorAll('.rjd-remove-p-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const pKey   = btn.dataset.p == 1 ? 'resumeP1' : 'resumeP2';
-        const pLabel = btn.dataset.p == 1 ? personLabels.p1 : personLabels.p2;
-        if (!confirm('Remove ' + pLabel + "'s resume from this application?")) return;
-        app[pKey] = '';
-        await dbUpdateApp(app);
-        showToast(pLabel + ' resume removed');
-        renderTable();
-        showAppDetail(app);
-      });
+    // Copy URL button
+    const copyUrlBtn = document.getElementById('rjd-copy-url-btn');
+    if (copyUrlBtn) copyUrlBtn.addEventListener('click', () => {
+      const v = document.getElementById('rjd-detail-url-input')?.value.trim() || '';
+      if (!v) { showToast('No URL saved', true); return; }
+      navigator.clipboard.writeText(v).then(() => showToast('URL copied')).catch(() => showToast('Copy failed', true));
     });
   }
 
@@ -961,24 +748,15 @@ ${context}`;
     currentDetailId = null;
   }
 
-  // ── RESUME DETAIL (person-aware) ──
-  function showPersonResumeDetail(app, person) {
-    const pKey   = person === '1' ? 'resumeP1' : 'resumeP2';
-    const pLabel = person === '1' ? personLabels.p1 : personLabels.p2;
-    const panel = document.getElementById('rjd-resume-panel');
-    panel.dataset.prev   = currentDetailId ? 'detail' : 'main';
-    panel.dataset.person = person;
-    panel.dataset.appId  = app.id;
-    panel.style.display  = 'flex';
-    document.getElementById('rjd-detail-panel').style.display = 'none';
-    document.getElementById('rjd-main').style.display         = 'none';
-    document.getElementById('rjd-resume-title').textContent   = pLabel + ' Resume — ' + (app.company||'Application');
-    document.getElementById('rjd-resume-body').textContent    = app[pKey] || '';
-  }
-
   // ── RESUME DETAIL ──
   function showResumeDetail(app) {
-    showPersonResumeDetail(app, '1');
+    const panel = document.getElementById('rjd-resume-panel');
+    panel.dataset.prev = currentDetailId ? 'detail' : 'main';
+    panel.style.display = 'flex';
+    document.getElementById('rjd-detail-panel').style.display = 'none';
+    document.getElementById('rjd-main').style.display = 'none';
+    document.getElementById('rjd-resume-title').textContent = 'Resume — ' + (app.company||'Application');
+    document.getElementById('rjd-resume-body').textContent  = app.resume || '';
   }
 
   function hideResumeDetail() {
@@ -1037,6 +815,7 @@ ${context}`;
             <div style="display:flex;gap:6px;">
               <button id="rjd-quick-extract-btn" class="rjd-primary-btn" style="background:#1F4E79;font-size:11px;padding:5px 10px;white-space:nowrap;">✦ Extract & Save</button>
               <button id="rjd-new-app-btn" class="rjd-primary-btn">+ New</button>
+              <button id="rjd-refresh-btn" title="Refresh" style="background:rgba(255,255,255,0.2);border:none;color:#fff;font-size:14px;cursor:pointer;padding:5px 7px;border-radius:6px;line-height:1;">↻</button>
               <button id="rjd-settings-btn" title="Settings" style="background:rgba(255,255,255,0.2);border:none;color:#fff;font-size:14px;cursor:pointer;padding:5px 7px;border-radius:6px;line-height:1;">⚙</button>
             </div>
           </div>
@@ -1069,7 +848,6 @@ ${context}`;
               ${STATUSES.map(s=>`<option value="${s}">${s}</option>`).join('')}
             </select>
             <input type="date" id="rjd-date-filter" title="Filter by date" />
-            <button id="rjd-refresh-btn" title="Refresh" style="padding:5px 9px;background:#1a365d;border:1px solid #2E75B6;color:#90cdf4;border-radius:5px;font-size:13px;cursor:pointer;font-family:inherit;" >⟳</button>
             <button id="rjd-export-csv-btn" title="Export Excel">Export XLSX</button>
           </div>
 
@@ -1081,8 +859,9 @@ ${context}`;
                   <th class="rjd-th">Company</th>
                   <th class="rjd-th">Job Title</th>
                   <th class="rjd-th">URL</th>
-                  <th class="rjd-th" id="rjd-th-p1">P1</th>
-                  <th class="rjd-th" id="rjd-th-p2">P2</th>
+                  <th class="rjd-th">Resume</th>
+                  <th class="rjd-th">Date</th>
+                  <th class="rjd-th">Status</th>
                 </tr>
               </thead>
               <tbody id="rjd-tbody"></tbody>
@@ -1114,18 +893,19 @@ ${context}`;
           <div class="rjd-panel-body">
             <div class="rjd-detail-row"><span class="rjd-detail-lbl">Job Title</span><span id="rjd-detail-title"></span></div>
             <div class="rjd-detail-row"><span class="rjd-detail-lbl">URL</span>
-              <div style="display:flex;align-items:center;gap:6px;">
-                <a id="rjd-detail-url" target="_blank" class="rjd-url-link"></a>
-                <button id="rjd-copy-url-detail-btn" style="padding:2px 7px;font-size:10px;background:#ebf4ff;border:1px solid #bee3f8;border-radius:4px;color:#2E75B6;cursor:pointer;font-family:inherit;">Copy</button>
+              <div style="display:flex;gap:6px;align-items:center;flex:1;">
+                <input type="url" id="rjd-detail-url-input" style="flex:1;padding:4px 8px;border:1px solid #cbd5e0;border-radius:5px;font-size:12px;font-family:inherit;background:#fff;color:#1a202c;" placeholder="https://..."/>
+                <a id="rjd-detail-url" target="_blank" class="rjd-url-link" style="white-space:nowrap;flex-shrink:0;">Open</a>
+                <button id="rjd-copy-url-btn" style="padding:3px 8px;border:1px solid #e2e8f0;border-radius:5px;font-size:11px;background:#f8fafc;color:#4a5568;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;">Copy</button>
               </div>
             </div>
             <div class="rjd-detail-row"><span class="rjd-detail-lbl">Date</span><span id="rjd-detail-date"></span></div>
             <div class="rjd-detail-row"><span class="rjd-detail-lbl">Status</span><span id="rjd-detail-status"></span></div>
-            <div class="rjd-detail-section"><div class="rjd-detail-lbl">Resume</div><div id="rjd-detail-resume-section" style="margin-top:6px;"></div></div>
+            <div class="rjd-detail-section"><div class="rjd-detail-lbl" style="display:flex;align-items:center;justify-content:space-between;">Resume</div><div id="rjd-detail-resume-section" style="margin-top:6px;"></div></div>
             <div class="rjd-detail-section">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-                <div class="rjd-detail-lbl">Job Description</div>
-                <button id="rjd-copy-jd-btn" style="padding:2px 8px;font-size:10px;background:#ebf4ff;border:1px solid #bee3f8;border-radius:4px;color:#2E75B6;cursor:pointer;font-family:inherit;">Copy JD</button>
+              <div class="rjd-detail-lbl" style="display:flex;align-items:center;justify-content:space-between;">
+                <span>Job Description</span>
+                <button id="rjd-copy-jd-btn" style="padding:3px 8px;border:1px solid #e2e8f0;border-radius:5px;font-size:11px;background:#f8fafc;color:#4a5568;cursor:pointer;font-family:inherit;">Copy JD</button>
               </div>
               <pre id="rjd-detail-jd" class="rjd-jd-text"></pre>
             </div>
@@ -1160,6 +940,20 @@ ${context}`;
 
   function bindTrackerEvents() {
     document.getElementById('rjd-settings-btn').addEventListener('click', () => renderSettingsScreen('tracker'));
+    document.getElementById('rjd-refresh-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('rjd-refresh-btn');
+      btn.style.opacity = '0.5';
+      btn.disabled = true;
+      try {
+        applications = await dbLoadApps();
+        renderTable();
+        showToast('Refreshed ✓');
+      } catch(e) {
+        showToast('Refresh failed', true);
+      }
+      btn.style.opacity = '1';
+      btn.disabled = false;
+    });
     document.getElementById('rjd-new-app-btn').addEventListener('click', () => showNewAppPanel(false));
     document.getElementById('rjd-new-back').addEventListener('click', hideNewAppPanel);
     document.getElementById('rjd-detail-back').addEventListener('click', hideAppDetail);
@@ -1168,17 +962,6 @@ ${context}`;
     document.getElementById('rjd-search-input').addEventListener('input', (e) => { filterSearch = e.target.value; renderTable(); });
     document.getElementById('rjd-status-filter').addEventListener('change', (e) => { filterStatus = e.target.value; renderTable(); });
     document.getElementById('rjd-date-filter').addEventListener('change', (e) => { filterDate = e.target.value; renderTable(); });
-
-    document.getElementById('rjd-refresh-btn').addEventListener('click', async () => {
-      const btn = document.getElementById('rjd-refresh-btn');
-      btn.textContent = '...'; btn.disabled = true;
-      try {
-        applications = await dbLoadApps();
-        renderTable();
-        showToast('Refreshed ✓');
-      } catch(e) { showToast('Refresh failed', true); }
-      btn.textContent = '⟳'; btn.disabled = false;
-    });
 
     // ── WORKING DATE picker ──
     function setWorkingDate(iso) {
@@ -1222,72 +1005,83 @@ ${context}`;
       const btn = document.getElementById('rjd-quick-extract-btn');
       btn.textContent = 'Extracting...'; btn.disabled = true;
 
-      try {
-        const result = await smartExtract();
-        const company  = result.company_name || '';
-        const jobTitle = result.job_title    || '';
-        const pageUrl  = result.url          || window.location.href;
-        const jdText   = result.jd           || '';
+      const pageUrl  = window.location.href;
+      let company    = '';
+      let jobTitle   = '';
+      let clipText   = '';
 
-        // Duplicate check
-        if (company || jobTitle) {
-          const dupByUrl   = applications.find(a => a.url && a.url === pageUrl);
-          const dupByTitle = applications.find(a =>
-            a.company?.toLowerCase().trim() === company.toLowerCase().trim() &&
-            a.jobTitle?.toLowerCase().trim() === jobTitle.toLowerCase().trim()
-          );
-          if (dupByUrl) {
-            showToast('Already saved: ' + (dupByUrl.company || dupByUrl.jobTitle), true);
-            btn.textContent = '✦ Extract & Save'; btn.disabled = false; _extracting = false;
-            return;
-          }
-          if (dupByTitle) {
-            showToast('Possible duplicate: ' + dupByTitle.company + ' — ' + dupByTitle.jobTitle, true);
-            btn.textContent = '✦ Extract & Save'; btn.disabled = false; _extracting = false;
-            return;
-          }
+      // Try to read clipboard
+      try { clipText = await navigator.clipboard.readText(); } catch(e) {}
+
+      // Try Gemini extraction if key exists and clipboard has content
+      if (GEMINI_KEY && GEMINI_KEY.trim() && clipText.trim()) {
+        try {
+          const result = await extractWithGemini(clipText, pageUrl);
+          company  = result.company_name || '';
+          jobTitle = result.job_title    || '';
+        } catch(e) {
+          // Extraction failed — will open form for manual fill
         }
+      }
 
-        // If we got both fields → save directly
-        if (company && jobTitle) {
-          const app = {
-            id: Date.now().toString(), company, jobTitle,
-            url: pageUrl, jd: jdText, resume: '',
-            resumeP1: '', resumeP2: '',
-            status: 'Applied', date: today(), dateRaw: new Date().toISOString(),
-            dateKey: todayKey(), notes: '', followUpDate: ''
-          };
-          const ok = await dbSaveApp(app);
-          if (ok) {
-            applications.push(app);
-            renderTable();
-            showToast('Saved: ' + company + ' — ' + jobTitle);
-          } else {
-            showToast('Save failed — check connection', true);
-          }
+      // Duplicate check (only if we got something)
+      if (company || jobTitle) {
+        const dupByUrl   = applications.find(a => a.url && a.url === pageUrl);
+        // Warning fix #1: normalise both sides with trim() + toLowerCase() for reliable matching
+        const dupByTitle = applications.find(a =>
+          a.company?.toLowerCase().trim() === company.toLowerCase().trim() &&
+          a.jobTitle?.toLowerCase().trim() === jobTitle.toLowerCase().trim()
+        );
+        if (dupByUrl) {
+          showToast('Already saved: ' + (dupByUrl.company || dupByUrl.jobTitle), true);
+          btn.textContent = '✦ Extract & Save'; btn.disabled = false; _extracting = false;
+          return;
+        }
+        if (dupByTitle) {
+          showToast('Possible duplicate: ' + dupByTitle.company + ' — ' + dupByTitle.jobTitle, true);
+          btn.textContent = '✦ Extract & Save'; btn.disabled = false; _extracting = false;
+          return;
+        }
+      }
+
+      // If we got company + title → save directly
+      if (company && jobTitle) {
+        const app = {
+          id: crypto.randomUUID(), company, jobTitle,
+          url: pageUrl, jd: clipText, resume: '',
+          status: 'Applied', date: today(), dateRaw: new Date().toISOString(),
+          dateKey: todayKey(), notes: '', followUpDate: ''
+        };
+        const ok = await dbSaveApp(app);
+        if (ok) {
+          applications.push(app);
+          renderTable();
+          showToast('Saved: ' + company + ' — ' + jobTitle);
         } else {
-          // Partial or empty — open form pre-filled
-          showNewAppPanel(false);
-          const co = document.getElementById('rjd-new-company');
-          const ti = document.getElementById('rjd-new-title');
-          const ur = document.getElementById('rjd-new-url');
-          const jd = document.getElementById('rjd-new-jd');
-          if (co) co.value = company  || '';
-          if (ti) ti.value = jobTitle || '';
-          if (ur) ur.value = pageUrl;
-          if (jd) jd.value = jdText   || '';
-          const st = document.getElementById('rjd-extract-status');
-          if (st) {
-            st.style.color  = '#975a16';
-            st.textContent  = !GEMINI_KEY
-              ? 'No API key — fill details manually or add key in ⚙ Settings'
-              : !company && !jobTitle
-              ? 'Could not extract from page — fill in manually'
-              : 'Partially extracted — review the highlighted fields';
-          }
+          showToast('Save failed — check connection', true);
         }
-      } catch(err) {
-        showToast('Extraction failed: ' + (err.message || 'unknown error'), true);
+      } else {
+        // Could not extract — open New Application form pre-filled with what we have
+        showNewAppPanel(false);
+        // Pre-fill whatever we could get
+        const co = document.getElementById('rjd-new-company');
+        const ti = document.getElementById('rjd-new-title');
+        const ur = document.getElementById('rjd-new-url');
+        const jd = document.getElementById('rjd-new-jd');
+        if (co) co.value = company || '';
+        if (ti) ti.value = jobTitle || '';
+        if (ur) ur.value = pageUrl;
+        if (jd) jd.value = clipText || '';
+        // Show helpful hint
+        const st = document.getElementById('rjd-extract-status');
+        if (st) {
+          st.style.color = '#975a16';
+          st.textContent = !GEMINI_KEY
+            ? 'No API key — fill details manually or add key in ⚙ Settings'
+            : !clipText.trim()
+            ? 'Clipboard empty — URL pre-filled, add company and title'
+            : 'Could not extract — please fill in the details';
+        }
       }
 
       btn.textContent = '✦ Extract & Save'; btn.disabled = false;
@@ -1298,7 +1092,14 @@ ${context}`;
     document.getElementById('rjd-extract-btn').addEventListener('click', () => runExtract());
 
     // Save new app
+    // Issue #17 fix: guard against double-submit while async save is in flight.
+    let _savingApp = false;
     document.getElementById('rjd-save-app-btn').addEventListener('click', async () => {
+      if (_savingApp) return;
+      _savingApp = true;
+      const btn = document.getElementById('rjd-save-app-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+      try {
       const company  = document.getElementById('rjd-new-company').value.trim();
       const jobTitle = document.getElementById('rjd-new-title').value.trim();
       const url      = document.getElementById('rjd-new-url').value.trim();
@@ -1313,7 +1114,7 @@ ${context}`;
       if (dupByUrl)   { showToast('Already saved: ' + (dupByUrl.company || dupByUrl.jobTitle), true); return; }
       if (dupByTitle) { showToast('Possible duplicate: ' + dupByTitle.company + ' — ' + dupByTitle.jobTitle, true); return; }
       const app = {
-        id: Date.now().toString(), company, jobTitle, url, jd, resume: '',
+        id: crypto.randomUUID(), company, jobTitle, url, jd, resume: '',
         status: 'Applied', date: today(), dateRaw: new Date().toISOString(), dateKey: todayKey(), notes: ''
       };
       const ok = await dbSaveApp(app);
@@ -1323,6 +1124,10 @@ ${context}`;
         renderTable();
         showToast('Application saved');
       } else { showToast('Save failed — check connection', true); }
+      } finally {
+        _savingApp = false;
+        if (btn) { btn.disabled = false; btn.textContent = 'Save Application'; }
+      }
     });
 
     // Detail panel events
@@ -1332,6 +1137,8 @@ ${context}`;
         if (app) {
           app.notes = document.getElementById('rjd-detail-notes').value;
           app.followUpDate = document.getElementById('rjd-detail-followup').value || '';
+          const newUrl = (document.getElementById('rjd-detail-url-input')?.value || '').trim();
+          app.url = newUrl;
           await dbUpdateApp(app);
           showToast('Saved');
           renderTable();
@@ -1422,11 +1229,8 @@ ${context}`;
       .rjd-settings-nav-item{padding:7px 12px;font-size:11px;color:#718096;cursor:pointer;border-left:2px solid transparent;display:flex;align-items:center;gap:6px;}
       .rjd-settings-nav-item:hover{background:#f1f5f9;color:#1F4E79;}
       .rjd-snav-active{background:#ebf4ff !important;color:#1F4E79 !important;border-left-color:#1F4E79 !important;font-weight:600;}
-      .rjd-p-resume-btn{border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;padding:2px 7px;font-family:inherit;transition:opacity 0.15s;}
-      .rjd-p-has{background:#d1fae5;color:#065f46;}
-      .rjd-p-has:hover{background:#a7f3d0;}
-      .rjd-p-add{background:#ebf4ff;color:#2E75B6;}
-      .rjd-p-add:hover{background:#bee3f8;}
+      .rjd-td-sno{width:24px !important;min-width:24px !important;max-width:24px !important;padding:5px 4px !important;text-align:center !important;}
+      #rjd-table thead tr th:first-child{width:24px !important;padding:5px 4px !important;text-align:center !important;}
       #rjd-sidebar[data-theme=dark]{background:#1a202c !important;color:#e2e8f0 !important;border-left-color:#2d3748 !important;}
       #rjd-sidebar[data-theme=dark] #rjd-header{background:#1F4E79 !important;}
       #rjd-sidebar[data-theme=dark] #rjd-toolbar{background:#2d3748 !important;border-bottom-color:#4a5568 !important;}
@@ -1574,13 +1378,11 @@ ${context}`;
 
   // On page load — load working date AND session together so workingDate is set before any save
   if (hasChromeStorage) {
-    chrome.storage.local.get(['rjd_session', 'rjd_working_date', 'rjd_person_labels'], r => {
+    chrome.storage.local.get(['rjd_session', 'rjd_working_date'], r => {
       if (chrome.runtime.lastError) return;
+      // Set workingDate FIRST before applySession renders the sidebar
       if (r.rjd_working_date) {
         workingDate = r.rjd_working_date;
-      }
-      if (r.rjd_person_labels) {
-        personLabels = r.rjd_person_labels;
       }
       applySession(r.rjd_session || null);
     });

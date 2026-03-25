@@ -6,7 +6,14 @@ const SUPABASE_URL = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
 // chrome.runtime.id works when page is opened FROM the extension
 // For external pages (Vercel), we use externally_connectable messaging
 const EXT_ID = null; // Will be provided via URL parameter
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucWJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
+// Issue #1 fix: anon key loaded from chrome.storage at runtime — not hardcoded.
+let SUPABASE_KEY = '';
+(async () => {
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    const { rjd_anon_key } = await chrome.storage.local.get('rjd_anon_key');
+    SUPABASE_KEY = rjd_anon_key || '';
+  }
+})();
 
 const STATUS_COLORS = {
   'Applied':             's-applied',
@@ -56,6 +63,9 @@ function getWorkDayStart() {
 function saveWorkDayStart(hour) {
   localStorage.setItem('rjd_workday_start', String(hour));
 }
+// Aliases used by the Settings UI (Night Shift Cutoff)
+function getWorkDayCutoff() { return parseInt(localStorage.getItem('rjd_workday_cutoff') || '0', 10); }
+function saveWorkDayCutoff(hour) { localStorage.setItem('rjd_workday_cutoff', String(hour)); }
 // Returns the ISO work-day string (YYYY-MM-DD) for a given dateRaw timestamp
 // Logic: if hour >= workDayStart → work day = today (the session just started)
 //        if hour <  workDayStart → work day = yesterday (still in last night's session)
@@ -114,27 +124,49 @@ async function signOut() {
 
 // ── SUPABASE DB ──
 async function loadApps() {
-  let r = await fetch(SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc', { headers:headers() });
-  // If 401 — try refresh token
-  if (r.status === 401 && session?.refresh_token) {
-    const refreshed = await refreshToken();
-    if (refreshed) {
-      r = await fetch(SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc', { headers:headers() });
-    } else {
-      // Token refresh failed — sign out
-      clearStoredSession();
-      session = null; currentUser = null; apps = [];
-      showSection('auth-section'); setMode('signin');
-      return [];
+  // Issue #14 fix: paginate in 1000-row pages — Supabase silently caps at 1000 rows.
+  const PAGE = 1000;
+  let all = [];
+  let page = 0;
+  while (true) {
+    const from = page * PAGE;
+    const to   = from + PAGE - 1;
+    let r = await fetch(SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc', {
+      headers: headers({ 'Range-Unit': 'items', 'Range': from + '-' + to })
+    });
+    // If 401 on first page — try refresh token
+    if (r.status === 401 && session?.refresh_token && page === 0) {
+      const refreshed = await refreshToken();
+      if (refreshed) {
+        r = await fetch(SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc', {
+          headers: headers({ 'Range-Unit': 'items', 'Range': from + '-' + to })
+        });
+      } else {
+        clearStoredSession();
+        session = null; currentUser = null; apps = [];
+        showSection('auth-section'); setMode('signin');
+        return [];
+      }
     }
+    if (!r.ok) break;
+    const data = await r.json();
+    if (!Array.isArray(data) || data.length === 0) break;
+    all = all.concat(data.map(mapRow));
+    if (data.length < PAGE) break;
+    page++;
   }
-  if (!r.ok) return [];
-  const data = await r.json();
-  return Array.isArray(data) ? data.map(mapRow) : [];
+  return all;
 }
 
+// Issue #15 fix: singleton promise prevents concurrent refresh calls racing.
+let _appRefreshPromise = null;
 async function refreshToken() {
   if (!session?.refresh_token) return false;
+  if (_appRefreshPromise) return _appRefreshPromise;
+  _appRefreshPromise = _doRefreshToken().finally(() => { _appRefreshPromise = null; });
+  return _appRefreshPromise;
+}
+async function _doRefreshToken() {
   try {
     const r = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
       method: 'POST',
@@ -159,8 +191,7 @@ async function refreshToken() {
 }
 function mapRow(r) {
   return { id:r.id, company:r.company||'', jobTitle:r.job_title||'', url:r.url||'',
-    jd:r.jd||'', resume:r.resume||'', resumeP1:r.resume_p1||'', resumeP2:r.resume_p2||'',
-    status:r.status||'Applied',
+    jd:r.jd||'', resume:r.resume||'', status:r.status||'Applied',
     date:r.date||'', dateRaw:r.date_raw||'', dateKey:r.date_key||'', notes:r.notes||'',
     followUpDate:r.follow_up_date||'' };
 }
@@ -199,6 +230,9 @@ async function deleteApp(id) {
 // ── SESSION ──
 // ── GEMINI KEY — stored in Supabase per user ──
 async function saveGeminiKeyDB(key) {
+  // Issue #19 note: the Gemini API key is stored in plain text in Supabase.
+  // Users should treat it as sensitive. A server-side proxy would eliminate
+  // this exposure entirely — flag as a known limitation in the README.
   // Save to Supabase
   try {
     const res = await fetch(SUPABASE_URL + '/rest/v1/user_settings', {
@@ -256,7 +290,8 @@ function saveSession(data) {
     }
   };
 
-  // Save to localStorage for web app
+  // Issue #16: chrome.storage.local is the canonical session store.
+  // localStorage is kept only as a fallback for non-extension web contexts.
   localStorage.setItem('rjd_web_session', JSON.stringify(payload));
 
   // Save to chrome.storage — works because app.html is an extension page
@@ -407,6 +442,20 @@ async function showApp() {
   // Click topbar user → go to settings
   const tb = document.getElementById('topbar-user-btn');
   if (tb) tb.addEventListener('click', () => navigateTo('settings'));
+  // Refresh button
+  const refreshBtn = document.getElementById('refresh-btn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async () => {
+      refreshBtn.textContent = '↻ Refreshing...';
+      refreshBtn.disabled = true;
+      apps = await loadApps();
+      updateBadge();
+      renderPage(currentPage);
+      refreshBtn.textContent = '↻ Refresh';
+      refreshBtn.disabled = false;
+      showToast('Refreshed ✓');
+    });
+  }
   showLoading();
   apps = await loadApps();
   // Auto-refresh token every 50 minutes
@@ -468,6 +517,8 @@ function navigateTo(page) {
   document.getElementById('page-title').textContent = titles[page] || page;
   const addBtn = document.getElementById('add-app-btn');
   if (addBtn) addBtn.classList.toggle('hidden', page !== 'applications');
+  const refreshBtn = document.getElementById('refresh-btn');
+  if (refreshBtn) refreshBtn.style.display = '';
   renderPage(page);
 }
 
@@ -706,7 +757,6 @@ function renderApplications() {
       <div class="section-card-header">
         <div class="section-card-title">All Applications (${filtered.length})</div>
         <div class="filters-row">
-          <button id="refresh-apps-btn" class="btn-new" style="font-size:12px;padding:6px 12px;display:flex;align-items:center;gap:5px;">⟳ Refresh</button>
           <input class="filter-input" id="app-search" placeholder="Search..." value="${esc(filterSearch)}" style="width:160px"/>
           <select class="filter-select" id="app-status-filter">
             <option value="all" ${filterStatus==='all'?'selected':''}>All Statuses</option>
@@ -768,16 +818,6 @@ function renderApplications() {
   document.getElementById('app-search').addEventListener('input', e => { filterSearch = e.target.value; renderApplications(); });
   document.getElementById('app-status-filter').addEventListener('change', e => { filterStatus = e.target.value; renderApplications(); });
   document.getElementById('app-date-filter').addEventListener('change', e => { filterDate = e.target.value; renderApplications(); });
-
-  document.getElementById('refresh-apps-btn').addEventListener('click', async () => {
-    const btn = document.getElementById('refresh-apps-btn');
-    btn.textContent = '⟳ Refreshing...';
-    btn.disabled = true;
-    apps = await loadApps();
-    renderApplications();
-    updateBadge();
-    showToast('Applications refreshed ✓');
-  });
 
   document.querySelectorAll('.status-select').forEach(sel => {
     sel.addEventListener('change', async () => {
@@ -909,37 +949,17 @@ function openDetailModal(app) {
     statusSel.style.color      = (STATUS_BG[statusSel.value]||STATUS_BG.Applied).color;
   });
 
-  // URL input + button
+  // URL input + Open button
   const urlInput = document.getElementById('detail-url-input');
   const urlLink  = document.getElementById('detail-url-link');
-  const urlCopy  = document.getElementById('detail-url-copy');
-  urlInput.value = app.url || '';
-  if (app.url) { urlLink.href = app.url; urlLink.style.display = 'inline-flex'; }
-  else         { urlLink.style.display = 'none'; }
-  urlInput.addEventListener('input', () => {
-    const val = urlInput.value.trim();
-    if (val) { urlLink.href = val; urlLink.style.display = 'inline-flex'; }
-    else     { urlLink.style.display = 'none'; }
-  });
-  urlCopy.addEventListener('click', () => {
-    const val = urlInput.value.trim();
-    if (!val) { showToast('No URL to copy', true); return; }
-    navigator.clipboard.writeText(val).then(() => { showToast('URL copied ✓'); }).catch(() => { showToast('Copy failed', true); });
-  });
-
-  // Copy JD button
-  document.getElementById('copy-jd-btn').addEventListener('click', () => {
-    const text = document.getElementById('detail-jd-text').textContent;
-    if (!text || text.startsWith('No job')) { showToast('No JD to copy', true); return; }
-    navigator.clipboard.writeText(text).then(() => showToast('JD copied ✓')).catch(() => showToast('Copy failed', true));
-  });
-
-  // Copy Resume button
-  document.getElementById('copy-resume-btn').addEventListener('click', () => {
-    const text = document.getElementById('detail-resume-text').textContent;
-    if (!text || text.startsWith('No resume')) { showToast('No resume to copy', true); return; }
-    navigator.clipboard.writeText(text).then(() => showToast('Resume copied ✓')).catch(() => showToast('Copy failed', true));
-  });
+  if (urlInput) urlInput.value = app.url || '';
+  function syncUrlLink() {
+    const v = urlInput ? urlInput.value.trim() : '';
+    if (v) { urlLink.href = v; urlLink.style.opacity = '1'; urlLink.style.pointerEvents = 'auto'; }
+    else   { urlLink.href = '#'; urlLink.style.opacity = '0.4'; urlLink.style.pointerEvents = 'none'; }
+  }
+  syncUrlLink();
+  if (urlInput) urlInput.addEventListener('input', syncUrlLink);
 
   // Default to JD tab (or resume if no JD)
   switchDetailTab(app.jd ? 'jd' : (app.resume ? 'resume' : 'notes'));
@@ -952,7 +972,7 @@ function openDetailModal(app) {
     app.notes        = document.getElementById('detail-notes-input').value.trim();
     app.followUpDate = document.getElementById('detail-followup-input').value;
     app.status       = document.getElementById('detail-status-sel').value;
-    app.url          = document.getElementById('detail-url-input').value.trim();
+    app.url          = (document.getElementById('detail-url-input')?.value || '').trim();
     // Save session date if changed
     const newSessionDate = document.getElementById('detail-session-date-input')?.value;
     if (newSessionDate) {
@@ -1355,7 +1375,7 @@ document.getElementById('modal-save').addEventListener('click', async () => {
   if (!company && !jobTitle) { showToast('Enter company or job title', true); return; }
   const now = new Date();
   const app = {
-    id: Date.now().toString(), company, jobTitle, url, jd, resume:'',
+    id: crypto.randomUUID(), company, jobTitle, url, jd, resume:'',
     status, date: today(), dateRaw: now.toISOString(),
     dateKey: `${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`,
     notes, followUpDate:''
