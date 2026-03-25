@@ -56,9 +56,6 @@ function getWorkDayStart() {
 function saveWorkDayStart(hour) {
   localStorage.setItem('rjd_workday_start', String(hour));
 }
-// Aliases used by the Settings UI (Night Shift Cutoff)
-function getWorkDayCutoff() { return parseInt(localStorage.getItem('rjd_workday_cutoff') || '0', 10); }
-function saveWorkDayCutoff(hour) { localStorage.setItem('rjd_workday_cutoff', String(hour)); }
 // Returns the ISO work-day string (YYYY-MM-DD) for a given dateRaw timestamp
 // Logic: if hour >= workDayStart → work day = today (the session just started)
 //        if hour <  workDayStart → work day = yesterday (still in last night's session)
@@ -162,7 +159,8 @@ async function refreshToken() {
 }
 function mapRow(r) {
   return { id:r.id, company:r.company||'', jobTitle:r.job_title||'', url:r.url||'',
-    jd:r.jd||'', resume:r.resume||'', status:r.status||'Applied',
+    jd:r.jd||'', resume:r.resume||'', resumeP1:r.resume_p1||'', resumeP2:r.resume_p2||'',
+    status:r.status||'Applied',
     date:r.date||'', dateRaw:r.date_raw||'', dateKey:r.date_key||'', notes:r.notes||'',
     followUpDate:r.follow_up_date||'' };
 }
@@ -409,20 +407,6 @@ async function showApp() {
   // Click topbar user → go to settings
   const tb = document.getElementById('topbar-user-btn');
   if (tb) tb.addEventListener('click', () => navigateTo('settings'));
-  // Refresh button
-  const refreshBtn = document.getElementById('refresh-btn');
-  if (refreshBtn) {
-    refreshBtn.addEventListener('click', async () => {
-      refreshBtn.textContent = '↻ Refreshing...';
-      refreshBtn.disabled = true;
-      apps = await loadApps();
-      updateBadge();
-      renderPage(currentPage);
-      refreshBtn.textContent = '↻ Refresh';
-      refreshBtn.disabled = false;
-      showToast('Refreshed ✓');
-    });
-  }
   showLoading();
   apps = await loadApps();
   // Auto-refresh token every 50 minutes
@@ -484,8 +468,6 @@ function navigateTo(page) {
   document.getElementById('page-title').textContent = titles[page] || page;
   const addBtn = document.getElementById('add-app-btn');
   if (addBtn) addBtn.classList.toggle('hidden', page !== 'applications');
-  const refreshBtn = document.getElementById('refresh-btn');
-  if (refreshBtn) refreshBtn.style.display = '';
   renderPage(page);
 }
 
@@ -724,6 +706,7 @@ function renderApplications() {
       <div class="section-card-header">
         <div class="section-card-title">All Applications (${filtered.length})</div>
         <div class="filters-row">
+          <button id="refresh-apps-btn" class="btn-new" style="font-size:12px;padding:6px 12px;display:flex;align-items:center;gap:5px;">⟳ Refresh</button>
           <input class="filter-input" id="app-search" placeholder="Search..." value="${esc(filterSearch)}" style="width:160px"/>
           <select class="filter-select" id="app-status-filter">
             <option value="all" ${filterStatus==='all'?'selected':''}>All Statuses</option>
@@ -785,6 +768,16 @@ function renderApplications() {
   document.getElementById('app-search').addEventListener('input', e => { filterSearch = e.target.value; renderApplications(); });
   document.getElementById('app-status-filter').addEventListener('change', e => { filterStatus = e.target.value; renderApplications(); });
   document.getElementById('app-date-filter').addEventListener('change', e => { filterDate = e.target.value; renderApplications(); });
+
+  document.getElementById('refresh-apps-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('refresh-apps-btn');
+    btn.textContent = '⟳ Refreshing...';
+    btn.disabled = true;
+    apps = await loadApps();
+    renderApplications();
+    updateBadge();
+    showToast('Applications refreshed ✓');
+  });
 
   document.querySelectorAll('.status-select').forEach(sel => {
     sel.addEventListener('change', async () => {
@@ -916,17 +909,37 @@ function openDetailModal(app) {
     statusSel.style.color      = (STATUS_BG[statusSel.value]||STATUS_BG.Applied).color;
   });
 
-  // URL input + Open button
+  // URL input + button
   const urlInput = document.getElementById('detail-url-input');
   const urlLink  = document.getElementById('detail-url-link');
-  if (urlInput) urlInput.value = app.url || '';
-  function syncUrlLink() {
-    const v = urlInput ? urlInput.value.trim() : '';
-    if (v) { urlLink.href = v; urlLink.style.opacity = '1'; urlLink.style.pointerEvents = 'auto'; }
-    else   { urlLink.href = '#'; urlLink.style.opacity = '0.4'; urlLink.style.pointerEvents = 'none'; }
-  }
-  syncUrlLink();
-  if (urlInput) urlInput.addEventListener('input', syncUrlLink);
+  const urlCopy  = document.getElementById('detail-url-copy');
+  urlInput.value = app.url || '';
+  if (app.url) { urlLink.href = app.url; urlLink.style.display = 'inline-flex'; }
+  else         { urlLink.style.display = 'none'; }
+  urlInput.addEventListener('input', () => {
+    const val = urlInput.value.trim();
+    if (val) { urlLink.href = val; urlLink.style.display = 'inline-flex'; }
+    else     { urlLink.style.display = 'none'; }
+  });
+  urlCopy.addEventListener('click', () => {
+    const val = urlInput.value.trim();
+    if (!val) { showToast('No URL to copy', true); return; }
+    navigator.clipboard.writeText(val).then(() => { showToast('URL copied ✓'); }).catch(() => { showToast('Copy failed', true); });
+  });
+
+  // Copy JD button
+  document.getElementById('copy-jd-btn').addEventListener('click', () => {
+    const text = document.getElementById('detail-jd-text').textContent;
+    if (!text || text.startsWith('No job')) { showToast('No JD to copy', true); return; }
+    navigator.clipboard.writeText(text).then(() => showToast('JD copied ✓')).catch(() => showToast('Copy failed', true));
+  });
+
+  // Copy Resume button
+  document.getElementById('copy-resume-btn').addEventListener('click', () => {
+    const text = document.getElementById('detail-resume-text').textContent;
+    if (!text || text.startsWith('No resume')) { showToast('No resume to copy', true); return; }
+    navigator.clipboard.writeText(text).then(() => showToast('Resume copied ✓')).catch(() => showToast('Copy failed', true));
+  });
 
   // Default to JD tab (or resume if no JD)
   switchDetailTab(app.jd ? 'jd' : (app.resume ? 'resume' : 'notes'));
@@ -939,7 +952,7 @@ function openDetailModal(app) {
     app.notes        = document.getElementById('detail-notes-input').value.trim();
     app.followUpDate = document.getElementById('detail-followup-input').value;
     app.status       = document.getElementById('detail-status-sel').value;
-    app.url          = (document.getElementById('detail-url-input')?.value || '').trim();
+    app.url          = document.getElementById('detail-url-input').value.trim();
     // Save session date if changed
     const newSessionDate = document.getElementById('detail-session-date-input')?.value;
     if (newSessionDate) {
