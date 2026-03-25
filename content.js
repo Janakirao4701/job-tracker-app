@@ -1295,9 +1295,14 @@
 
     toggle.addEventListener('click', () => {
       if (!currentUser) {
-        // Not logged in — open extension's app.html which can write to chrome.storage
-        if (typeof chrome !== 'undefined' && chrome.runtime) {
-          chrome.tabs.create({ url: chrome.runtime.getURL('app.html') });
+        // Not logged in — ask background to open app.html (chrome.tabs is not available in content scripts)
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+          chrome.runtime.sendMessage({ action: 'open_app' }, () => {
+            if (chrome.runtime.lastError) {
+              // Fallback: open directly if background didn't handle it
+              try { window.open(chrome.runtime.getURL('app.html')); } catch(e) {}
+            }
+          });
         }
         return;
       }
