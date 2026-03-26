@@ -9,7 +9,8 @@
     "scripting",
     "clipboardRead",
     "tabs",
-    "notifications"
+    "notifications",
+    "alarms"
   ],
   "host_permissions": [
     "<all_urls>",
@@ -27,6 +28,9 @@
   },
   "background": {
     "service_worker": "background.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
   },
   "commands": {
     "toggle_sidebar": {
@@ -64,12 +68,23 @@
         "<all_urls>"
       ],
       "js": [
-        "xlsxbuilder.js",
         "content.js"
       ],
       "css": [
         "sidebar.css"
       ]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "xlsxbuilder.js",
+        "privacy.html",
+        "icons/icon16.png",
+        "icons/icon48.png",
+        "icons/icon128.png"
+      ],
+      "matches": ["<all_urls>"]
     }
   ],
   "icons": {

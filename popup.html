@@ -3,55 +3,190 @@
 <head>
 <meta charset="UTF-8">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{width:320px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;color:#1a202c;min-height:100px}
-.get-started{padding:32px 24px;text-align:center}
-.gs-icon{font-size:48px;margin-bottom:16px}
-.gs-title{font-size:18px;font-weight:800;color:#1F4E79;margin-bottom:8px}
-.gs-sub{font-size:13px;color:#718096;line-height:1.6;margin-bottom:24px}
-.btn-gs{width:100%;padding:13px;background:#1F4E79;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
-.btn-gs:hover{background:#2E75B6}
-.gs-note{font-size:11px;color:#a0aec0;margin-top:12px}
-.header{background:linear-gradient(135deg,#1F4E79,#2E75B6);padding:16px;display:flex;align-items:center;gap:12px}
-.logo{width:36px;height:36px;background:rgba(255,255,255,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
-.header-text h1{font-size:14px;font-weight:700;color:#fff}
-.header-text p{font-size:10px;color:rgba(255,255,255,0.75);margin-top:2px}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#e2e8f0;border-bottom:1px solid #e2e8f0}
-.stat{background:#fff;padding:10px 6px;text-align:center}
-.stat-num{font-size:20px;font-weight:700;color:#1F4E79;line-height:1}
-.stat-num.green{color:#00B050}.stat-num.orange{color:#ED7D31}.stat-num.blue{color:#2E75B6}
-.stat-lbl{font-size:9px;color:#718096;margin-top:3px;text-transform:uppercase;letter-spacing:0.4px}
-.user-bar{background:#fff;padding:10px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #e2e8f0}
-.avatar{width:28px;height:28px;background:#1F4E79;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
-.username{font-size:12px;font-weight:600;color:#1F4E79}
-.useremail{font-size:10px;color:#a0aec0}
-.actions{padding:12px 14px;border-bottom:1px solid #e2e8f0;display:flex;gap:8px}
-.btn-primary{flex:1;padding:9px;background:#1F4E79;color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
-.btn-primary:hover{background:#2E75B6}
-.btn-secondary{flex:1;padding:9px;background:#fff;color:#1F4E79;border:1.5px solid #1F4E79;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}
-.btn-secondary:hover{background:#ebf4ff}
-.recent{padding:10px 14px;border-bottom:1px solid #e2e8f0}
-.recent-label{font-size:10px;font-weight:600;color:#718096;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
-.recent-item{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f1f5f9}
-.recent-item:last-child{border-bottom:none}
-.recent-company{font-size:11px;font-weight:600;color:#1a202c}
-.recent-job{font-size:10px;color:#718096}
-.badge{font-size:9px;font-weight:600;padding:2px 7px;border-radius:10px;white-space:nowrap}
-.b-applied{background:#DDEEFF;color:#1F4E79}
-.b-interview{background:#C6EFCE;color:#276749}
-.b-offer{background:#00B050;color:#fff}
-.b-rejected{background:#FFC7CE;color:#9C0006}
-.b-done{background:#FFEB9C;color:#9C5700}
-.b-skipped{background:#F2F2F2;color:#808080}
-.no-apps{font-size:11px;color:#a0aec0;text-align:center;padding:8px 0;font-style:italic}
-.footer{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:#f8fafc}
-.btn-signout{font-size:10px;color:#718096;background:none;border:none;font-family:inherit;cursor:pointer}
-.btn-signout:hover{color:#c53030}
-.version{font-size:10px;color:#cbd5e0}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 300px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    color: #1a202c;
+    background: #f8fafc;
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #1F4E79, #2E75B6);
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo {
+    width: 36px; height: 36px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .header-text h1 { font-size: 14px; font-weight: 700; color: #fff; }
+  .header-text p  { font-size: 10px; color: rgba(255,255,255,0.75); margin-top: 2px; }
+
+  /* Stats */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .stat {
+    background: #fff;
+    padding: 10px 6px;
+    text-align: center;
+  }
+  .stat-num { font-size: 20px; font-weight: 700; color: #1F4E79; line-height: 1; }
+  .stat-num.green { color: #00B050; }
+  .stat-num.orange { color: #ED7D31; }
+  .stat-num.blue { color: #2E75B6; }
+  .stat-lbl { font-size: 9px; color: #718096; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  /* User badge */
+  .user-bar {
+    background: #fff;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .user-info { display: flex; align-items: center; gap: 8px; }
+  .avatar {
+    width: 26px; height: 26px;
+    background: #1F4E79;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: #fff;
+  }
+  .username { font-size: 12px; font-weight: 600; color: #1F4E79; }
+  .switch-btn {
+    font-size: 10px; color: #718096;
+    background: none; border: 1px solid #e2e8f0;
+    border-radius: 4px; padding: 2px 8px; cursor: pointer;
+  }
+  .no-user { font-size: 11px; color: #718096; font-style: italic; }
+
+  /* Actions */
+  .actions { padding: 12px 14px; background: #fff; border-bottom: 1px solid #e2e8f0; }
+  .action-title { font-size: 10px; font-weight: 600; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .btn-row { display: flex; gap: 8px; }
+  .btn-primary {
+    flex: 1; padding: 8px;
+    background: #1F4E79; color: #fff;
+    border: none; border-radius: 7px;
+    font-size: 11px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+  }
+  .btn-primary:hover { background: #2E75B6; }
+  .btn-secondary {
+    flex: 1; padding: 8px;
+    background: #fff; color: #1F4E79;
+    border: 1.5px solid #1F4E79; border-radius: 7px;
+    font-size: 11px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+  }
+  .btn-secondary:hover { background: #ebf4ff; }
+
+  /* Recent */
+  .recent { padding: 10px 14px; background: #fff; border-bottom: 1px solid #e2e8f0; }
+  .recent-title { font-size: 10px; font-weight: 600; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .recent-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .recent-item:last-child { border-bottom: none; }
+  .recent-company { font-size: 11px; font-weight: 600; color: #1a202c; }
+  .recent-title-txt { font-size: 10px; color: #718096; }
+  .badge {
+    font-size: 9px; font-weight: 600;
+    padding: 2px 7px; border-radius: 10px;
+    white-space: nowrap;
+  }
+  .b-applied    { background: #DDEEFF; color: #1F4E79; }
+  .b-interview  { background: #C6EFCE; color: #276749; }
+  .b-offer      { background: #00B050; color: #fff; }
+  .b-rejected   { background: #FFC7CE; color: #9C0006; }
+  .b-done       { background: #FFEB9C; color: #9C5700; }
+  .b-skipped    { background: #F2F2F2; color: #808080; }
+  .no-recent    { font-size: 11px; color: #a0aec0; font-style: italic; text-align: center; padding: 8px 0; }
+
+  /* Footer */
+  .footer {
+    padding: 10px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: #f8fafc;
+  }
+  .footer-link {
+    font-size: 10px; color: #718096;
+    text-decoration: none; cursor: pointer;
+    background: none; border: none; font-family: inherit;
+  }
+  .footer-link:hover { color: #1F4E79; }
+  .version { font-size: 10px; color: #cbd5e0; }
 </style>
 </head>
 <body>
-<div id="root"></div>
-<script src="popup.js"></script>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">📋</div>
+    <div class="header-text">
+      <h1>Job Application Tracker</h1>
+      <p>AI-powered · Local storage · Zero setup</p>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat"><div class="stat-num" id="stat-total">—</div><div class="stat-lbl">Total</div></div>
+    <div class="stat"><div class="stat-num blue" id="stat-today">—</div><div class="stat-lbl">Today</div></div>
+    <div class="stat"><div class="stat-num orange" id="stat-interviews">—</div><div class="stat-lbl">Interviews</div></div>
+    <div class="stat"><div class="stat-num green" id="stat-offers">—</div><div class="stat-lbl">Offers</div></div>
+  </div>
+
+  <!-- User bar -->
+  <div class="user-bar">
+    <div id="user-section">
+      <span class="no-user">No user selected</span>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="actions">
+    <div class="action-title">Quick Actions</div>
+    <div class="btn-row">
+      <button class="btn-primary" id="btn-open-tracker">
+        <span>⚡</span> Open Tracker
+      </button>
+      <button class="btn-secondary" id="btn-landing">
+        <span>📖</span> How to Use
+      </button>
+    </div>
+  </div>
+
+  <!-- Recent Applications -->
+  <div class="recent">
+    <div class="recent-title">Recent Applications</div>
+    <div id="recent-list"><div class="no-recent">No applications yet</div></div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <button class="footer-link" id="btn-landing2">About this extension</button>
+    <span class="version">v3.0.2</span>
+  </div>
+
+  <script src="popup.js"></script>
 </body>
 </html>

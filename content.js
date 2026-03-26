@@ -34,30 +34,34 @@
     };
   }
 
-  // Auto-refresh session token before it expires
+  // Fix #15: Single in-flight promise prevents multiple simultaneous refresh calls
+  let _refreshPromise = null;
   async function refreshSession() {
     if (!sessionToken) return;
-    try {
-      const res = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-        body: JSON.stringify({ refresh_token: sessionRefreshToken }),
-      });
-      const data = await res.json();
-      if (data.access_token) {
-        sessionToken = data.access_token;
-        if (data.refresh_token) sessionRefreshToken = data.refresh_token;
-        saveSession(sessionToken, currentUser, sessionRefreshToken);
-        // Warning fix #2: broadcast refreshed token to all tabs via background
-        const s = chromeStore();
-        if (s) {
-          chrome.runtime.sendMessage({
-            action: 'session_saved',
-            payload: { token: sessionToken, user: currentUser, refreshToken: sessionRefreshToken }
-          }, () => { if (chrome.runtime.lastError) {} });
+    if (_refreshPromise) return _refreshPromise; // coalesce concurrent callers
+    _refreshPromise = (async () => {
+      try {
+        const res = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+          body: JSON.stringify({ refresh_token: sessionRefreshToken }),
+        });
+        const data = await res.json();
+        if (data.access_token) {
+          sessionToken = data.access_token;
+          if (data.refresh_token) sessionRefreshToken = data.refresh_token;
+          saveSession(sessionToken, currentUser, sessionRefreshToken);
+          const s = chromeStore();
+          if (s) {
+            chrome.runtime.sendMessage({
+              action: 'session_saved',
+              payload: { token: sessionToken, user: currentUser, refreshToken: sessionRefreshToken }
+            }, () => { if (chrome.runtime.lastError) {} });
+          }
         }
-      }
-    } catch(e) { console.warn('Token refresh failed', e); }
+      } catch(e) { console.warn('Token refresh failed', e); }
+    })();
+    try { await _refreshPromise; } finally { _refreshPromise = null; }
   }
 
   async function sbFetch(url, opts) {
@@ -79,12 +83,22 @@
   }
 
   async function dbLoadApps() {
-    const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?select=*&order=created_at.asc', {
-      headers: sbHeaders(),
-    });
-    const data = await res.json();
-    if (!Array.isArray(data)) return [];
-    return data.map(r => ({
+    const PAGE_SIZE = 1000;
+    let allRows = [];
+    let offset  = 0;
+    // Paginate to bypass Supabase's default 1000-row cap
+    while (true) {
+      const res = await sbFetch(
+        SUPABASE_URL + `/rest/v1/applications?select=*&order=created_at.asc&limit=${PAGE_SIZE}&offset=${offset}`,
+        { headers: { ...sbHeaders(), 'Range-Unit': 'items', 'Range': `${offset}-${offset + PAGE_SIZE - 1}` } }
+      );
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) break;
+      allRows = allRows.concat(data);
+      if (data.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
+    }
+    return allRows.map(r => ({
       id:       r.id,
       company:  r.company,
       jobTitle: r.job_title,
@@ -117,12 +131,17 @@
       notes:          app.notes || '',
       follow_up_date: app.followUpDate || null,
     };
-    const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications', {
-      method: 'POST',
-      headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
-      body: JSON.stringify(body),
-    });
-    return res.ok;
+    try {
+      const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications', {
+        method: 'POST',
+        headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
+        body: JSON.stringify(body),
+      });
+      return res.ok;
+    } catch(e) {
+      showToast('Save failed: ' + (e.message || 'unknown error'), true);
+      return false;
+    }
   }
 
   async function dbUpdateApp(app) {
@@ -137,20 +156,30 @@
       notes:           app.notes || '',
       follow_up_date:  app.followUpDate || null,
     };
-    const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?id=eq.' + app.id, {
-      method: 'PATCH',
-      headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
-      body: JSON.stringify(body),
-    });
-    return res.ok;
+    try {
+      const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?id=eq.' + app.id, {
+        method: 'PATCH',
+        headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
+        body: JSON.stringify(body),
+      });
+      return res.ok;
+    } catch(e) {
+      showToast('Update failed: ' + (e.message || 'unknown error'), true);
+      return false;
+    }
   }
 
   async function dbDeleteApp(id) {
-    const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?id=eq.' + id, {
-      method: 'DELETE',
-      headers: sbHeaders(),
-    });
-    return res.ok;
+    try {
+      const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?id=eq.' + id, {
+        method: 'DELETE',
+        headers: sbHeaders(),
+      });
+      return res.ok;
+    } catch(e) {
+      showToast('Delete failed: ' + (e.message || 'unknown error'), true);
+      return false;
+    }
   }
 
   // ── SESSION PERSISTENCE ──
@@ -173,7 +202,8 @@
     if (s) {
       s.get('rjd_session', r => {
         const sess = r.rjd_session || null;
-        if (sess && sess.refreshToken) sessionRefreshToken = sess.refreshToken;
+        // Support both 'refreshToken' (current) and legacy 'refresh_token' key
+        if (sess) sessionRefreshToken = sess.refreshToken || sess.refresh_token || '';
         cb(sess);
       });
     } else {
@@ -252,18 +282,162 @@
   }
 
   // ── GEMINI EXTRACTION ──
+
+  // Fallback 1: scrape visible page DOM for company/title signals
+  function scrapePageSignals() {
+    const signals = {};
+
+    // --- Job Title ---
+    // Try common meta tags first
+    const ogTitle = document.querySelector('meta[property="og:title"]')?.content || '';
+    const metaTitle = document.querySelector('meta[name="title"]')?.content || '';
+    const h1 = document.querySelector('h1')?.innerText?.trim() || '';
+    const pageTitle = document.title || '';
+
+    // Many job boards put "Job Title at Company" or "Job Title - Company" in <title> / <h1>
+    signals.rawTitle   = ogTitle || metaTitle || h1 || pageTitle;
+
+    // --- Company Name ---
+    // Try structured data first (most reliable)
+    try {
+      const jsonLds = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+      for (const el of jsonLds) {
+        const obj = JSON.parse(el.textContent);
+        const items = Array.isArray(obj) ? obj : [obj];
+        for (const item of items) {
+          const type = item['@type'] || '';
+          if (/JobPosting/i.test(type)) {
+            if (item.hiringOrganization?.name) signals.company = item.hiringOrganization.name;
+            if (item.title)                    signals.jobTitle = item.title;
+          }
+        }
+        if (signals.company && signals.jobTitle) break;
+      }
+    } catch(e) {}
+
+    // Try og:site_name as company hint
+    if (!signals.company) {
+      signals.ogSiteName = document.querySelector('meta[property="og:site_name"]')?.content || '';
+    }
+
+    // Collect visible text near common company-label elements
+    const companySelectors = [
+      '[data-company-name]','[class*="company-name"]','[class*="companyName"]',
+      '[class*="employer"]','[class*="org-name"]','[itemprop="name"]',
+      '[class*="hiring-company"]','[class*="job-company"]',
+    ];
+    for (const sel of companySelectors) {
+      const el = document.querySelector(sel);
+      if (el?.innerText?.trim()) { signals.domCompany = el.innerText.trim(); break; }
+    }
+
+    // URL hostname as last-resort company hint (e.g. jobs.stripe.com → Stripe)
+    try {
+      const host = new URL(window.location.href).hostname.replace(/^www\.|^jobs\.|^careers\./, '');
+      signals.hostname = host.split('.')[0]; // e.g. "stripe"
+    } catch(e) {}
+
+    return signals;
+  }
+
+  // Build the richest possible context string to send to Gemini
+  function buildExtractionContext(jdText, pageUrl) {
+    const sig = scrapePageSignals();
+    const parts = [];
+
+    if (sig.company)     parts.push(`[STRUCTURED DATA company] ${sig.company}`);
+    if (sig.jobTitle)    parts.push(`[STRUCTURED DATA job title] ${sig.jobTitle}`);
+    if (sig.rawTitle)    parts.push(`[PAGE TITLE / H1] ${sig.rawTitle}`);
+    if (sig.ogSiteName)  parts.push(`[OG SITE NAME] ${sig.ogSiteName}`);
+    if (sig.domCompany)  parts.push(`[DOM COMPANY ELEMENT] ${sig.domCompany}`);
+    if (sig.hostname)    parts.push(`[HOSTNAME HINT] ${sig.hostname}`);
+    parts.push(`[PAGE URL] ${pageUrl}`);
+
+    // Use up to 6000 chars of JD (increased from 3000)
+    parts.push(`[JOB DESCRIPTION TEXT]\n${jdText.substring(0, 6000)}`);
+
+    return parts.join('\n');
+  }
+
   async function extractWithGemini(jdText, pageUrl) {
     if (!GEMINI_KEY || !GEMINI_KEY.trim()) throw new Error('Gemini API key not set — open Settings to add it');
-    const prompt = `Extract from this job description. Return ONLY valid JSON, no markdown.\n{"company_name":"","job_title":""}\n\n${jdText.substring(0,3000)}`;
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + GEMINI_KEY, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 150 } })
-    });
+
+    const context = buildExtractionContext(jdText, pageUrl);
+
+    const prompt = `You are a precise job-posting parser. Extract the company name and job title from the context below.
+
+RULES:
+- Return ONLY a single valid JSON object — no markdown, no explanation, no extra keys.
+- Use the exact format: {"company_name":"...","job_title":"..."}
+- company_name: the hiring company (NOT a job board like LinkedIn, Indeed, Glassdoor, Naukri, etc.)
+- job_title: the exact role title (e.g. "Senior Software Engineer", "Product Manager")
+- If a value genuinely cannot be determined, use "" (empty string) — never guess wildly.
+- Prefer [STRUCTURED DATA] values when available, they are most reliable.
+- For company_name, if the page is on a company's own careers site (e.g. careers.stripe.com), use that company.
+- Strip suffixes like "Jobs", "Careers", "| LinkedIn" from titles.
+- Do NOT include location, salary, or seniority-level qualifiers unless they are part of the official title.
+
+CONTEXT:
+${context}`;
+
+    const res = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + GEMINI_KEY,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0, maxOutputTokens: 200 },
+        }),
+      }
+    );
     if (!res.ok) throw new Error('Gemini API error: ' + res.status);
     const data = await res.json();
-    const text = (data.candidates?.[0]?.content?.parts?.[0]?.text || '{}').replace(/```json|```/g,'').trim();
-    const parsed = JSON.parse(text);
+    let raw = (data.candidates?.[0]?.content?.parts?.[0]?.text || '{}')
+      .replace(/```json|```/g, '').trim();
+
+    // Strip any accidental leading text before the JSON object
+    const jsonStart = raw.indexOf('{');
+    const jsonEnd   = raw.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1) raw = raw.slice(jsonStart, jsonEnd + 1);
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch(e) {
+      // JSON parse failed — try to rescue with regex
+      const cn = raw.match(/"company_name"\s*:\s*"([^"]*)"/)?.[1] || '';
+      const jt = raw.match(/"job_title"\s*:\s*"([^"]*)"/)?.[1] || '';
+      parsed = { company_name: cn, job_title: jt };
+    }
+
+    // --- Post-processing fallbacks ---
+    const sig = scrapePageSignals();
+
+    // If Gemini returned a job board as company, override with DOM/structured data
+    const JOB_BOARDS = /linkedin|indeed|glassdoor|naukri|monster|ziprecruiter|dice|simplyhired|hired\.com|wellfound|angel\.co/i;
+    if (!parsed.company_name || JOB_BOARDS.test(parsed.company_name)) {
+      parsed.company_name = sig.company || sig.domCompany || sig.ogSiteName || parsed.company_name || '';
+    }
+
+    // If title is still empty, fall back to structured data or try to parse page title
+    if (!parsed.job_title && sig.jobTitle) {
+      parsed.job_title = sig.jobTitle;
+    }
+    if (!parsed.job_title && sig.rawTitle) {
+      // "Senior Engineer at Stripe | LinkedIn" → "Senior Engineer"
+      parsed.job_title = sig.rawTitle
+        .replace(/\s*[\|\-–—]\s*(linkedin|indeed|glassdoor|naukri|careers|jobs).*/i, '')
+        .replace(/\s*(at|@)\s+[\w\s]+$/, '')
+        .trim()
+        .substring(0, 120);
+    }
+
+    // Capitalise company name if it came back all-lowercase
+    if (parsed.company_name && parsed.company_name === parsed.company_name.toLowerCase()) {
+      parsed.company_name = parsed.company_name.replace(/\b\w/g, c => c.toUpperCase());
+    }
+
     parsed.url = pageUrl;
     return parsed;
   }
@@ -271,19 +445,38 @@
   async function runExtract() {
     const statusEl = document.getElementById('rjd-extract-status');
     if (!statusEl) return;
-    statusEl.textContent = 'Auto-extracting...';
+    statusEl.textContent = 'Extracting...';
     statusEl.style.color = '#2E75B6';
     try {
-      const clipText = await navigator.clipboard.readText();
-      if (!clipText.trim()) { statusEl.textContent = 'Clipboard empty — paste JD and click Extract.'; statusEl.style.color = '#c53030'; return; }
+      let clipText = '';
+      try { clipText = await navigator.clipboard.readText(); } catch(e) {}
+
+      // Even if clipboard is empty, pass page URL + DOM signals to Gemini
+      // so it can still extract company/title from the live page context
+      if (!clipText.trim()) {
+        statusEl.textContent = 'No clipboard text — trying page signals...';
+      }
+
       const result = await extractWithGemini(clipText, window.location.href);
+
       document.getElementById('rjd-new-company').value = result.company_name || '';
       document.getElementById('rjd-new-title').value   = result.job_title   || '';
       document.getElementById('rjd-new-url').value     = result.url         || '';
       document.getElementById('rjd-new-jd').value      = clipText;
-      statusEl.textContent = '✓ Extracted — review and save';
-      statusEl.style.color = '#276749';
-      setTimeout(() => { statusEl.textContent = ''; }, 4000);
+
+      const gotBoth    = result.company_name && result.job_title;
+      const gotPartial = result.company_name || result.job_title;
+      if (gotBoth) {
+        statusEl.textContent = '✓ Extracted — review and save';
+        statusEl.style.color = '#276749';
+      } else if (gotPartial) {
+        statusEl.textContent = '⚠ Partially extracted — please fill in the missing field';
+        statusEl.style.color = '#975a16';
+      } else {
+        statusEl.textContent = 'Could not extract — please fill in details manually';
+        statusEl.style.color = '#c53030';
+      }
+      setTimeout(() => { statusEl.textContent = ''; }, 5000);
     } catch(err) {
       statusEl.textContent = err.message || 'Extraction failed';
       statusEl.style.color = '#c53030';
@@ -568,8 +761,9 @@
     }
     tbody.innerHTML = filtered.map((app, idx) => {
       const sc = STATUS_COLORS[app.status] || STATUS_COLORS['Applied'];
+      const safeUrl = app.url && /^https?:\/\//i.test(app.url) ? app.url : null;
       const resumeBtn = app.resume ? `<button class="rjd-view-resume-btn" data-id="${app.id}">View</button>` : `<span class="rjd-no-resume">—</span>`;
-      const urlBtn    = app.url    ? `<a href="${escHtml(app.url)}" target="_blank" class="rjd-url-link">Open</a>` : `<span class="rjd-no-resume">—</span>`;
+      const urlBtn    = safeUrl    ? `<a href="${escHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" class="rjd-url-link">Open</a>` : `<span class="rjd-no-resume">—</span>`;
       // Warning fix #4: compare date strings directly — avoids UTC vs local timezone mismatch
       const isOverdue = app.followUpDate && app.followUpDate < todayKey().slice(0,10) && app.status !== 'Offer' && app.status !== 'Rejected';
       const followUpBadge = app.followUpDate ? `<div style="font-size:9px;color:${isOverdue?'#c53030':'#718096'};margin-top:1px;">${isOverdue?'⚠ Follow up: ':'📅 '} ${app.followUpDate}</div>` : '';
@@ -997,7 +1191,7 @@
       // If we got company + title → save directly
       if (company && jobTitle) {
         const app = {
-          id: Date.now().toString(), company, jobTitle,
+          id: crypto.randomUUID(), company, jobTitle,
           url: pageUrl, jd: clipText, resume: '',
           status: 'Applied', date: today(), dateRaw: new Date().toISOString(),
           dateKey: todayKey(), notes: '', followUpDate: ''
@@ -1041,14 +1235,15 @@
     // Extract in panel
     document.getElementById('rjd-extract-btn').addEventListener('click', () => runExtract());
 
-    // Save new app
+    // Save new app — loading guard prevents double-submit (#17)
+    let _saving = false;
     document.getElementById('rjd-save-app-btn').addEventListener('click', async () => {
+      if (_saving) return;
       const company  = document.getElementById('rjd-new-company').value.trim();
       const jobTitle = document.getElementById('rjd-new-title').value.trim();
       const url      = document.getElementById('rjd-new-url').value.trim();
       const jd       = document.getElementById('rjd-new-jd').value.trim();
       if (!company && !jobTitle) { showToast('Enter at least company or job title', true); return; }
-      // Warning fix #1: duplicate check in manual save path too
       const dupByUrl   = url && applications.find(a => a.url && a.url === url);
       const dupByTitle = company && jobTitle && applications.find(a =>
         a.company?.toLowerCase().trim() === company.toLowerCase() &&
@@ -1056,11 +1251,17 @@
       );
       if (dupByUrl)   { showToast('Already saved: ' + (dupByUrl.company || dupByUrl.jobTitle), true); return; }
       if (dupByTitle) { showToast('Possible duplicate: ' + dupByTitle.company + ' — ' + dupByTitle.jobTitle, true); return; }
+      _saving = true;
+      const saveBtn = document.getElementById('rjd-save-app-btn');
+      if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+      // Use crypto.randomUUID() — avoids Date.now() collisions and gives proper UUID type (#13)
       const app = {
-        id: Date.now().toString(), company, jobTitle, url, jd, resume: '',
+        id: crypto.randomUUID(), company, jobTitle, url, jd, resume: '',
         status: 'Applied', date: today(), dateRaw: new Date().toISOString(), dateKey: todayKey(), notes: ''
       };
       const ok = await dbSaveApp(app);
+      _saving = false;
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Application'; }
       if (ok) {
         applications.push(app);
         hideNewAppPanel();
@@ -1097,9 +1298,19 @@
       showToast('Resume copied');
     });
 
-    // Export XLSX
+    // Export XLSX — inject xlsxbuilder.js on demand (fix #9: removed from content_scripts to avoid global scope pollution)
     document.getElementById('rjd-export-csv-btn').addEventListener('click', async () => {
       if (applications.length === 0) { showToast('No applications to export', true); return; }
+      // Lazy-load xlsxbuilder if not already present
+      if (typeof window.buildXLSX !== 'function') {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = chrome.runtime.getURL('xlsxbuilder.js');
+          s.onload = resolve;
+          s.onerror = () => reject(new Error('Failed to load xlsxbuilder.js'));
+          document.head.appendChild(s);
+        });
+      }
       showToast('Preparing export...');
       try {
         const now = new Date();

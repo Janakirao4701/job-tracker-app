@@ -117,48 +117,78 @@ async function signOut() {
 
 // ── SUPABASE DB ──
 async function loadApps() {
-  let r = await fetch(SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc', { headers:headers() });
-  // If 401 — try refresh token
-  if (r.status === 401 && session?.refresh_token) {
-    const refreshed = await refreshToken();
-    if (refreshed) {
-      r = await fetch(SUPABASE_URL+'/rest/v1/applications?select=*&order=created_at.asc', { headers:headers() });
-    } else {
-      // Token refresh failed — sign out
-      clearStoredSession();
-      session = null; currentUser = null; apps = [];
-      showSection('auth-section'); setMode('signin');
-      return [];
+  const PAGE_SIZE = 1000;
+  let allRows = [];
+  let offset  = 0;
+  // Fix #7: filter by current user so users never see each other's data
+  // Fix #14: paginate to bypass Supabase's default 1000-row cap
+  while (true) {
+    let r = await fetch(
+      `${SUPABASE_URL}/rest/v1/applications?select=*&username=eq.${currentUser.id}&order=created_at.asc&limit=${PAGE_SIZE}&offset=${offset}`,
+      { headers: headers({ 'Range-Unit': 'items', 'Range': `${offset}-${offset + PAGE_SIZE - 1}` }) }
+    );
+    // If 401 — try refresh token (only on first page attempt)
+    if (r.status === 401 && session?.refresh_token && offset === 0) {
+      const refreshed = await refreshToken();
+      if (refreshed) {
+        r = await fetch(
+          `${SUPABASE_URL}/rest/v1/applications?select=*&username=eq.${currentUser.id}&order=created_at.asc&limit=${PAGE_SIZE}&offset=${offset}`,
+          { headers: headers({ 'Range-Unit': 'items', 'Range': `${offset}-${offset + PAGE_SIZE - 1}` }) }
+        );
+      } else {
+        clearStoredSession();
+        session = null; currentUser = null; apps = [];
+        showSection('auth-section'); setMode('signin');
+        return [];
+      }
     }
+    if (!r.ok) break;
+    const data = await r.json();
+    if (!Array.isArray(data) || data.length === 0) break;
+    allRows = allRows.concat(data);
+    if (data.length < PAGE_SIZE) break;
+    offset += PAGE_SIZE;
   }
-  if (!r.ok) return [];
-  const data = await r.json();
-  return Array.isArray(data) ? data.map(mapRow) : [];
+  return allRows.map(mapRow);
 }
 
+// Fix #15: Single in-flight promise prevents multiple simultaneous refresh calls
+let _refreshPromise = null;
 async function refreshToken() {
   if (!session?.refresh_token) return false;
-  try {
-    const r = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-      body: JSON.stringify({ refresh_token: session.refresh_token })
-    });
-    const data = await r.json();
-    if (data.access_token) {
-      session = { access_token: data.access_token, refresh_token: data.refresh_token || session.refresh_token };
-      // Update stored session
-      const stored = loadStoredSession();
-      if (stored) {
-        stored.token = data.access_token;
-        stored.access_token = data.access_token;
-        if (data.refresh_token) stored.refreshToken = data.refresh_token;
-        localStorage.setItem('rjd_web_session', JSON.stringify(stored));
+  if (_refreshPromise) return _refreshPromise;
+  _refreshPromise = (async () => {
+    try {
+      const r = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+        body: JSON.stringify({ refresh_token: session.refresh_token })
+      });
+      const data = await r.json();
+      if (data.access_token) {
+        session = { access_token: data.access_token, refresh_token: data.refresh_token || session.refresh_token };
+        // Fix #16: keep chrome.storage as the single source of truth; update localStorage as a mirror only
+        const stored = loadStoredSession();
+        if (stored) {
+          stored.token = data.access_token;
+          stored.access_token = data.access_token;
+          if (data.refresh_token) stored.refreshToken = data.refresh_token;
+          localStorage.setItem('rjd_web_session', JSON.stringify(stored));
+        }
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.get('rjd_session', (res) => {
+            const sess = res.rjd_session || {};
+            sess.token = data.access_token;
+            if (data.refresh_token) sess.refreshToken = data.refresh_token;
+            chrome.storage.local.set({ rjd_session: sess });
+          });
+        }
+        return true;
       }
-      return true;
-    }
-  } catch(e) {}
-  return false;
+    } catch(e) {}
+    return false;
+  })();
+  try { return await _refreshPromise; } finally { _refreshPromise = null; }
 }
 function mapRow(r) {
   return { id:r.id, company:r.company||'', jobTitle:r.job_title||'', url:r.url||'',
@@ -1341,8 +1371,9 @@ document.getElementById('modal-save').addEventListener('click', async () => {
   const notes    = document.getElementById('m-notes').value.trim();
   if (!company && !jobTitle) { showToast('Enter company or job title', true); return; }
   const now = new Date();
+  // Fix #13: use crypto.randomUUID() — avoids timestamp collisions and produces proper UUID
   const app = {
-    id: Date.now().toString(), company, jobTitle, url, jd, resume:'',
+    id: crypto.randomUUID(), company, jobTitle, url, jd, resume:'',
     status, date: today(), dateRaw: now.toISOString(),
     dateKey: `${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`,
     notes, followUpDate:''

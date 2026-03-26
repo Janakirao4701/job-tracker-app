@@ -37,20 +37,31 @@ chrome.commands.onCommand.addListener(async (command) => {
 });
 
 // ── INTERVIEW NOTIFICATIONS ──
-checkInterviewsToday();
+// Fix #2: MV3 service workers do not support setTimeout/setInterval reliably.
+// Use chrome.alarms instead — these fire even after the service worker restarts.
+chrome.alarms.get('rjd-daily-check', (alarm) => {
+  if (!alarm) {
+    // Schedule a daily alarm firing at 09:00 local time (delay in minutes)
+    const now  = new Date();
+    const next = new Date(now);
+    next.setHours(9, 0, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+    const delayMinutes = Math.ceil((next - now) / 60000);
+    chrome.alarms.create('rjd-daily-check', {
+      delayInMinutes: delayMinutes,
+      periodInMinutes: 24 * 60
+    });
+  }
+});
 
-function scheduleNextCheck() {
-  const now  = new Date();
-  const next = new Date(now);
-  next.setHours(9, 0, 0, 0);
-  if (next <= now) next.setDate(next.getDate() + 1);
-  const delay = next - now;
-  setTimeout(() => {
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'rjd-daily-check') {
     checkInterviewsToday();
-    setInterval(checkInterviewsToday, 24 * 60 * 60 * 1000);
-  }, delay);
-}
-scheduleNextCheck();
+  }
+});
+
+// Also run once on install/startup
+checkInterviewsToday();
 
 async function checkInterviewsToday() {
   const { rjd_session } = await chrome.storage.local.get('rjd_session');

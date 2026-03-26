@@ -111,7 +111,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Show logged in with empty stats first, then load
     renderLoggedIn(session.user, []);
     try {
-      const r = await fetch(SUPABASE_URL + '/rest/v1/applications?select=*&order=created_at.desc', {
+      // Fix #7: filter by current user's ID — prevents leaking other users' rows
+      const r = await fetch(SUPABASE_URL + '/rest/v1/applications?select=*&username=eq.' + session.user.id + '&order=created_at.desc', {
         headers: { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+session.token }
       });
       if (!r.ok) return;
