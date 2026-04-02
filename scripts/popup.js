@@ -33,7 +33,7 @@ function renderNotLoggedIn() {
       <div class="gs-note">Opens sign in page · Free forever</div>
     </div>`;
   document.getElementById('btn-gs').addEventListener('click', () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL('app.html') });
+    chrome.tabs.create({ url: chrome.runtime.getURL('pages/app.html') });
     window.close();
   });
 }
