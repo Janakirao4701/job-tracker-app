@@ -1,8 +1,4 @@
-// ── SHARED CONFIG ──
-// Single source of truth for Supabase credentials (Quality fix #1)
-const SUPABASE_URL = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucWJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
-
+importScripts('config.js');
 // ── FORWARD SESSION EVENTS TO ALL TABS ──
 chrome.runtime.onMessage.addListener((msg, sender) => {
   if (msg.action === 'session_saved' || msg.action === 'session_cleared') {
@@ -75,8 +71,8 @@ async function checkInterviewsToday() {
   const today = new Date().toLocaleDateString('en-CA');
   try {
     const res = await fetch(
-      SUPABASE_URL + "/rest/v1/applications?status=eq.Interview Scheduled&select=company,job_title,follow_up_date",
-      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' } }
+      CONFIG.SUPABASE_URL + "/rest/v1/applications?status=eq.Interview Scheduled&select=company,job_title,follow_up_date",
+      { headers: { 'apikey': CONFIG.SUPABASE_KEY, 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' } }
     );
     if (!res.ok) return;
     const apps = await res.json();

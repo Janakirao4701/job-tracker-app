@@ -1,12 +1,12 @@
 
-const SUPABASE_URL = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
+const SUPABASE_URL = CONFIG.SUPABASE_URL;
 // Extension ID - update this after publishing to Chrome Web Store
 // For now using runtime detection
 // Extension ID - this is set after the extension is installed
 // chrome.runtime.id works when page is opened FROM the extension
 // For external pages (Vercel), we use externally_connectable messaging
-const EXT_ID = null; // Will be provided via URL parameter
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucWJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
+const EXT_ID = new URLSearchParams(window.location.search).get('ext_id') || null;
+const SUPABASE_KEY = CONFIG.SUPABASE_KEY;
 
 const STATUS_COLORS = {
   'Applied':             's-applied',

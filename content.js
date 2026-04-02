@@ -3,8 +3,8 @@
 
   // ── CONFIG ──
   let GEMINI_KEY = ''; // loaded from storage
-  const SUPABASE_URL  = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
-  const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucWJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
+  const SUPABASE_URL  = CONFIG.SUPABASE_URL;
+  const SUPABASE_KEY  = CONFIG.SUPABASE_KEY;
 
   const STATUSES = ['Applied','Interview Scheduled','Interview Done','Offer','Rejected','Skipped'];
   const STATUS_COLORS = {
@@ -737,10 +737,8 @@ ${context}`;
     let list = [...applications];
     if (filterStatus !== 'all') list = list.filter(a => a.status === filterStatus);
     if (filterDate) list = list.filter(a => {
-      if (!a.dateRaw) return false;
-      // Convert dateRaw to local YYYY-MM-DD and compare
-      const localDate = new Date(a.dateRaw).toLocaleDateString('en-CA'); // en-CA = YYYY-MM-DD
-      return localDate === filterDate;
+      if (!a.dateKey) return false;
+      return a.dateKey === filterDate;
     });
     if (filterSearch.trim()) {
       const q = filterSearch.toLowerCase();

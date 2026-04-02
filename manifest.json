@@ -68,6 +68,7 @@
         "<all_urls>"
       ],
       "js": [
+        "config.js",
         "content.js"
       ],
       "css": [
@@ -94,7 +95,9 @@
   },
   "externally_connectable": {
     "matches": [
-      "https://job-tracker-app-iota-beryl.vercel.app/*"
+      "https://job-tracker-app-iota-beryl.vercel.app/*",
+      "http://localhost:*/*",
+      "http://127.0.0.1:*/*"
     ]
   }
 }
