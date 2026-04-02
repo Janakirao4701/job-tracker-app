@@ -1,5 +1,4 @@
-// ── CONFIG ── (Quality note: popup runs in its own isolated context — cannot import from background.js)
-// These must match background.js exactly. If rotating keys, update all 4 files: app.js, content.js, background.js, popup.js
+// ── CONFIG ──
 const SUPABASE_URL = CONFIG.SUPABASE_URL;
 const SUPABASE_KEY = CONFIG.SUPABASE_KEY;
 
@@ -12,12 +11,24 @@ const STATUS_BADGE = {
   'Rejected':'b-rejected','Skipped':'b-skipped'
 };
 
+// ── Count-up animation ──
+function animateCount(el, target, duration) {
+  if (!el || target === 0) return;
+  let start = 0;
+  const step = Math.ceil(target / (duration / 16));
+  const timer = setInterval(() => {
+    start += step;
+    if (start >= target) { start = target; clearInterval(timer); }
+    el.textContent = start;
+  }, 16);
+}
+
 function renderNotLoggedIn() {
   document.getElementById('root').innerHTML = `
     <div class="get-started">
-      <div class="gs-icon">📋</div>
+      <div class="gs-icon"><img src="icons/icon128.png" style="width:40px; height:40px; object-fit:contain; border-radius:10px;"/></div>
       <div class="gs-title">Job Application Tracker</div>
-      <div class="gs-sub">Track every job you apply to. Sign in to get started.</div>
+      <div class="gs-sub">Track every application with AI-powered extraction and cloud sync. Start your organized job search today.</div>
       <button class="btn-gs" id="btn-gs">Get Started — It's Free</button>
       <div class="gs-note">Opens sign in page · Free forever</div>
     </div>`;
@@ -36,31 +47,46 @@ function renderLoggedIn(user, apps) {
 
   document.getElementById('root').innerHTML = `
     <div class="header">
-      <div class="logo">📋</div>
-      <div class="header-text">
-        <h1>Job Application Tracker</h1>
-        <p>AI-powered · Cloud sync · Free forever</p>
+      <span class="version-badge">v5.0</span>
+      <div class="header-top">
+        <div class="logo"><img src="icons/icon48.png" style="width:24px; height:24px; object-fit:contain; border-radius:6px;"/></div>
+        <div class="header-text">
+          <h1>Job Tracker</h1>
+          <p>AI-powered · Cloud sync</p>
+        </div>
       </div>
     </div>
     <div class="stats">
-      <div class="stat"><div class="stat-num">${apps.length}</div><div class="stat-lbl">Total</div></div>
-      <div class="stat"><div class="stat-num blue">${todayCount}</div><div class="stat-lbl">Today</div></div>
-      <div class="stat"><div class="stat-num orange">${interviews}</div><div class="stat-lbl">Interviews</div></div>
-      <div class="stat"><div class="stat-num green">${offers}</div><div class="stat-lbl">Offers</div></div>
+      <div class="stat animate-in" style="animation-delay:0.05s">
+        <div class="stat-num" data-count="${apps.length}">0</div>
+        <div class="stat-lbl">Total</div>
+      </div>
+      <div class="stat animate-in" style="animation-delay:0.1s">
+        <div class="stat-num blue" data-count="${todayCount}">0</div>
+        <div class="stat-lbl">Today</div>
+      </div>
+      <div class="stat animate-in" style="animation-delay:0.15s">
+        <div class="stat-num orange" data-count="${interviews}">0</div>
+        <div class="stat-lbl">Interviews</div>
+      </div>
+      <div class="stat animate-in" style="animation-delay:0.2s">
+        <div class="stat-num green" data-count="${offers}">0</div>
+        <div class="stat-lbl">Offers</div>
+      </div>
     </div>
     <div class="user-bar">
       <div class="avatar">${esc(initials(user.name||user.email))}</div>
       <div>
-        <div class="username">${esc(user.name||user.email)}</div>
-        <div class="useremail">${esc(user.email||'')}</div>
+        <div class="user-name">${esc(user.name||user.email)}</div>
+        <div class="user-email">${esc(user.email||'')}</div>
       </div>
     </div>
     <div class="actions">
-      <button class="btn-primary" id="btn-tracker">⚡ Open Tracker</button>
+      <button class="btn-primary" id="btn-tracker">⚡ Open Sidebar</button>
       <button class="btn-secondary" id="btn-dash">📊 Dashboard</button>
     </div>
     <div class="recent">
-      <div class="recent-label">Recent Applications</div>
+      <div class="recent-header">Recent Applications</div>
       ${recent.length ? recent.map(a => `
         <div class="recent-item">
           <div>
@@ -68,19 +94,25 @@ function renderLoggedIn(user, apps) {
             <div class="recent-job">${esc(a.job_title||'—')}</div>
           </div>
           <span class="badge ${STATUS_BADGE[a.status]||'b-applied'}">${esc(a.status||'Applied')}</span>
-        </div>`).join('') : '<div class="no-apps">No applications yet</div>'}
+        </div>`).join('') : '<div class="no-recent">No applications yet</div>'}
     </div>
     <div class="footer">
-      <button class="btn-signout" id="btn-so">Sign out</button>
-      <span class="version">v4.2.0</span>
+      <button class="footer-btn" id="btn-so">Sign out</button>
     </div>`;
+
+  // Animate stat counters
+  setTimeout(() => {
+    document.querySelectorAll('.stat-num[data-count]').forEach(el => {
+      animateCount(el, parseInt(el.dataset.count, 10), 600);
+    });
+  }, 200);
 
   document.getElementById('btn-tracker').addEventListener('click', () => {
     chrome.tabs.query({ active:true, currentWindow:true }, (tabs) => {
       if (tabs[0]) {
         chrome.scripting.executeScript({
           target: { tabId: tabs[0].id },
-          func: () => { const t = document.getElementById('rjd-toggle'); if (t) t.click(); }
+          func: () => { const t = document.getElementById('rjd-toggle'); if (t) t.dispatchEvent(new Event('rjd-external-open')); }
         }).catch(() => {});
       }
       window.close();
@@ -88,7 +120,7 @@ function renderLoggedIn(user, apps) {
   });
 
   document.getElementById('btn-dash').addEventListener('click', () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL('app.html') });
+    chrome.tabs.create({ url: chrome.runtime.getURL('pages/app.html') });
     window.close();
   });
 
@@ -108,16 +140,19 @@ document.addEventListener('DOMContentLoaded', () => {
       renderNotLoggedIn();
       return;
     }
-    // Show logged in with empty stats first, then load
-    renderLoggedIn(session.user, []);
+    
+    // Show quick skeleton
+    document.getElementById('root').innerHTML = `<div style="padding:40px;text-align:center;color:#94a3b8;font-weight:600;">Loading...</div>`;
+    
     try {
-      // Fix #7: filter by current user's ID — prevents leaking other users' rows
       const r = await fetch(SUPABASE_URL + '/rest/v1/applications?select=*&username=eq.' + session.user.id + '&order=created_at.desc', {
         headers: { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+session.token }
       });
-      if (!r.ok) return;
+      if (!r.ok) { renderLoggedIn(session.user, []); return; }
       const apps = await r.json();
-      if (Array.isArray(apps)) renderLoggedIn(session.user, apps);
-    } catch(e) {}
+      renderLoggedIn(session.user, Array.isArray(apps) ? apps : []);
+    } catch(e) {
+      renderLoggedIn(session.user, []);
+    }
   });
 });

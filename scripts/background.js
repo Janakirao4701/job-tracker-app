@@ -1,4 +1,4 @@
-importScripts('config.js');
+importScripts('../lib/config.js');
 // ── FORWARD SESSION EVENTS TO ALL TABS ──
 chrome.runtime.onMessage.addListener((msg, sender) => {
   if (msg.action === 'session_saved' || msg.action === 'session_cleared') {

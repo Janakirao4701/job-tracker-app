@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Job Application Tracker",
-  "version": "4.2.0",
-  "description": "Track job applications with AI extraction, cloud sync, and Supabase auth",
+  "version": "5.0.0",
+  "description": "Premium AI-powered job application tracker with cloud sync, Gemini extraction, and beautiful UI",
   "permissions": [
     "storage",
     "activeTab",
@@ -19,7 +19,7 @@
     "https://job-tracker-app-iota-beryl.vercel.app/"
   ],
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "pages/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -27,7 +27,7 @@
     }
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "scripts/background.js"
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
@@ -68,19 +68,19 @@
         "<all_urls>"
       ],
       "js": [
-        "config.js",
-        "content.js"
+        "lib/config.js",
+        "scripts/content.js"
       ],
       "css": [
-        "sidebar.css"
+        "styles/sidebar.css"
       ]
     }
   ],
   "web_accessible_resources": [
     {
       "resources": [
-        "xlsxbuilder.js",
-        "privacy.html",
+        "lib/xlsxbuilder.js",
+        "pages/privacy.html",
         "icons/icon16.png",
         "icons/icon48.png",
         "icons/icon128.png"

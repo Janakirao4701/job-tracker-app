@@ -17,12 +17,12 @@ const STATUS_COLORS = {
   'Skipped':             's-skipped',
 };
 const STATUS_BG = {
-  'Applied':             { bg:'#DDEEFF', color:'#1F4E79' },
-  'Interview Scheduled': { bg:'#C6EFCE', color:'#276749' },
-  'Interview Done':      { bg:'#FFEB9C', color:'#9C5700' },
-  'Offer':               { bg:'#D4EDDA', color:'#155724' },
-  'Rejected':            { bg:'#FFC7CE', color:'#9C0006' },
-  'Skipped':             { bg:'#F2F2F2', color:'#808080' },
+  'Applied':             { bg:'#eef2ff', color:'#4f46e5' },
+  'Interview Scheduled': { bg:'#ecfdf5', color:'#059669' },
+  'Interview Done':      { bg:'#fffbeb', color:'#d97706' },
+  'Offer':               { bg:'#d1fae5', color:'#065f46' },
+  'Rejected':            { bg:'#fef2f2', color:'#dc2626' },
+  'Skipped':             { bg:'#f1f5f9', color:'#94a3b8' },
 };
 const STATUSES = ['Applied','Interview Scheduled','Interview Done','Offer','Rejected','Skipped'];
 
@@ -79,6 +79,7 @@ function workTodayISO() {
 
 function showToast(msg, isError) {
   const t = document.getElementById('toast');
+  if (!t) return;
   t.textContent = msg;
   t.className = 'toast' + (isError ? ' error' : '') + ' show';
   setTimeout(() => t.classList.remove('show'), 3000);
@@ -607,14 +608,14 @@ function renderDashboard() {
               const count = calendarData[key]||0;
               const isToday = key === todayISO();
               let bg = 'transparent', color = '#4a5568', fontWeight = '400', border = 'none';
-              if (count > 0) { bg = '#1F4E79'; color = '#fff'; fontWeight = '600'; }
-              else if (isToday) { bg = '#EBF4FF'; color = '#1F4E79'; fontWeight = '600'; border = '1.5px solid #1F4E79'; }
+              if (count > 0) { bg = 'linear-gradient(135deg,#4f46e5,#7c3aed)'; color = '#fff'; fontWeight = '600'; }
+              else if (isToday) { bg = '#eef2ff'; color = '#4f46e5'; fontWeight = '600'; border = '1.5px solid #4f46e5'; }
               return `<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${bg};color:${color};font-size:11px;font-weight:${fontWeight};border:${border};" title="${count>0?count+' application'+(count>1?'s':''):''}">${d}</div>`;
             }).join('')}
           </div>
           <div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid #f1f5f9;">
-            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#718096;"><span style="width:8px;height:8px;border-radius:50%;background:#1F4E79;display:inline-block;"></span>Applied</div>
-            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#718096;"><span style="width:8px;height:8px;border-radius:50%;background:#EBF4FF;border:1.5px solid #1F4E79;display:inline-block;"></span>Today</div>
+            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted,#94a3b8);"><span style="width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:inline-block;"></span>Applied</div>
+            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted,#94a3b8);"><span style="width:8px;height:8px;border-radius:50%;background:#eef2ff;border:1.5px solid #4f46e5;display:inline-block;"></span>Today</div>
           </div>
         </div>
       </div>
@@ -706,7 +707,7 @@ function renderDashboard() {
       const x   = 10 + i * gap + (gap - barW) / 2;
       const bH  = val > 0 ? Math.max(4, Math.round((val / max) * chartH)) : 0;
       const y   = padT + chartH - bH;
-      ctx.fillStyle = i === n - 1 ? '#1F4E79' : '#BFD7ED';
+      ctx.fillStyle = i === n - 1 ? '#4f46e5' : '#c7d2fe';
       ctx.beginPath();
       ctx.roundRect(x, y, barW, bH, 3);
       ctx.fill();
@@ -742,12 +743,12 @@ function renderApplications() {
 
   document.getElementById('page-content').innerHTML = `
     <!-- Bulk Action Bar (hidden until selection) -->
-    <div id="bulk-bar" style="display:none;align-items:center;gap:12px;background:#1F4E79;color:#fff;padding:10px 16px;border-radius:10px;margin-bottom:12px;flex-wrap:wrap;">
+    <div id="bulk-bar" style="display:none;align-items:center;gap:12px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;padding:12px 18px;border-radius:12px;margin-bottom:14px;flex-wrap:wrap;box-shadow:0 4px 16px rgba(79,70,229,0.3);">
       <span id="bulk-count" style="font-size:13px;font-weight:700;">0 selected</span>
       <span style="font-size:13px;">→ Reassign to session:</span>
-      <input type="date" id="bulk-session-date" style="padding:5px 10px;border-radius:6px;border:none;font-size:13px;font-family:inherit;background:#fff;color:#1a202c;"/>
-      <button id="bulk-reassign-btn" style="padding:6px 16px;background:#2E75B6;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Reassign</button>
-      <button id="bulk-clear-btn" style="padding:6px 12px;background:rgba(255,255,255,0.15);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;">✕ Clear</button>
+      <input type="date" id="bulk-session-date" style="padding:6px 12px;border-radius:8px;border:none;font-size:13px;font-family:inherit;background:#fff;color:var(--text,#1e293b);"/>
+      <button id="bulk-reassign-btn" style="padding:7px 18px;background:rgba(255,255,255,0.2);backdrop-filter:blur(8px);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Reassign</button>
+      <button id="bulk-clear-btn" style="padding:7px 14px;background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);border:none;border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit;">✕ Clear</button>
     </div>
 
     <div class="section-card">

@@ -8,12 +8,12 @@
 
   const STATUSES = ['Applied','Interview Scheduled','Interview Done','Offer','Rejected','Skipped'];
   const STATUS_COLORS = {
-    'Applied':             { bg: '#ebf4ff', color: '#2E75B6' },
-    'Interview Scheduled': { bg: '#f0fff4', color: '#276749' },
-    'Interview Done':      { bg: '#fffff0', color: '#975a16' },
-    'Offer':               { bg: '#e6ffed', color: '#22543d' },
-    'Rejected':            { bg: '#fff5f5', color: '#c53030' },
-    'Skipped':             { bg: '#f7fafc', color: '#a0aec0' },
+    'Applied':             { bg: '#eef2ff', color: '#4f46e5' },
+    'Interview Scheduled': { bg: '#ecfdf5', color: '#059669' },
+    'Interview Done':      { bg: '#fffbeb', color: '#d97706' },
+    'Offer':               { bg: '#d1fae5', color: '#065f46' },
+    'Rejected':            { bg: '#fef2f2', color: '#dc2626' },
+    'Skipped':             { bg: '#f1f5f9', color: '#94a3b8' },
   };
 
   let currentUser         = null; // { id, email, name }
@@ -24,6 +24,66 @@
   let filterSearch = '';
   let filterDate   = '';
   let currentDetailId = null;
+
+  // ── OFFLINE QUEUE ──
+  const QUEUE_KEY = 'rjd_offline_queue';
+  function getQueue(cb) {
+    const s = chromeStore();
+    if (s) s.get(QUEUE_KEY, r => cb(r[QUEUE_KEY] || []));
+    else cb([]);
+  }
+  function saveQueue(queue, cb) {
+    const s = chromeStore();
+    if (s) s.set({ [QUEUE_KEY]: queue }, cb);
+    updateQueueBadge(queue.length);
+  }
+  function updateQueueBadge(count) {
+    const badge = document.getElementById('rjd-queue-badge');
+    if (!badge) return;
+    badge.style.display = count > 0 ? 'flex' : 'none';
+    badge.textContent = count;
+  }
+  function enqueueApp(app) {
+    getQueue(queue => {
+      queue.push({ app, queuedAt: Date.now() });
+      saveQueue(queue);
+      showToast('📶 Offline — queued (syncs when online)');
+    });
+  }
+  async function flushQueue() {
+    if (!navigator.onLine) return;
+    getQueue(async queue => {
+      if (!queue.length) return;
+      const remaining = [];
+      for (const item of queue) {
+        try {
+          const body = {
+            id: item.app.id, username: currentUser?.id,
+            company: item.app.company, job_title: item.app.jobTitle,
+            url: item.app.url, jd: item.app.jd, resume: item.app.resume || '',
+            status: item.app.status, date: item.app.date,
+            date_raw: item.app.dateRaw, date_key: item.app.dateKey,
+            notes: item.app.notes || '', follow_up_date: item.app.followUpDate || null,
+          };
+          const res = await fetch(SUPABASE_URL + '/rest/v1/applications', {
+            method: 'POST',
+            headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
+            body: JSON.stringify(body),
+          });
+          if (res.ok) {
+            if (!applications.find(a => a.id === item.app.id)) applications.push(item.app);
+          } else remaining.push(item);
+        } catch(e) { remaining.push(item); }
+      }
+      saveQueue(remaining);
+      if (remaining.length < queue.length) {
+        renderTable();
+        showToast('✓ ' + (queue.length - remaining.length) + ' queued app(s) synced');
+      }
+    });
+  }
+  // Auto-flush when coming back online
+  window.addEventListener('online', () => flushQueue());
 
   // ── SUPABASE HELPERS ──
   function sbHeaders() {
@@ -115,7 +175,12 @@
   }
 
   async function dbSaveApp(app) {
-    if (!navigator.onLine) { showToast('No internet — cannot save', true); return false; }
+    if (!navigator.onLine) {
+      enqueueApp(app);
+      applications.push(app);
+      renderTable();
+      return true; // treat as success so UI updates
+    }
     const body = {
       id:        app.id,
       username:  currentUser.id,
@@ -184,7 +249,7 @@
 
   // ── SESSION PERSISTENCE ──
   function chromeStore() {
-    return (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) ? chrome.storage.local : null;
+    return (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id && chrome.storage && chrome.storage.local) ? chrome.storage.local : null;
   }
 
   function saveSession(token, user, refreshToken) {
@@ -233,10 +298,9 @@
     if (!main) return;
     main.innerHTML = `
       <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:40px 20px;">
-        <div id="rjd-spinner" style="width:36px;height:36px;border:3px solid #ebf4ff;border-top-color:#1F4E79;border-radius:50%;"></div>
-        <div style="font-size:13px;color:#718096;text-align:center;">${msg || 'Loading...'}</div>
+        <div id="rjd-spinner" style="width:36px;height:36px;border:3px solid #eef2ff;border-top-color:#4f46e5;border-radius:50%;"></div>
+        <div style="font-size:13px;color:var(--text-muted,#94a3b8);text-align:center;">${msg || 'Loading...'}</div>
       </div>`;
-    // CSS animation via style tag
     const s = document.createElement('style');
     s.id = 'rjd-spinner-style';
     s.textContent = '@keyframes rjd-spin{to{transform:rotate(360deg)}} #rjd-spinner{animation:rjd-spin 0.8s linear infinite;}';
@@ -272,7 +336,7 @@
     const t = document.getElementById('rjd-toast');
     if (!t) return;
     t.textContent = msg;
-    t.style.background = isError ? '#c53030' : '#1F4E79';
+    t.style.background = isError ? '#dc2626' : '';
     t.classList.add('show');
     setTimeout(() => t.classList.remove('show'), 2500);
   }
@@ -283,37 +347,113 @@
 
   // ── GEMINI EXTRACTION ──
 
+  function extractFromDomain() {
+    try {
+      const hostname = window.location.hostname;
+      // LinkedIn
+      if (hostname.includes('linkedin.com')) {
+        let company = document.querySelector('.job-details-jobs-unified-top-card__company-name a')?.innerText
+                   || document.querySelector('.job-details-jobs-unified-top-card__company-name')?.innerText
+                   || document.querySelector('.job-details-top-card__company-url')?.innerText;
+        let title = document.querySelector('.job-details-jobs-unified-top-card__job-title h1')?.innerText
+                 || document.querySelector('h1.t-24')?.innerText
+                 || document.querySelector('.topcard__title')?.innerText;
+        if (company && title) return { company: company.trim(), jobTitle: title.trim(), source: 'linkedin_dom' };
+      }
+      // Naukri
+      if (hostname.includes('naukri.com')) {
+        let company = document.querySelector('.jd-header-comp-name a')?.innerText 
+                   || document.querySelector('.job-details .company-name')?.innerText;
+        let title = document.querySelector('.jd-header-title')?.innerText 
+                 || document.querySelector('h1.title')?.innerText;
+        if (company && title) return { company: company.trim(), jobTitle: title.trim(), source: 'naukri_dom' };
+      }
+      // Indeed
+      if (hostname.includes('indeed.com')) {
+        let company = document.querySelector('[data-company-name="true"] a')?.innerText 
+                   || document.querySelector('[data-company-name="true"]')?.innerText;
+        let title = document.querySelector('h1[data-testid="jobsearch-JobInfoHeader-title"]')?.innerText
+                 || document.querySelector('.jobsearch-JobInfoHeader-title')?.innerText;
+        if (title) title = title.replace(/\s*-\s*job post$/i, '');
+        if (company && title) return { company: company.trim(), jobTitle: title.trim(), source: 'indeed_dom' };
+      }
+      // Glassdoor
+      if (hostname.includes('glassdoor.')) {
+        let company = document.querySelector('[data-test="employerName"]')?.innerText?.split('\n')[0];
+        let title = document.querySelector('[data-test="jobTitle"]')?.innerText;
+        if (company && title) return { company: company.replace(/★.*/,'').trim(), jobTitle: title.trim(), source: 'glassdoor_dom' };
+      }
+      // Wellfound / AngelList
+      if (hostname.includes('wellfound.com') || hostname.includes('angel.co')) {
+        let company = document.querySelector('h2.styles_name__mkZaj')?.innerText
+                   || document.querySelector('h1.styles_component__2q82k')?.innerText; // Depends on view
+        let title = document.querySelector('h2.styles_title__D_wGE')?.innerText
+                 || document.querySelector('.styles_jobTitle__...')?.innerText; // Adjust if found
+        if (company) return { company: company.trim(), jobTitle: title?.trim(), source: 'wellfound_dom' };
+      }
+      // Internshala
+      if (hostname.includes('internshala.com')) {
+        let company = document.querySelector('.company_name a')?.innerText || document.querySelector('.company_name')?.innerText;
+        let title = document.querySelector('.profile_on_detail_page')?.innerText;
+        if (company && title) return { company: company.trim(), jobTitle: title.trim(), source: 'internshala_dom' };
+      }
+    } catch(e) {}
+    return null;
+  }
+
+  function findJobPostingLD(obj) {
+    if (!obj || typeof obj !== 'object') return null;
+    if (obj['@type'] === 'JobPosting' || (Array.isArray(obj['@type']) && obj['@type'].includes('JobPosting'))) return obj;
+    if (Array.isArray(obj)) {
+      for (let item of obj) {
+        const found = findJobPostingLD(item);
+        if (found) return found;
+      }
+    } else {
+      for (let key in obj) {
+        if (typeof obj[key] === 'object') {
+          const found = findJobPostingLD(obj[key]);
+          if (found) return found;
+        }
+      }
+    }
+    return null;
+  }
+
   // Fallback 1: scrape visible page DOM for company/title signals
   function scrapePageSignals() {
     const signals = {};
 
-    // --- Job Title ---
-    // Try common meta tags first
+    // --- Precise Domain Extraction (Golden Path) ---
+    const domainSignals = extractFromDomain();
+    if (domainSignals) {
+      signals.company = domainSignals.company;
+      signals.jobTitle = domainSignals.jobTitle;
+      signals.preciseDomain = true;
+    }
+
+    // --- Job Title Common Fallbacks ---
     const ogTitle = document.querySelector('meta[property="og:title"]')?.content || '';
     const metaTitle = document.querySelector('meta[name="title"]')?.content || '';
     const h1 = document.querySelector('h1')?.innerText?.trim() || '';
     const pageTitle = document.title || '';
+    signals.rawTitle = ogTitle || metaTitle || h1 || pageTitle;
 
-    // Many job boards put "Job Title at Company" or "Job Title - Company" in <title> / <h1>
-    signals.rawTitle   = ogTitle || metaTitle || h1 || pageTitle;
-
-    // --- Company Name ---
-    // Try structured data first (most reliable)
-    try {
-      const jsonLds = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
-      for (const el of jsonLds) {
-        const obj = JSON.parse(el.textContent);
-        const items = Array.isArray(obj) ? obj : [obj];
-        for (const item of items) {
-          const type = item['@type'] || '';
-          if (/JobPosting/i.test(type)) {
-            if (item.hiringOrganization?.name) signals.company = item.hiringOrganization.name;
-            if (item.title)                    signals.jobTitle = item.title;
+    // --- Structured Data (Silver Path) ---
+    if (!signals.company || !signals.jobTitle) {
+      try {
+        const jsonLds = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+        for (const el of jsonLds) {
+          const obj = JSON.parse(el.textContent);
+          const jobNode = findJobPostingLD(obj);
+          if (jobNode) {
+            let cName = typeof jobNode.hiringOrganization === 'string' ? jobNode.hiringOrganization : jobNode.hiringOrganization?.name;
+            if (cName && !signals.company) signals.company = cName;
+            if (jobNode.title && !signals.jobTitle) signals.jobTitle = jobNode.title;
           }
         }
-        if (signals.company && signals.jobTitle) break;
-      }
-    } catch(e) {}
+      } catch(e) {}
+    }
 
     // Try og:site_name as company hint
     if (!signals.company) {
@@ -331,30 +471,112 @@
       if (el?.innerText?.trim()) { signals.domCompany = el.innerText.trim(); break; }
     }
 
-    // URL hostname as last-resort company hint (e.g. jobs.stripe.com → Stripe)
+    // URL hostname as last-resort company hint
     try {
-      const host = new URL(window.location.href).hostname.replace(/^www\.|^jobs\.|^careers\./, '');
-      signals.hostname = host.split('.')[0]; // e.g. "stripe"
+      const host = new URL(window.location.href).hostname.replace(/^www\.|^jobs\.|^careers\.|^jobs\./, '');
+      signals.hostname = host.split('.')[0]; 
     } catch(e) {}
+
+    return signals;
+  }
+
+  // ── JD TEXT PRE-PARSER ──
+  // Extracts company/title directly from the copied JD text using regex patterns.
+  // This is the MOST reliable source when the user is on a different page.
+  function parseJdTextSignals(jdText) {
+    if (!jdText || !jdText.trim()) return {};
+    const signals = {};
+    const lines = jdText.split('\n').map(l => l.trim()).filter(Boolean);
+
+    // Pattern 1: Labelled fields — "Company: Acme Corp", "Role: Software Engineer"
+    const COMPANY_LABELS = /^(?:company|employer|organisation|organization|hiring company|posted by|about the company)\s*[:\-–]\s*(.+)$/i;
+    const TITLE_LABELS   = /^(?:job title|role|position|designation|opening|vacancy|job opening|job role)\s*[:\-–]\s*(.+)$/i;
+    for (const line of lines) {
+      if (!signals.company) {
+        const m = line.match(COMPANY_LABELS);
+        if (m) signals.company = m[1].trim();
+      }
+      if (!signals.jobTitle) {
+        const m = line.match(TITLE_LABELS);
+        if (m) signals.jobTitle = m[1].trim();
+      }
+      if (signals.company && signals.jobTitle) break;
+    }
+
+    // Pattern 2: Top lines sometimes are: "CompanyName\nJobTitle" or vice versa
+    // Heuristic: first non-empty line that looks like a proper title (2–6 words, title-case)
+    if (!signals.jobTitle) {
+      const JOB_TITLE_PATTERN = /^[A-Z][a-z]+(?:\s+[A-Za-z\-\/]+){1,6}$/;
+      const SENIOR_WORDS = /\b(senior|junior|lead|staff|principal|associate|intern|manager|engineer|analyst|developer|designer|specialist|consultant|architect|director)\b/i;
+      for (const line of lines.slice(0, 8)) {
+        if (line.length > 5 && line.length < 80 && SENIOR_WORDS.test(line)) {
+          signals.jobTitle = line;
+          break;
+        }
+      }
+    }
+
+    // Pattern 3: "at CompanyName" in title  — e.g. "Senior Engineer at Google"
+    if (!signals.company && signals.jobTitle) {
+      const atMatch = signals.jobTitle.match(/\bat\s+(.+)$/i);
+      if (atMatch) {
+        signals.company = atMatch[1].trim();
+        signals.jobTitle = signals.jobTitle.replace(/\bat\s+.+$/i, '').trim();
+      }
+    }
+
+    // Pattern 4: Look for "About <Company>" or "About Us" section header
+    if (!signals.company) {
+      for (const line of lines) {
+        const m = line.match(/^About\s+(?!us|the role|this role|this position)(.{2,50})$/i);
+        if (m) { signals.company = m[1].replace(/[:\-–].*/, '').trim(); break; }
+      }
+    }
+
+    // Pattern 5: "We are <Company>" / "<Company> is looking for"
+    if (!signals.company) {
+      for (const line of lines.slice(0, 20)) {
+        let m = line.match(/^(?:we are|we're|welcome to|join)\s+([A-Z][A-Za-z0-9&' ]{1,40?})[,!.]/);
+        if (!m) m = line.match(/^([A-Z][A-Za-z0-9&' ]{1,40?})\s+is\s+(?:looking|hiring|seeking)/);
+        if (!m) m = line.match(/^([A-Z][A-Za-z0-9&'.\- ]{1,40?})\s+is\s+a\s+(?:leading|global|fast|growing)/i);
+        if (m) { signals.company = m[1].trim(); break; }
+      }
+    }
 
     return signals;
   }
 
   // Build the richest possible context string to send to Gemini
   function buildExtractionContext(jdText, pageUrl) {
-    const sig = scrapePageSignals();
     const parts = [];
+    const hasJD = jdText && jdText.trim().length > 50;
 
-    if (sig.company)     parts.push(`[STRUCTURED DATA company] ${sig.company}`);
-    if (sig.jobTitle)    parts.push(`[STRUCTURED DATA job title] ${sig.jobTitle}`);
-    if (sig.rawTitle)    parts.push(`[PAGE TITLE / H1] ${sig.rawTitle}`);
-    if (sig.ogSiteName)  parts.push(`[OG SITE NAME] ${sig.ogSiteName}`);
-    if (sig.domCompany)  parts.push(`[DOM COMPANY ELEMENT] ${sig.domCompany}`);
-    if (sig.hostname)    parts.push(`[HOSTNAME HINT] ${sig.hostname}`);
+    // ── PRIORITY 1: JD text pre-parsed signals (most reliable when on a different page) ──
+    if (hasJD) {
+      const jdSig = parseJdTextSignals(jdText);
+      if (jdSig.company)   parts.push(`[JD TEXT company hint] ${jdSig.company}`);
+      if (jdSig.jobTitle)  parts.push(`[JD TEXT title hint] ${jdSig.jobTitle}`);
+    }
+
+    // ── PRIORITY 2: Page structured/DOM signals (only useful if on the actual job page) ──
+    const sig = scrapePageSignals();
+    if (sig.preciseDomain) {
+      parts.push(`[VERIFIED DOM COMPANY] ${sig.company}`);
+      parts.push(`[VERIFIED DOM TITLE] ${sig.jobTitle}`);
+    } else {
+      if (sig.company)    parts.push(`[PAGE structured data company] ${sig.company}`);
+      if (sig.jobTitle)   parts.push(`[PAGE structured data title] ${sig.jobTitle}`);
+      if (sig.rawTitle)   parts.push(`[PAGE title/H1] ${sig.rawTitle}`);
+      if (sig.ogSiteName) parts.push(`[PAGE og:site_name] ${sig.ogSiteName}`);
+      if (sig.domCompany) parts.push(`[PAGE DOM company element] ${sig.domCompany}`);
+      if (sig.hostname)   parts.push(`[PAGE hostname hint] ${sig.hostname}`);
+    }
     parts.push(`[PAGE URL] ${pageUrl}`);
 
-    // Use up to 6000 chars of JD (increased from 3000)
-    parts.push(`[JOB DESCRIPTION TEXT]\n${jdText.substring(0, 6000)}`);
+    // ── PRIORITY 3: Full JD text (let Gemini read it directly) ──
+    if (hasJD) {
+      parts.push(`[JOB DESCRIPTION TEXT]\n${jdText.substring(0, 8000)}`);
+    }
 
     return parts.join('\n');
   }
@@ -363,19 +585,31 @@
     if (!GEMINI_KEY || !GEMINI_KEY.trim()) throw new Error('Gemini API key not set — open Settings to add it');
 
     const context = buildExtractionContext(jdText, pageUrl);
+    const hasJD   = jdText && jdText.trim().length > 50;
 
-    const prompt = `You are a precise job-posting parser. Extract the company name and job title from the context below.
+    const prompt = `You are a precise job-posting parser. Extract the company name and job title.
 
 RULES:
-- Return ONLY a single valid JSON object — no markdown, no explanation, no extra keys.
-- Use the exact format: {"company_name":"...","job_title":"..."}
-- company_name: the hiring company (NOT a job board like LinkedIn, Indeed, Glassdoor, Naukri, etc.)
-- job_title: the exact role title (e.g. "Senior Software Engineer", "Product Manager")
-- If a value genuinely cannot be determined, use "" (empty string) — never guess wildly.
-- Prefer [STRUCTURED DATA] values when available, they are most reliable.
-- For company_name, if the page is on a company's own careers site (e.g. careers.stripe.com), use that company.
-- Strip suffixes like "Jobs", "Careers", "| LinkedIn" from titles.
-- Do NOT include location, salary, or seniority-level qualifiers unless they are part of the official title.
+- Return ONLY valid JSON: {"company_name":"...","job_title":"..."}
+- No markdown, no explanation, no extra keys.
+- company_name: the actual HIRING COMPANY (never a job board like LinkedIn, Indeed, Glassdoor, Naukri, Internshala, Monster, Simplify, Wellfound).
+- job_title: the exact role title (e.g. "Senior Data Engineer", "Product Manager").
+- If a value truly cannot be determined, use "" — never guess randomly.
+
+EXTRACTION PRIORITY (highest to lowest):
+${hasJD ? `1. [JD TEXT company hint] and [VERIFIED DOM COMPANY] — these are highly reliable.
+2. Read [JOB DESCRIPTION TEXT] carefully — company name and job title are typically mentioned in the first few lines.
+3. [PAGE structured data] — only reliable if the user is on the actual job posting page.
+4. [PAGE title/H1] and [PAGE hostname hint] — low reliability, use as last resort only.` :
+`1. [VERIFIED DOM COMPANY/TITLE] — extremely reliable, trust this implicitly.
+2. [PAGE structured data company/title] — highly reliable.
+3. [PAGE title/H1] — parse carefully, strip "| LinkedIn" etc.
+4. [PAGE hostname hint] — last resort for company name.`}
+
+IMPORTANT: The user may have copied the JD from one page and is now on a DIFFERENT page. In that case, [PAGE signals] will be WRONG unless it's a [VERIFIED DOM COMPANY]. Always trust [JD TEXT] signals over general [PAGE] signals when they conflict.
+
+Strip from job_title: location, salary, "Jobs", "Careers", "| LinkedIn", "at CompanyName".
+Capitalize company_name properly if it appears in all-lowercase.
 
 CONTEXT:
 ${context}`;
@@ -396,7 +630,7 @@ ${context}`;
     let raw = (data.candidates?.[0]?.content?.parts?.[0]?.text || '{}')
       .replace(/```json|```/g, '').trim();
 
-    // Strip any accidental leading text before the JSON object
+    // Extract JSON object from raw string
     const jsonStart = raw.indexOf('{');
     const jsonEnd   = raw.lastIndexOf('}');
     if (jsonStart !== -1 && jsonEnd !== -1) raw = raw.slice(jsonStart, jsonEnd + 1);
@@ -405,56 +639,71 @@ ${context}`;
     try {
       parsed = JSON.parse(raw);
     } catch(e) {
-      // JSON parse failed — try to rescue with regex
       const cn = raw.match(/"company_name"\s*:\s*"([^"]*)"/)?.[1] || '';
-      const jt = raw.match(/"job_title"\s*:\s*"([^"]*)"/)?.[1] || '';
+      const jt = raw.match(/"job_title"\s*:\s*"([^"]*)"/)?.[1]    || '';
       parsed = { company_name: cn, job_title: jt };
     }
 
-    // --- Post-processing fallbacks ---
-    const sig = scrapePageSignals();
+    // ── Post-processing fallbacks ──
+    const sig   = scrapePageSignals();
+    const jdSig = parseJdTextSignals(jdText);
 
-    // If Gemini returned a job board as company, override with DOM/structured data
-    const JOB_BOARDS = /linkedin|indeed|glassdoor|naukri|monster|ziprecruiter|dice|simplyhired|hired\.com|wellfound|angel\.co/i;
-    if (!parsed.company_name || JOB_BOARDS.test(parsed.company_name)) {
-      parsed.company_name = sig.company || sig.domCompany || sig.ogSiteName || parsed.company_name || '';
+    // If we have precise domain extraction, trust it over Gemini for company name
+    if (sig.preciseDomain && sig.company) {
+      if (!parsed.company_name || parsed.company_name !== sig.company) {
+        parsed.company_name = sig.company;
+      }
     }
 
-    // If title is still empty, fall back to structured data or try to parse page title
-    if (!parsed.job_title && sig.jobTitle) {
-      parsed.job_title = sig.jobTitle;
+    // If Gemini returned a job board as the company, override with JD signals first
+    const JOB_BOARDS = /^(linkedin|indeed|glassdoor|naukri|monster|ziprecruiter|dice|simplyhired|hired\.com|wellfound|angel\.co|internshala|simplify|greenhouse|lever|workday|workable|breezy|ashby|dover)$/i;
+    if (!parsed.company_name || JOB_BOARDS.test(parsed.company_name.trim())) {
+      parsed.company_name = jdSig.company || sig.company || sig.domCompany || sig.ogSiteName || '';
     }
+
+    // If title is empty, use JD pre-parsed title first, then structured data
+    if (!parsed.job_title) {
+      parsed.job_title = jdSig.jobTitle || sig.jobTitle || '';
+    }
+    // Last resort: parse page title
     if (!parsed.job_title && sig.rawTitle) {
-      // "Senior Engineer at Stripe | LinkedIn" → "Senior Engineer"
       parsed.job_title = sig.rawTitle
-        .replace(/\s*[\|\-–—]\s*(linkedin|indeed|glassdoor|naukri|careers|jobs).*/i, '')
+        .replace(/\s*[\|\-–—]\s*(linkedin|indeed|glassdoor|naukri|careers|jobs|internshala).*/i, '')
         .replace(/\s*(at|@)\s+[\w\s]+$/, '')
         .trim()
         .substring(0, 120);
     }
 
-    // Capitalise company name if it came back all-lowercase
+    // Capitalize company name if all-lowercase
     if (parsed.company_name && parsed.company_name === parsed.company_name.toLowerCase()) {
       parsed.company_name = parsed.company_name.replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    // Strip "at CompanyName" from job title if it snuck in
+    if (parsed.job_title && parsed.company_name) {
+      parsed.job_title = parsed.job_title
+        .replace(new RegExp(`\\s*at\\s+${parsed.company_name}\\s*$`, 'i'), '')
+        .trim();
     }
 
     parsed.url = pageUrl;
     return parsed;
   }
 
+
   async function runExtract() {
     const statusEl = document.getElementById('rjd-extract-status');
     if (!statusEl) return;
-    statusEl.textContent = 'Extracting...';
-    statusEl.style.color = '#2E75B6';
+
+    const extractBtn = document.getElementById('rjd-extract-btn');
+    statusEl.textContent = '⏳ Extracting...';
+    if (extractBtn) { extractBtn.disabled = true; extractBtn.style.opacity = '0.7'; extractBtn.textContent = '⏳ Extracting...'; }
     try {
       let clipText = '';
       try { clipText = await navigator.clipboard.readText(); } catch(e) {}
 
-      // Even if clipboard is empty, pass page URL + DOM signals to Gemini
-      // so it can still extract company/title from the live page context
       if (!clipText.trim()) {
-        statusEl.textContent = 'No clipboard text — trying page signals...';
+        statusEl.textContent = '⚡ No clipboard text — using page signals...';
       }
 
       const result = await extractWithGemini(clipText, window.location.href);
@@ -468,21 +717,22 @@ ${context}`;
       const gotPartial = result.company_name || result.job_title;
       if (gotBoth) {
         statusEl.textContent = '✓ Extracted — review and save';
-        statusEl.style.color = '#276749';
+        statusEl.style.color = 'rgba(255,255,255,0.9)';
       } else if (gotPartial) {
-        statusEl.textContent = '⚠ Partially extracted — please fill in the missing field';
-        statusEl.style.color = '#975a16';
+        statusEl.textContent = '⚠ Partially extracted — fill missing field';
+        statusEl.style.color = '#fde68a';
       } else {
-        statusEl.textContent = 'Could not extract — please fill in details manually';
-        statusEl.style.color = '#c53030';
+        statusEl.textContent = 'Could not extract — fill in manually';
+        statusEl.style.color = '#fca5a5';
       }
-      setTimeout(() => { statusEl.textContent = ''; }, 5000);
+      if (extractBtn) { extractBtn.disabled = false; extractBtn.style.opacity = '1'; extractBtn.innerHTML = '<span style="font-size:16px;">✦</span> Extract from Clipboard + Page URL'; }
+      setTimeout(() => { statusEl.textContent = ''; statusEl.style.color = ''; }, 5000);
     } catch(err) {
-      statusEl.textContent = err.message || 'Extraction failed';
-      statusEl.style.color = '#c53030';
+      statusEl.textContent = '✕ ' + (err.message || 'Extraction failed');
+      statusEl.style.color = '#fca5a5';
+      if (extractBtn) { extractBtn.disabled = false; extractBtn.style.opacity = '1'; extractBtn.innerHTML = '<span style="font-size:16px;">✦</span> Extract from Clipboard + Page URL'; }
     }
   }
-
 
   // ════════════════════════════════════════
   // SETTINGS SCREEN
@@ -497,25 +747,25 @@ ${context}`;
       main.innerHTML = `
         <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
 
-          <div style="background:#1F4E79;padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
-            <button id="rjd-settings-back-btn" style="background:rgba(255,255,255,0.15);border:none;color:#fff;border-radius:5px;padding:4px 8px;font-size:12px;cursor:pointer;">← Back</button>
-            <span style="font-size:13px;font-weight:700;color:#fff;">Settings</span>
+          <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:12px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
+            <button id="rjd-settings-back-btn" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;backdrop-filter:blur(8px);font-family:inherit;">← Back</button>
+            <span style="font-size:14px;font-weight:700;color:#fff;">Settings</span>
           </div>
 
           <div style="flex:1;display:flex;overflow:hidden;">
 
             <!-- NAV -->
-            <div style="width:130px;background:#f8fafc;border-right:1px solid #e2e8f0;flex-shrink:0;overflow-y:auto;padding:8px 0;">
-              <div style="font-size:9px;font-weight:700;color:#a0aec0;text-transform:uppercase;letter-spacing:0.8px;padding:6px 12px 4px;">General</div>
+            <div style="width:140px;background:var(--bg-secondary,#f8fafc);border-right:1px solid var(--border-color,#e2e8f0);flex-shrink:0;overflow-y:auto;padding:8px 0;">
+              <div style="font-size:9px;font-weight:700;color:var(--text-muted,#94a3b8);text-transform:uppercase;letter-spacing:0.8px;padding:8px 14px 4px;">General</div>
               <div class="rjd-settings-nav-item ${activeSection==='apikey'?'rjd-snav-active':''}" data-sec="apikey">🔑 API Key</div>
-              <div style="font-size:9px;font-weight:700;color:#a0aec0;text-transform:uppercase;letter-spacing:0.8px;padding:10px 12px 4px;">Info</div>
+              <div style="font-size:9px;font-weight:700;color:var(--text-muted,#94a3b8);text-transform:uppercase;letter-spacing:0.8px;padding:12px 14px 4px;">Info</div>
               <div class="rjd-settings-nav-item ${activeSection==='shortcuts'?'rjd-snav-active':''}" data-sec="shortcuts">⌨️ Shortcuts</div>
               <div class="rjd-settings-nav-item ${activeSection==='privacy'?'rjd-snav-active':''}" data-sec="privacy">🛡️ Privacy</div>
               <div class="rjd-settings-nav-item ${activeSection==='about'?'rjd-snav-active':''}" data-sec="about">ℹ️ About</div>
             </div>
 
             <!-- CONTENT -->
-            <div id="rjd-settings-panel" style="flex:1;overflow-y:auto;padding:16px;"></div>
+            <div id="rjd-settings-panel" style="flex:1;overflow-y:auto;padding:18px;"></div>
           </div>
         </div>`;
 
@@ -544,21 +794,21 @@ ${context}`;
 
       if (sec === 'apikey') {
         panel.innerHTML = `
-          <div style="font-size:14px;font-weight:700;color:#1F4E79;margin-bottom:3px;">Gemini API Key</div>
-          <div style="font-size:11px;color:#718096;margin-bottom:12px;">Powers AI extraction. Free key from Google.</div>
-          <div style="background:#ebf4ff;border:1px solid #bee3f8;border-radius:7px;padding:10px;margin-bottom:14px;font-size:10px;color:#2E75B6;line-height:1.6;">
+          <div style="font-size:15px;font-weight:700;color:var(--text-primary,#1e293b);margin-bottom:4px;">Gemini API Key</div>
+          <div style="font-size:12px;color:var(--text-muted,#94a3b8);margin-bottom:14px;">Powers AI extraction. Free key from Google.</div>
+          <div style="background:var(--accent-light,#eef2ff);border:1px solid var(--accent-border,#c7d2fe);border-radius:8px;padding:12px;margin-bottom:16px;font-size:11px;color:var(--accent-primary,#4f46e5);line-height:1.6;">
             Your key is stored only in your browser. It is sent directly to Google Gemini — never to any other server.
           </div>
           <div id="rjd-sk-msg"></div>
-          <label style="font-size:10px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">API Key</label>
-          <input type="password" id="rjd-sk-input" placeholder="AIzaSy..." style="width:100%;padding:8px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:11px;font-family:inherit;background:#fff !important;color:#1a202c !important;margin-bottom:8px;"/>
-          <div style="display:flex;gap:8px;margin-bottom:14px;">
-            <button id="rjd-sk-show" style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:10px;cursor:pointer;background:#f8fafc;color:#718096;font-family:inherit;">Show</button>
-            <button id="rjd-sk-save" class="rjd-primary-btn" style="flex:1;padding:6px;">Save Key</button>
+          <label style="font-size:10px;font-weight:700;color:var(--text-muted,#94a3b8);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">API Key</label>
+          <input type="password" id="rjd-sk-input" placeholder="AIzaSy..." style="width:100%;padding:10px 12px;border:1.5px solid var(--border-color,#e2e8f0);border-radius:8px;font-size:12px;font-family:inherit;background:var(--bg-primary,#fff) !important;color:var(--text-primary,#1e293b) !important;margin-bottom:10px;"/>
+          <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <button id="rjd-sk-show" style="padding:8px 14px;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;font-size:11px;cursor:pointer;background:var(--bg-secondary,#f8fafc);color:var(--text-muted,#94a3b8);font-family:inherit;transition:all 0.2s;">Show</button>
+            <button id="rjd-sk-save" class="rjd-primary-btn" style="flex:1;padding:8px;">Save Key</button>
           </div>
-          <div style="border-top:1px solid #f1f5f9;padding-top:12px;">
-            <div style="font-size:11px;font-weight:600;color:#1a202c;margin-bottom:6px;">How to get a free key:</div>
-            <div style="font-size:11px;color:#4a5568;line-height:1.8;">
+          <div style="border-top:1px solid var(--border-light,#f1f5f9);padding-top:14px;">
+            <div style="font-size:12px;font-weight:600;color:var(--text-primary,#1e293b);margin-bottom:8px;">How to get a free key:</div>
+            <div style="font-size:12px;color:var(--text-secondary,#475569);line-height:1.8;">
               1. Go to <strong>aistudio.google.com</strong><br>
               2. Click <strong>Get API Key → Create API key</strong><br>
               3. Copy and paste it above
@@ -718,19 +968,21 @@ ${context}`;
     const progBar    = document.getElementById('rjd-progress-bar');
     const targSel    = document.getElementById('rjd-target-select');
     if (progText) progText.textContent = done + '/' + target;
-    if (progText) progText.style.color = done >= target ? '#68d391' : '#90cdf4';
-    if (progBar)  { progBar.style.width = pct + '%'; progBar.style.background = done >= target ? '#68d391' : '#2E75B6'; }
+    if (progText) progText.style.color = done >= target ? '#059669' : '';
+    if (progBar)  { progBar.style.width = pct + '%'; }
     if (targSel)  targSel.value = String(target);
   }
 
   // ── TABLE ──
   function updateTrackBadge() {
-    const toggle = document.getElementById('rjd-toggle');
-    if (!toggle) return;
-    const count = applications.length;
-    toggle.innerHTML = count > 0
-      ? 'TRACK<span style="display:block;background:#fff;color:#1F4E79;border-radius:8px;font-size:8px;font-weight:900;padding:1px 4px;margin-top:3px;min-width:16px;text-align:center;">' + count + '</span>'
-      : 'TRACK';
+    const badge = document.getElementById('rjd-toggle-badge');
+    if (!badge) return;
+    const todayCount = applications.filter(a => a.dateKey === todayKey()).length;
+    badge.style.display = todayCount > 0 ? 'flex' : 'none';
+    badge.textContent = todayCount > 99 ? '99+' : todayCount;
+    // Tooltip so user knows what it means
+    const icon = document.getElementById('rjd-toggle-icon');
+    if (icon) icon.title = todayCount + ' application' + (todayCount !== 1 ? 's' : '') + ' today';
   }
 
   function getFiltered() {
@@ -762,9 +1014,11 @@ ${context}`;
       const safeUrl = app.url && /^https?:\/\//i.test(app.url) ? app.url : null;
       const resumeBtn = app.resume ? `<button class="rjd-view-resume-btn" data-id="${app.id}">View</button>` : `<span class="rjd-no-resume">—</span>`;
       const urlBtn    = safeUrl    ? `<a href="${escHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" class="rjd-url-link">Open</a>` : `<span class="rjd-no-resume">—</span>`;
-      // Warning fix #4: compare date strings directly — avoids UTC vs local timezone mismatch
       const isOverdue = app.followUpDate && app.followUpDate < todayKey().slice(0,10) && app.status !== 'Offer' && app.status !== 'Rejected';
-      const followUpBadge = app.followUpDate ? `<div style="font-size:9px;color:${isOverdue?'#c53030':'#718096'};margin-top:1px;">${isOverdue?'⚠ Follow up: ':'📅 '} ${app.followUpDate}</div>` : '';
+      const followUpBadge = app.followUpDate ? `<div style="font-size:9px;color:${isOverdue?'#dc2626':'#94a3b8'};margin-top:1px;">${isOverdue?'⚠ ':'📅 '}${app.followUpDate}</div>` : '';
+      // Status chip (click to cycle)
+      const shortStatus = { 'Applied':'Applied','Interview Scheduled':'Interview','Interview Done':'Done','Offer':'Offer','Rejected':'Rejected','Skipped':'Skipped' };
+      const statusChip = `<button class="rjd-status-chip-btn" data-id="${app.id}" style="background:${sc.bg};color:${sc.color};border:1.5px solid ${sc.color}33;padding:4px 9px;border-radius:20px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all 0.15s;letter-spacing:0.1px;" title="Click to change status">${shortStatus[app.status]||app.status} ▾</button>`;
       return `<tr class="rjd-row" data-id="${app.id}" style="${isOverdue?'background:#fff5f5 !important;':''}">
         <td class="rjd-td rjd-td-sno">${idx+1}</td>
         <td class="rjd-td rjd-td-company"><div>${escHtml(app.company||'—')}</div>${followUpBadge}</td>
@@ -772,24 +1026,22 @@ ${context}`;
         <td class="rjd-td rjd-td-url">${urlBtn}</td>
         <td class="rjd-td rjd-td-resume">${resumeBtn}</td>
         <td class="rjd-td rjd-td-date">${escHtml(app.date||'—')}</td>
-        <td class="rjd-td rjd-td-status">
-          <select class="rjd-status-sel" data-id="${app.id}" style="background:${sc.bg};color:${sc.color}">
-            ${STATUSES.map(s=>`<option value="${s}" ${app.status===s?'selected':''}>${s}</option>`).join('')}
-          </select>
-        </td>
+        <td class="rjd-td rjd-td-status">${statusChip}</td>
       </tr>`;
     }).join('');
 
-    tbody.querySelectorAll('.rjd-status-sel').forEach(sel => {
-      sel.addEventListener('change', async (e) => {
+    // Status chip cycling — tap to go to next status
+    tbody.querySelectorAll('.rjd-status-chip-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const app = applications.find(a => a.id === sel.dataset.id);
-        if (app) {
-          app.status = sel.value;
-          await dbUpdateApp(app);
-          // Quality fix #2: re-render table instead of manually patching row backgrounds
-          renderTable();
-        }
+        const app = applications.find(a => a.id === btn.dataset.id);
+        if (!app) return;
+        const idx = STATUSES.indexOf(app.status);
+        const next = STATUSES[(idx + 1) % STATUSES.length];
+        app.status = next;
+        await dbUpdateApp(app);
+        renderTable();
+        showToast('Status → ' + next);
       });
     });
 
@@ -799,14 +1051,13 @@ ${context}`;
 
     tbody.querySelectorAll('.rjd-row').forEach(row => {
       row.addEventListener('click', (e) => {
-        if (['rjd-status-sel','rjd-view-resume-btn','rjd-url-link'].some(c=>e.target.classList.contains(c))) return;
+        if (['rjd-status-chip-btn','rjd-view-resume-btn','rjd-url-link'].some(c=>e.target.classList.contains(c))) return;
         const app = applications.find(a=>a.id===row.dataset.id);
         if (app) showAppDetail(app);
       });
     });
   }
 
-  // ── NEW APP PANEL ──
   function showNewAppPanel(autoExtract) {
     const panel = document.getElementById('rjd-new-app-panel');
     const main  = document.getElementById('rjd-main');
@@ -818,9 +1069,45 @@ ${context}`;
       document.getElementById('rjd-new-url').value     = '';
       document.getElementById('rjd-new-jd').value      = '';
       document.getElementById('rjd-extract-status').textContent = '';
+
+      // Wire status chips — select "Applied" by default
+      const statusInput = document.getElementById('rjd-new-status');
+      panel.querySelectorAll('.rjd-status-chip').forEach(chip => {
+        if (chip.dataset.val === 'Applied') {
+          chip.style.background  = '#eef2ff';
+          chip.style.borderColor = '#4f46e5';
+          chip.style.color       = '#4f46e5';
+        }
+        chip.onclick = () => {
+          statusInput.value = chip.dataset.val;
+          panel.querySelectorAll('.rjd-status-chip').forEach(c => {
+            c.style.background  = '#f8fafc';
+            c.style.borderColor = '#e2e8f0';
+            c.style.color       = '#64748b';
+          });
+          chip.style.background  = '#eef2ff';
+          chip.style.borderColor = '#4f46e5';
+          chip.style.color       = '#4f46e5';
+        };
+      });
+
+      // Input focus glow
+      panel.querySelectorAll('input[type=text],input[type=url],textarea').forEach(el => {
+        el.onfocus = () => { el.style.borderColor = '#4f46e5'; el.style.boxShadow = '0 0 0 3px rgba(79,70,229,0.12)'; };
+        el.onblur  = () => { el.style.borderColor = '#e2e8f0'; el.style.boxShadow = 'none'; };
+      });
+
+      // Extract button hover
+      const eb = document.getElementById('rjd-extract-btn');
+      if (eb) {
+        eb.onmouseenter = () => { eb.style.transform = 'translateY(-1px)'; eb.style.boxShadow = '0 6px 20px rgba(79,70,229,0.4)'; };
+        eb.onmouseleave = () => { eb.style.transform = ''; eb.style.boxShadow = '0 4px 16px rgba(79,70,229,0.3)'; };
+      }
+
       if (autoExtract) setTimeout(() => runExtract(), 100);
     }
   }
+
 
   function hideNewAppPanel() {
     document.getElementById('rjd-new-app-panel').style.display = 'none';
@@ -951,35 +1238,35 @@ ${context}`;
         <div id="rjd-main" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
           <div id="rjd-toolbar">
             <div class="rjd-toolbar-left">
-              <div style="width:28px;height:28px;border-radius:50%;background:#fff;color:#1F4E79;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">${escHtml(initials)}</div>
+              <div class="rjd-toolbar-avatar">${escHtml(initials)}</div>
               <span id="rjd-username-display">${escHtml(currentUser.name)}</span>
             </div>
             <div style="display:flex;gap:6px;">
-              <button id="rjd-quick-extract-btn" class="rjd-primary-btn" style="background:#1F4E79;font-size:11px;padding:5px 10px;white-space:nowrap;">✦ Extract & Save</button>
-              <button id="rjd-new-app-btn" class="rjd-primary-btn">+ New</button>
-              <button id="rjd-refresh-btn" title="Refresh" style="background:rgba(255,255,255,0.2);border:none;color:#fff;font-size:14px;cursor:pointer;padding:5px 7px;border-radius:6px;line-height:1;">↻</button>
-              <button id="rjd-settings-btn" title="Settings" style="background:rgba(255,255,255,0.2);border:none;color:#fff;font-size:14px;cursor:pointer;padding:5px 7px;border-radius:6px;line-height:1;">⚙</button>
+              <button id="rjd-quick-extract-btn" class="rjd-primary-btn" style="font-size:11px;padding:6px 12px;white-space:nowrap;">✦ Extract & Save</button>
+              <button id="rjd-new-app-btn" class="rjd-primary-btn" style="background:var(--bg-secondary,#f8fafc);color:var(--accent-primary,#4f46e5);border:1.5px solid var(--accent-border,#c7d2fe);box-shadow:none;">+ New</button>
+              <button id="rjd-refresh-btn" title="Refresh" style="background:var(--bg-secondary,#f8fafc);border:1px solid var(--border-color,#e2e8f0);color:var(--text-muted,#94a3b8);font-size:14px;cursor:pointer;padding:6px 8px;border-radius:8px;line-height:1;transition:all 0.2s;">↻</button>
+              <button id="rjd-settings-btn" title="Settings" style="background:var(--bg-secondary,#f8fafc);border:1px solid var(--border-color,#e2e8f0);color:var(--text-muted,#94a3b8);font-size:14px;cursor:pointer;padding:6px 8px;border-radius:8px;line-height:1;transition:all 0.2s;">⚙</button>
             </div>
           </div>
 
           <div id="rjd-stats"></div>
 
           <!-- Session Bar -->
-          <div id="rjd-session-bar" style="padding:8px 12px;background:#1a365d;border-bottom:1px solid #2a4a7f;font-size:12px;color:#bee3f8;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-              <span style="font-weight:700;white-space:nowrap;">📅 Session:</span>
-              <input type="date" id="rjd-working-date-input" style="flex:1;padding:3px 8px;border-radius:5px;border:1px solid #2E75B6;background:#0f2744;color:#fff;font-size:12px;font-family:inherit;"/>
-              <button id="rjd-working-date-today" style="padding:3px 8px;border-radius:5px;border:none;background:#2E75B6;color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;">Today</button>
+          <div id="rjd-session-bar">
+            <div class="rjd-session-row">
+              <span class="rjd-session-label">📅 Session:</span>
+              <input type="date" id="rjd-working-date-input" class="rjd-session-input"/>
+              <button id="rjd-working-date-today" class="rjd-session-btn">Today</button>
             </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span style="white-space:nowrap;">🎯 Target:</span>
-              <select id="rjd-target-select" style="padding:3px 8px;border-radius:5px;border:1px solid #2E75B6;background:#0f2744;color:#fff;font-size:12px;font-family:inherit;flex:1;">
+            <div class="rjd-session-row">
+              <span class="rjd-session-label">🎯 Target:</span>
+              <select id="rjd-target-select" class="rjd-session-input">
                 ${[10,15,20,25,30,35,40,50].map(n=>`<option value="${n}">${n} applications</option>`).join('')}
               </select>
-              <span id="rjd-session-progress" style="font-weight:700;white-space:nowrap;color:#90cdf4;">0/30</span>
+              <span id="rjd-session-progress" style="font-weight:700;white-space:nowrap;color:var(--accent-primary,#4f46e5);font-size:12px;">0/30</span>
             </div>
-            <div id="rjd-progress-bar-wrap" style="margin-top:6px;background:#0f2744;border-radius:4px;height:6px;overflow:hidden;">
-              <div id="rjd-progress-bar" style="height:6px;background:#2E75B6;border-radius:4px;width:0%;transition:width 0.3s;"></div>
+            <div id="rjd-progress-bar-wrap">
+              <div id="rjd-progress-bar"></div>
             </div>
           </div>
 
@@ -1012,18 +1299,69 @@ ${context}`;
         </div>
 
         <div id="rjd-new-app-panel" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
-          <div class="rjd-panel-header">
-            <button class="rjd-back-btn" id="rjd-new-back">← Back</button>
-            <span class="rjd-panel-title">New Application</span>
+          <!-- Panel Header -->
+          <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:14px 18px;display:flex;align-items:center;gap:10px;flex-shrink:0;position:relative;overflow:hidden;">
+            <div style="position:absolute;top:-20px;right:-10px;width:70px;height:70px;background:rgba(255,255,255,0.07);border-radius:50%;"></div>
+            <button id="rjd-new-back" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600;backdrop-filter:blur(8px);transition:all 0.2s;flex-shrink:0;">← Back</button>
+            <div style="flex:1;">
+              <div style="font-size:15px;font-weight:700;color:#fff;letter-spacing:-0.2px;">New Application</div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.65);margin-top:1px;" id="rjd-extract-status"></div>
+            </div>
           </div>
-          <div class="rjd-panel-body">
-            <div id="rjd-extract-status" class="rjd-extract-status"></div>
-            <button id="rjd-extract-btn" class="rjd-extract-btn">✦ Extract from Clipboard + Page URL</button>
-            <div class="rjd-field-group"><label class="rjd-label">Company Name</label><input type="text" id="rjd-new-company" placeholder="e.g. Google"/></div>
-            <div class="rjd-field-group"><label class="rjd-label">Job Title</label><input type="text" id="rjd-new-title" placeholder="e.g. Senior Data Analyst"/></div>
-            <div class="rjd-field-group"><label class="rjd-label">Job URL</label><input type="text" id="rjd-new-url" placeholder="Auto-filled or paste manually"/></div>
-            <div class="rjd-field-group"><label class="rjd-label">Job Description</label><textarea id="rjd-new-jd" placeholder="Auto-filled from clipboard..." rows="6"></textarea></div>
-            <button id="rjd-save-app-btn" class="rjd-primary-btn">Save Application</button>
+
+          <!-- Scrollable Body -->
+          <div style="flex:1;overflow-y:auto;padding:18px 18px 24px;">
+
+            <!-- Extract Button -->
+            <button id="rjd-extract-btn" style="width:100%;padding:14px 16px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:20px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(79,70,229,0.3);transition:all 0.2s;letter-spacing:0.1px;">
+              <span style="font-size:16px;">✦</span> Extract from Clipboard + Page URL
+            </button>
+
+            <!-- Divider -->
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+              <div style="flex:1;height:1px;background:#e2e8f0;"></div>
+              <span style="font-size:11px;color:#94a3b8;font-weight:600;white-space:nowrap;">OR FILL MANUALLY</span>
+              <div style="flex:1;height:1px;background:#e2e8f0;"></div>
+            </div>
+
+            <!-- Company + Title side-by-side -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+              <div>
+                <label style="display:block;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px;">Company Name</label>
+                <input type="text" id="rjd-new-company" placeholder="e.g. Google" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;background:#fff !important;color:#1e293b !important;-webkit-text-fill-color:#1e293b !important;outline:none;transition:border-color 0.2s,box-shadow 0.2s;"/>
+              </div>
+              <div>
+                <label style="display:block;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px;">Job Title</label>
+                <input type="text" id="rjd-new-title" placeholder="e.g. Data Analyst" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;background:#fff !important;color:#1e293b !important;-webkit-text-fill-color:#1e293b !important;outline:none;transition:border-color 0.2s,box-shadow 0.2s;"/>
+              </div>
+            </div>
+
+            <!-- Status -->
+            <div style="margin-bottom:14px;">
+              <label style="display:block;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px;">Status</label>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                ${STATUSES.map(s => `<button class="rjd-status-chip" data-val="${s}" style="padding:6px 12px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid #e2e8f0;background:#f8fafc;color:#64748b;font-family:inherit;transition:all 0.15s;">${s}</button>`).join('')}
+              </div>
+              <input type="hidden" id="rjd-new-status" value="Applied"/>
+            </div>
+
+            <!-- Job URL -->
+            <div style="margin-bottom:14px;">
+              <label style="display:block;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px;">Job URL</label>
+              <input type="url" id="rjd-new-url" placeholder="Auto-filled or paste manually" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;background:#fff !important;color:#1e293b !important;-webkit-text-fill-color:#1e293b !important;outline:none;transition:border-color 0.2s,box-shadow 0.2s;"/>
+            </div>
+
+            <!-- Job Description -->
+            <div style="margin-bottom:20px;">
+              <label style="display:block;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px;">Job Description</label>
+              <textarea id="rjd-new-jd" placeholder="Auto-filled from clipboard, or paste JD here..." rows="6" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:12px;font-family:inherit;background:#fff !important;color:#1e293b !important;-webkit-text-fill-color:#1e293b !important;resize:vertical;outline:none;line-height:1.6;transition:border-color 0.2s,box-shadow 0.2s;"></textarea>
+            </div>
+
+            <!-- Save Button -->
+            <button id="rjd-save-app-btn" style="width:100%;padding:13px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(79,70,229,0.3);transition:all 0.2s;letter-spacing:-0.1px;">
+              💾 Save Application
+            </button>
+
           </div>
         </div>
 
@@ -1241,6 +1579,7 @@ ${context}`;
       const jobTitle = document.getElementById('rjd-new-title').value.trim();
       const url      = document.getElementById('rjd-new-url').value.trim();
       const jd       = document.getElementById('rjd-new-jd').value.trim();
+      const status   = document.getElementById('rjd-new-status')?.value || 'Applied';
       if (!company && !jobTitle) { showToast('Enter at least company or job title', true); return; }
       const dupByUrl   = url && applications.find(a => a.url && a.url === url);
       const dupByTitle = company && jobTitle && applications.find(a =>
@@ -1251,20 +1590,19 @@ ${context}`;
       if (dupByTitle) { showToast('Possible duplicate: ' + dupByTitle.company + ' — ' + dupByTitle.jobTitle, true); return; }
       _saving = true;
       const saveBtn = document.getElementById('rjd-save-app-btn');
-      if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
-      // Use crypto.randomUUID() — avoids Date.now() collisions and gives proper UUID type (#13)
+      if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Saving...'; }
       const app = {
         id: crypto.randomUUID(), company, jobTitle, url, jd, resume: '',
-        status: 'Applied', date: today(), dateRaw: new Date().toISOString(), dateKey: todayKey(), notes: ''
+        status, date: today(), dateRaw: new Date().toISOString(), dateKey: todayKey(), notes: ''
       };
       const ok = await dbSaveApp(app);
       _saving = false;
-      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Application'; }
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '💾 Save Application'; }
       if (ok) {
         applications.push(app);
         hideNewAppPanel();
         renderTable();
-        showToast('Application saved');
+        showToast('✓ Application saved — ' + company);
       } else { showToast('Save failed — check connection', true); }
     });
 
@@ -1303,7 +1641,7 @@ ${context}`;
       if (typeof window.buildXLSX !== 'function') {
         await new Promise((resolve, reject) => {
           const s = document.createElement('script');
-          s.src = chrome.runtime.getURL('xlsxbuilder.js');
+          s.src = chrome.runtime.getURL('lib/xlsxbuilder.js');
           s.onload = resolve;
           s.onerror = () => reject(new Error('Failed to load xlsxbuilder.js'));
           document.head.appendChild(s);
@@ -1374,35 +1712,7 @@ ${context}`;
   function buildSidebar() {
     const style = document.createElement('style');
     style.textContent = `
-      .rjd-settings-nav-item{padding:7px 12px;font-size:11px;color:#718096;cursor:pointer;border-left:2px solid transparent;display:flex;align-items:center;gap:6px;}
-      .rjd-settings-nav-item:hover{background:#f1f5f9;color:#1F4E79;}
-      .rjd-snav-active{background:#ebf4ff !important;color:#1F4E79 !important;border-left-color:#1F4E79 !important;font-weight:600;}
-      .rjd-td-sno{width:24px !important;min-width:24px !important;max-width:24px !important;padding:5px 4px !important;text-align:center !important;}
-      #rjd-table thead tr th:first-child{width:24px !important;padding:5px 4px !important;text-align:center !important;}
-      #rjd-sidebar[data-theme=dark]{background:#1a202c !important;color:#e2e8f0 !important;border-left-color:#2d3748 !important;}
-      #rjd-sidebar[data-theme=dark] #rjd-header{background:#1F4E79 !important;}
-      #rjd-sidebar[data-theme=dark] #rjd-toolbar{background:#2d3748 !important;border-bottom-color:#4a5568 !important;}
-      #rjd-sidebar[data-theme=dark] #rjd-filters{background:#2d3748 !important;border-bottom-color:#4a5568 !important;}
-      #rjd-sidebar[data-theme=dark] #rjd-search-input,
-      #rjd-sidebar[data-theme=dark] #rjd-status-filter,
-      #rjd-sidebar[data-theme=dark] #rjd-date-filter{background:#4a5568 !important;color:#e2e8f0 !important;-webkit-text-fill-color:#e2e8f0 !important;border-color:#718096 !important;}
-      #rjd-sidebar[data-theme=dark] #rjd-table-wrap{background:#1a202c !important;}
-      #rjd-sidebar[data-theme=dark] .rjd-th{background:#2d3748 !important;color:#a0aec0 !important;border-color:#4a5568 !important;}
-      #rjd-sidebar[data-theme=dark] .rjd-td{border-color:#2d3748 !important;background:#1a202c !important;color:#e2e8f0 !important;}
-      #rjd-sidebar[data-theme=dark] .rjd-row:nth-child(even) .rjd-td{background:#2d3748 !important;}
-      #rjd-sidebar[data-theme=dark] #rjd-stats{background:#2d3748 !important;border-bottom-color:#4a5568 !important;}
-      #rjd-sidebar[data-theme=dark] .rjd-stat-box{background:#2d3748 !important;}
-      #rjd-sidebar[data-theme=dark] .rjd-stat-lbl{color:#a0aec0 !important;}
-      #rjd-sidebar[data-theme=dark] .rjd-panel-header{background:#2d3748 !important;border-bottom-color:#4a5568 !important;}
-      #rjd-sidebar[data-theme=dark] .rjd-panel-body{background:#1a202c !important;}
-      #rjd-sidebar[data-theme=dark] .rjd-field-group input,
-      #rjd-sidebar[data-theme=dark] .rjd-field-group textarea,
-      #rjd-sidebar[data-theme=dark] .rjd-notes-input{background:#2d3748 !important;color:#e2e8f0 !important;-webkit-text-fill-color:#e2e8f0 !important;border-color:#4a5568 !important;}
-      #rjd-sidebar[data-theme=dark] .rjd-label{color:#a0aec0 !important;}
-      #rjd-sidebar[data-theme=dark] .rjd-detail-lbl{color:#a0aec0 !important;}
-      #rjd-sidebar[data-theme=dark] .rjd-detail-row{border-bottom-color:#2d3748 !important;color:#e2e8f0 !important;}
-      #rjd-sidebar[data-theme=dark] .rjd-resume-body{background:#2d3748 !important;color:#e2e8f0 !important;}
-      #rjd-sidebar[data-theme=dark] .rjd-jd-text{background:#2d3748 !important;color:#e2e8f0 !important;}
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
     `;
     document.head.appendChild(style);
 
@@ -1433,9 +1743,90 @@ ${context}`;
       <div id="rjd-sidebar-content" style="display:flex;flex-direction:column;flex:1;overflow:hidden;"></div>`;
     document.body.appendChild(sidebar);
 
-    const toggle = document.createElement('button');
+    // ── FLOATING TRACK BUTTON ──
+    const toggle = document.createElement('div');
     toggle.id = 'rjd-toggle';
-    // Always visible — behaviour changes based on login state
+    toggle.innerHTML = `
+      <div id="rjd-toggle-icon" style="width:52px;height:52px;background:linear-gradient(135deg,#4f46e5,#7c3aed);border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(79,70,229,0.4);cursor:pointer;transition:all 0.2s;position:relative;">
+        <img src="${(typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime.getURL('icons/icon128.png') : ''}" style="width:26px; height:26px; object-fit:contain; border-radius:6px; pointer-events:none;"/>
+        <div id="rjd-toggle-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#dc2626;color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;font-weight:800;align-items:center;justify-content:center;border:2px solid #fff;">0</div>
+      </div>
+      <div id="rjd-queue-badge" style="display:none;position:absolute;bottom:-4px;right:-4px;background:#f59e0b;color:#fff;border-radius:50%;width:18px;height:18px;font-size:9px;font-weight:800;align-items:center;justify-content:center;border:2px solid #fff;">0</div>
+    `;
+    // Draggable positioning (slide up/down on the right edge)
+    let _isDragging = false, _startY = 0, _startTop = 0;
+    let _toggleTop = window.innerHeight / 2 - 26; // initial vertical center
+    toggle.style.cssText = `position:fixed!important;right:12px!important;top:${_toggleTop}px;z-index:2147483647!important;cursor:grab;user-select:none;`;
+
+    toggle.addEventListener('mousedown', (e) => {
+      _isDragging = false;
+      _startY = e.clientY;
+      _startTop = _toggleTop;
+      const onMove = (em) => {
+        const dy = em.clientY - _startY;
+        if (Math.abs(dy) > 4) _isDragging = true;
+        _toggleTop = Math.max(10, Math.min(window.innerHeight - 70, _startTop + dy));
+        toggle.style.top = _toggleTop + 'px';
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        toggle.style.cursor = 'grab';
+        if (!_isDragging) handleToggleClick();
+        // Persist position safely
+        try {
+          if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+            const s3 = chromeStore();
+            if (s3) s3.set({ rjd_toggle_top: _toggleTop });
+          }
+        } catch(e) {}
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    // Touch drag support
+    toggle.addEventListener('touchstart', (e) => {
+      _isDragging = false;
+      _startY = e.touches[0].clientY;
+      _startTop = _toggleTop;
+    }, { passive: true });
+    toggle.addEventListener('touchmove', (e) => {
+      const dy = e.touches[0].clientY - _startY;
+      if (Math.abs(dy) > 4) _isDragging = true;
+      _toggleTop = Math.max(10, Math.min(window.innerHeight - 70, _startTop + dy));
+      toggle.style.top = _toggleTop + 'px';
+    }, { passive: true });
+    toggle.addEventListener('touchend', () => { if (!_isDragging) handleToggleClick(); });
+
+    function handleToggleClick() {
+      if (!currentUser) {
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+          window.open(chrome.runtime.getURL('pages/app.html'), '_blank');
+        }
+        return;
+      }
+      sidebar.classList.toggle('open');
+      if (!sidebar.classList.contains('open')) return;
+      if (applications.length > 0) { renderTrackerScreen(); return; }
+      showLoading('Loading...');
+      dbLoadApps().then(apps => { applications = apps; renderTrackerScreen(); }).catch(() => renderTrackerScreen());
+    }
+
+    // Restore saved position
+    const s2b = chromeStore();
+    if (s2b) s2b.get('rjd_toggle_top', r => {
+      if (r.rjd_toggle_top) { _toggleTop = r.rjd_toggle_top; toggle.style.top = _toggleTop + 'px'; }
+    });
+
+    // Hover effect
+    const icon = toggle.querySelector('#rjd-toggle-icon');
+    toggle.addEventListener('mouseenter', () => { if (icon) icon.style.transform = 'scale(1.1)'; });
+    toggle.addEventListener('mouseleave', () => { if (icon) icon.style.transform = ''; });
+    
+    // External open hook for popup/keyboard shortcut
+    toggle.addEventListener('rjd-external-open', handleToggleClick);
+
     document.body.appendChild(toggle);
 
     const toast = document.createElement('div');
@@ -1444,27 +1835,10 @@ ${context}`;
 
     document.getElementById('rjd-close').addEventListener('click', () => sidebar.classList.remove('open'));
 
-    toggle.addEventListener('click', () => {
-      if (!currentUser) {
-        // Not logged in — open extension's app.html which can write to chrome.storage
-        if (typeof chrome !== 'undefined' && chrome.runtime) {
-          chrome.tabs.create({ url: chrome.runtime.getURL('app.html') });
-        }
-        return;
-      }
-      sidebar.classList.toggle('open');
-      if (!sidebar.classList.contains('open')) return;
-      // Warning fix #6: skip reload if apps already loaded (avoid double-fetch + spinner flash)
-      if (applications.length > 0) {
-        renderTrackerScreen();
-        return;
-      }
-      showLoading('Loading...');
-      dbLoadApps().then(apps => {
-        applications = apps;
-        renderTrackerScreen();
-      }).catch(() => renderTrackerScreen());
-    });
+    // Flush offline queue on load
+    setTimeout(() => flushQueue(), 2000);
+    // Check for existing queue items
+    getQueue(q => updateQueueBadge(q.length));
   }
 
   // ── KEYBOARD SHORTCUTS ──
@@ -1474,7 +1848,8 @@ ${context}`;
     const sidebar = document.getElementById('rjd-sidebar');
     const isOpen  = sidebar && sidebar.classList.contains('open');
     if (action === 'toggle_sidebar') {
-      document.getElementById('rjd-toggle') && document.getElementById('rjd-toggle').click();
+      const tg = document.getElementById('rjd-toggle');
+      if (tg) tg.dispatchEvent(new Event('rjd-external-open'));
     } else if (action === 'extract_save' && isOpen) {
       document.getElementById('rjd-quick-extract-btn') && document.getElementById('rjd-quick-extract-btn').click();
     } else if (action === 'new_app' && isOpen) {

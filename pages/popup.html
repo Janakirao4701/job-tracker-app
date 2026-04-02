@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 380px;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    color: #1e293b;
+    background: #f8fafc;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #a855f7 100%);
+    padding: 20px 20px 18px;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::before {
+    content: '';
+    position: absolute;
+    top: -30px; right: -30px;
+    width: 120px; height: 120px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 50%;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    bottom: -20px; left: 30%;
+    width: 80px; height: 80px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 50%;
+  }
+  .header-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+  }
+  .logo {
+    width: 40px; height: 40px;
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  .header-text h1 {
+    font-size: 15px; font-weight: 700; color: #fff;
+    letter-spacing: -0.2px;
+  }
+  .header-text p {
+    font-size: 11px; color: rgba(255,255,255,0.7);
+    margin-top: 2px; font-weight: 500;
+  }
+  .version-badge {
+    position: absolute;
+    top: 10px; right: 16px;
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(8px);
+    color: rgba(255,255,255,0.9);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.2);
+    z-index: 1;
+  }
+
+  /* ── Stats grid ── */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    padding: 14px 16px;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .stat {
+    text-align: center;
+    padding: 10px 4px;
+    background: #f8fafc;
+    border-radius: 10px;
+    border: 1px solid #f1f5f9;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .stat:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  }
+  .stat-num {
+    font-size: 22px; font-weight: 800;
+    line-height: 1;
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .stat-num.green {
+    background: linear-gradient(135deg, #059669, #10b981);
+    -webkit-background-clip: text; background-clip: text;
+  }
+  .stat-num.orange {
+    background: linear-gradient(135deg, #d97706, #f59e0b);
+    -webkit-background-clip: text; background-clip: text;
+  }
+  .stat-num.blue {
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
+    -webkit-background-clip: text; background-clip: text;
+  }
+  .stat-lbl {
+    font-size: 9px; color: #94a3b8;
+    margin-top: 4px; text-transform: uppercase;
+    letter-spacing: 0.5px; font-weight: 600;
+  }
+
+  /* ── User bar ── */
+  .user-bar {
+    background: #fff;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .avatar {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #fff;
+    flex-shrink: 0;
+  }
+  .user-name { font-size: 13px; font-weight: 600; color: #1e293b; }
+  .user-email { font-size: 10px; color: #94a3b8; margin-top: 1px; }
+
+  /* ── Actions ── */
+  .actions {
+    padding: 14px 16px;
+    display: flex;
+    gap: 8px;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .btn-primary {
+    flex: 1; padding: 10px;
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    color: #fff;
+    border: none; border-radius: 10px;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    transition: opacity 0.2s, transform 0.1s;
+    box-shadow: 0 2px 8px rgba(79,70,229,0.3);
+  }
+  .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-secondary {
+    flex: 1; padding: 10px;
+    background: #f8fafc; color: #4f46e5;
+    border: 1.5px solid #e0e7ff; border-radius: 10px;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    transition: all 0.2s;
+  }
+  .btn-secondary:hover { background: #eef2ff; border-color: #c7d2fe; }
+
+  /* ── Recent ── */
+  .recent {
+    padding: 14px 16px;
+    background: #fff;
+  }
+  .recent-header {
+    font-size: 10px; font-weight: 700; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 10px;
+  }
+  .recent-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    transition: background 0.15s;
+  }
+  .recent-item:hover { background: #f8fafc; }
+  .recent-item:last-child { margin-bottom: 0; }
+  .recent-company { font-size: 12px; font-weight: 600; color: #1e293b; }
+  .recent-job { font-size: 10px; color: #94a3b8; margin-top: 1px; }
+  .badge {
+    font-size: 9px; font-weight: 700;
+    padding: 3px 8px; border-radius: 20px;
+    white-space: nowrap;
+    letter-spacing: 0.2px;
+  }
+  .b-applied    { background: #eef2ff; color: #4f46e5; }
+  .b-interview  { background: #ecfdf5; color: #059669; }
+  .b-offer      { background: linear-gradient(135deg, #059669, #10b981); color: #fff; }
+  .b-rejected   { background: #fef2f2; color: #dc2626; }
+  .b-done       { background: #fffbeb; color: #d97706; }
+  .b-skipped    { background: #f1f5f9; color: #94a3b8; }
+  .no-recent {
+    font-size: 12px; color: #cbd5e1;
+    text-align: center; padding: 16px 0;
+    font-style: italic;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+  }
+  .footer-btn {
+    font-size: 11px; color: #94a3b8;
+    background: none; border: none;
+    cursor: pointer; font-family: inherit;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+  .footer-btn:hover { color: #4f46e5; }
+
+  /* ── Get Started (Not logged in) ── */
+  .get-started {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 32px 36px;
+    text-align: center;
+    background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+    min-height: 100%;
+  }
+  .gs-icon {
+    width: 72px; height: 72px;
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 32px rgba(79,70,229,0.25);
+  }
+  .gs-title {
+    font-size: 18px; font-weight: 800; color: #1e293b;
+    margin-bottom: 8px; letter-spacing: -0.3px;
+  }
+  .gs-sub {
+    font-size: 13px; color: #64748b;
+    line-height: 1.5; margin-bottom: 24px;
+    max-width: 280px;
+  }
+  .btn-gs {
+    width: 100%; padding: 13px;
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    color: #fff;
+    border: none; border-radius: 12px;
+    font-size: 14px; font-weight: 700;
+    cursor: pointer; font-family: inherit;
+    box-shadow: 0 4px 16px rgba(79,70,229,0.35);
+    transition: all 0.2s;
+    letter-spacing: -0.2px;
+  }
+  .btn-gs:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(79,70,229,0.4);
+  }
+  .gs-note {
+    font-size: 11px; color: #94a3b8;
+    margin-top: 12px;
+  }
+
+  /* Count-up animation */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-in {
+    animation: fadeInUp 0.4s ease forwards;
+  }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="../lib/config.js"></script>
+  <script src="../scripts/popup.js"></script>
+</body>
+</html>
