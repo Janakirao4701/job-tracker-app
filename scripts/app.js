@@ -908,13 +908,7 @@ function renderApplications() {
     });
   });
 
-  // Clear selection
-  document.getElementById('bulk-clear-btn').addEventListener('click', () => {
-    document.querySelectorAll('.app-chk').forEach(c => c.checked = false);
-    const allChk = document.getElementById('select-all-chk');
-    if (allChk) allChk.checked = false;
-    updateBulkBar();
-  });
+
 
   // Bulk reassign to session date
   document.getElementById('bulk-reassign-btn').addEventListener('click', async () => {
