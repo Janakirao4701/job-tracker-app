@@ -855,16 +855,17 @@ function renderApplications() {
 
   document.querySelectorAll('.status-select').forEach(sel => {
     sel.addEventListener('change', async () => {
-      const app = apps.find(a => a.id === sel.dataset.id);
+      const app = apps.find(a => String(a.id) === String(sel.dataset.id));
       if (app) { app.status = sel.value; await updateApp(app); sel.style.background=(STATUS_BG[sel.value]||STATUS_BG.Applied).bg; sel.style.color=(STATUS_BG[sel.value]||STATUS_BG.Applied).color; showToast('Status updated'); }
     });
   });
 
   document.querySelectorAll('.del-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation(); // Prevent row click
       if (!confirm('Delete this application?')) return;
       await deleteApp(btn.dataset.id);
-      apps = apps.filter(a => a.id !== btn.dataset.id);
+      apps = apps.filter(a => String(a.id) !== String(btn.dataset.id));
       renderApplications(); updateBadge(); showToast('Deleted');
     });
   });
@@ -927,7 +928,7 @@ function renderApplications() {
     btn.textContent = 'Saving...'; btn.disabled = true;
     let successCount = 0;
     await Promise.all(ids.map(async id => {
-      const app = apps.find(a => a.id === id);
+      const app = apps.find(a => String(a.id) === String(id));
       if (app) {
         app.dateKey = newDate;
         app.date    = displayDate;
@@ -946,13 +947,17 @@ function renderApplications() {
   // Row Click for Details (excluding interactive elements)
   document.querySelectorAll('.app-row').forEach(row => {
     row.addEventListener('click', (e) => {
-      // Don't open details if they clicked a checkbox, select dropdown, action button, or link
+      // Don't open details if they clicked an interactive element
       if (e.target.closest('.app-chk') || e.target.closest('#select-all-chk') || e.target.closest('select') || e.target.closest('button') || e.target.closest('a')) {
         return;
       }
       const id = row.getAttribute('data-id');
-      const app = apps.find(a => a.id === id);
-      if (app) openDetailModal(app);
+      const app = apps.find(a => String(a.id) === String(id));
+      if (app) {
+        openDetailModal(app);
+      } else {
+        console.error("Could not find app with ID:", id, "Available apps:", apps);
+      }
     });
   });
 }
