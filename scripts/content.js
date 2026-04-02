@@ -1748,7 +1748,7 @@ ${context}`;
     toggle.id = 'rjd-toggle';
     toggle.innerHTML = `
       <div id="rjd-toggle-icon" style="width:52px;height:52px;background:linear-gradient(135deg,#4f46e5,#7c3aed);border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(79,70,229,0.4);cursor:pointer;transition:all 0.2s;position:relative;">
-        <img src="${(typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime.getURL('icons/icon-128.png') : ''}" style="width:26px; height:26px; object-fit:contain; border-radius:6px; pointer-events:none;"/>
+        <img src="${(typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime.getURL('icons/icon128.jpg') : ''}" style="width:26px; height:26px; object-fit:contain; border-radius:6px; pointer-events:none;"/>
         <div id="rjd-toggle-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#dc2626;color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;font-weight:800;align-items:center;justify-content:center;border:2px solid #fff;">0</div>
       </div>
       <div id="rjd-queue-badge" style="display:none;position:absolute;bottom:-4px;right:-4px;background:#f59e0b;color:#fff;border-radius:50%;width:18px;height:18px;font-size:9px;font-weight:800;align-items:center;justify-content:center;border:2px solid #fff;">0</div>

@@ -87,7 +87,7 @@ async function checkInterviewsToday() {
 
     const names = todayInterviews.map(a => (a.company || 'Unknown') + (a.job_title ? ' — ' + a.job_title : '')).join('\n');
     chrome.notifications.create('rjd-interview-' + Date.now(), {
-      type: 'basic', iconUrl: 'icons/icon-128.png',
+      type: 'basic', iconUrl: 'icons/icon128.jpg',
       title: todayInterviews.length === 1 ? 'Interview today!' : todayInterviews.length + ' interviews today!',
       message: names, priority: 2,
     });
