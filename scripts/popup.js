@@ -134,25 +134,44 @@ function renderLoggedIn(user, apps) {
 
 // ── INIT ──
 document.addEventListener('DOMContentLoaded', () => {
-  chrome.storage.local.get('rjd_session', async (res) => {
+  chrome.storage.local.get(['rjd_session', 'rjd_apps_cache'], async (res) => {
     const session = res.rjd_session || null;
     if (!session || !session.token || !session.user) {
       renderNotLoggedIn();
       return;
     }
     
-    // Show quick skeleton
-    document.getElementById('root').innerHTML = `<div style="padding:40px;text-align:center;color:#94a3b8;font-weight:600;">Loading...</div>`;
+    // Optimistic instant render from cache
+    if (res.rjd_apps_cache) {
+      renderLoggedIn(session.user, res.rjd_apps_cache);
+    } else {
+      // Modern spinner instead of "Loading..." text
+      document.getElementById('root').innerHTML = `
+        <style>@keyframes popupSpin { to { transform: rotate(360deg); } }</style>
+        <div style="display:flex; justify-content:center; align-items:center; height:180px;">
+          <div style="width:28px; height:28px; border:3px solid #eef2ff; border-top-color:#4f46e5; border-radius:50%; animation:popupSpin 0.8s linear infinite;"></div>
+        </div>
+      `;
+    }
     
     try {
       const r = await fetch(SUPABASE_URL + '/rest/v1/applications?select=*&username=eq.' + session.user.id + '&order=created_at.desc', {
         headers: { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+session.token }
       });
-      if (!r.ok) { renderLoggedIn(session.user, []); return; }
+      if (!r.ok) { 
+        if (!res.rjd_apps_cache) renderLoggedIn(session.user, []);
+        return; 
+      }
       const apps = await r.json();
-      renderLoggedIn(session.user, Array.isArray(apps) ? apps : []);
+      const validApps = Array.isArray(apps) ? apps : [];
+      
+      // Update cache
+      chrome.storage.local.set({ rjd_apps_cache: validApps });
+      
+      // Update UI with fresh data
+      renderLoggedIn(session.user, validApps);
     } catch(e) {
-      renderLoggedIn(session.user, []);
+      if (!res.rjd_apps_cache) renderLoggedIn(session.user, []);
     }
   });
 });
