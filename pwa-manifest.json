@@ -3,13 +3,18 @@
   "name": "Job Application Tracker",
   "icons": [
     {
-      "src": "icons/icon48.jpg",
-      "type": "image/jpeg",
+      "src": "icons/icon16.png",
+      "type": "image/png",
+      "sizes": "16x16"
+    },
+    {
+      "src": "icons/icon48.png",
+      "type": "image/png",
       "sizes": "48x48"
     },
     {
-      "src": "icons/icon128.jpg",
-      "type": "image/jpeg",
+      "src": "icons/icon128.png",
+      "type": "image/png",
       "sizes": "128x128"
     }
   ],

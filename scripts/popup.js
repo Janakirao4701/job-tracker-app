@@ -26,7 +26,7 @@ function animateCount(el, target, duration) {
 function renderNotLoggedIn() {
   document.getElementById('root').innerHTML = `
     <div class="get-started">
-      <div class="gs-icon"><img src="/icons/icon128.jpg" style="width:40px; height:40px; object-fit:contain; border-radius:10px;"/></div>
+      <div class="gs-icon"><img src="/icons/icon128.png" style="width:40px; height:40px; object-fit:contain; border-radius:10px;"/></div>
       <div class="gs-title">Job Application Tracker</div>
       <div class="gs-sub">Track every application with AI-powered extraction and cloud sync. Start your organized job search today.</div>
       <button class="btn-gs" id="btn-gs">Get Started — It's Free</button>
@@ -49,7 +49,7 @@ function renderLoggedIn(user, apps) {
     <div class="header">
       <span class="version-badge">v5.0</span>
       <div class="header-top">
-        <div class="logo"><img src="/icons/icon48.jpg" style="width:24px; height:24px; object-fit:contain; border-radius:6px;"/></div>
+        <div class="logo"><img src="/icons/icon48.png" style="width:24px; height:24px; object-fit:contain; border-radius:6px;"/></div>
         <div class="header-text">
           <h1>Job Tracker</h1>
           <p>AI-powered · Cloud sync</p>
