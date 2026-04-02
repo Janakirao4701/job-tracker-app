@@ -49,6 +49,7 @@ function toggleTheme() {
 let filterStatus = 'all';
 let filterSearch = '';
 let filterDate   = '';
+let isBulkMode   = false;
 
 // ── UTILS ──
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -778,13 +779,12 @@ function renderApplications() {
   if (filterSearch) { const q = filterSearch.toLowerCase(); filtered = filtered.filter(a => (a.company+a.jobTitle+a.url).toLowerCase().includes(q)); }
 
   document.getElementById('page-content').innerHTML = `
-    <!-- Bulk Action Bar (hidden until selection) -->
-    <div id="bulk-bar" style="display:none;align-items:center;gap:12px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;padding:12px 18px;border-radius:12px;margin-bottom:14px;flex-wrap:wrap;box-shadow:0 4px 16px rgba(79,70,229,0.3);">
+    <!-- Bulk Action Bar -->
+    <div id="bulk-bar" style="display:${isBulkMode ? 'flex' : 'none'};align-items:center;gap:12px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;padding:12px 18px;border-radius:12px;margin-bottom:14px;flex-wrap:wrap;box-shadow:0 4px 16px rgba(79,70,229,0.3);">
       <span id="bulk-count" style="font-size:13px;font-weight:700;">0 selected</span>
       <span style="font-size:13px;">→ Reassign to session:</span>
       <input type="date" id="bulk-session-date" style="padding:6px 12px;border-radius:8px;border:none;font-size:13px;font-family:inherit;background:#fff;color:var(--text,#1e293b);"/>
       <button id="bulk-reassign-btn" style="padding:7px 18px;background:rgba(255,255,255,0.2);backdrop-filter:blur(8px);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Reassign</button>
-      <button id="bulk-clear-btn" style="padding:7px 14px;background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);border:none;border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit;">✕ Clear</button>
     </div>
 
     <div class="section-card">
@@ -797,20 +797,21 @@ function renderApplications() {
             ${STATUSES.map(s=>`<option value="${s}" ${filterStatus===s?'selected':''}>${s}</option>`).join('')}
           </select>
           <input class="filter-input" type="date" id="app-date-filter" value="${filterDate}" style="width:150px"/>
+          <button class="btn-new" id="toggle-bulk-mode-btn" style="padding:8px 12px;margin-left:8px;">${isBulkMode ? 'Cancel Select' : '≡ Select'}</button>
         </div>
       </div>
       <div style="overflow-x:auto">
       <table>
         <thead><tr>
-          <th style="width:36px;"><input type="checkbox" id="select-all-chk" title="Select all"/></th>
+          <th class="bulk-col" style="width:36px;display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" id="select-all-chk" title="Select all"/></th>
           <th>#</th><th>Company</th><th>Job Title</th><th>URL</th><th>Status</th><th>Session Date</th><th>Notes</th><th>Actions</th>
         </tr></thead>
         <tbody>
           ${filtered.length === 0
-            ? '<tr><td colspan="9" class="empty-row">No applications match your filters</td></tr>'
+            ? `<tr><td colspan="${isBulkMode ? 9 : 8}" class="empty-row">No applications match your filters</td></tr>`
             : filtered.map((a,i) => `
-              <tr data-id="${a.id}">
-                <td><input type="checkbox" class="app-chk" data-id="${a.id}"/></td>
+              <tr data-id="${a.id}" class="app-row" style="cursor:pointer;transition:background 0.2s;">
+                <td class="bulk-col" style="display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" class="app-chk" data-id="${a.id}"/></td>
                 <td style="color:var(--text-faint);font-size:12px;">${i+1}</td>
                 <td><div style="font-weight:600;font-size:13px;color:var(--text);">${esc(a.company||'—')}</div>
                     <div style="margin-top:3px;display:flex;gap:4px;">
@@ -828,7 +829,6 @@ function renderApplications() {
                 <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${esc(a.dateKey||a.date||'—')}</td>
                 <td style="font-size:12px;color:var(--text-muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(a.notes||'—')}</td>
                 <td style="white-space:nowrap;">
-                  <button class="auth-link view-btn" data-id="${a.id}" style="color:var(--accent);font-size:12px;margin-right:8px;">View</button>
                   <button class="auth-link del-btn" data-id="${a.id}" style="color:var(--danger);font-size:12px;">Delete</button>
                 </td>
               </tr>`).join('')}
@@ -869,12 +869,7 @@ function renderApplications() {
     });
   });
 
-  document.querySelectorAll('.view-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const app = apps.find(a => a.id === btn.dataset.id);
-      if (app) openDetailModal(app);
-    });
-  });
+
 
   // ── BULK SELECTION ──
   function getSelectedIds() {
@@ -882,15 +877,18 @@ function renderApplications() {
   }
   function updateBulkBar() {
     const ids = getSelectedIds();
-    const bar = document.getElementById('bulk-bar');
     const countEl = document.getElementById('bulk-count');
-    if (!bar) return;
-    if (ids.length > 0) {
-      bar.style.display = 'flex';
-      countEl.textContent = ids.length + ' selected';
-    } else {
-      bar.style.display = 'none';
-    }
+    if (countEl) countEl.textContent = ids.length + ' selected';
+  }
+  
+  const toggleBulkBtn = document.getElementById('toggle-bulk-mode-btn');
+  if (toggleBulkBtn) {
+    toggleBulkBtn.addEventListener('click', () => {
+      isBulkMode = !isBulkMode;
+      // also uncheck everything when turning off
+      if (!isBulkMode) document.querySelectorAll('.app-chk').forEach(c => c.checked = false);
+      renderApplications();
+    });
   }
 
   // Select all checkbox
@@ -939,8 +937,23 @@ function renderApplications() {
     }));
     btn.textContent = '✓ Reassign'; btn.disabled = false;
     showToast(successCount + ' apps moved to ' + newDate + ' ✓');
+    document.querySelectorAll('.app-chk').forEach(c => c.checked = false);
+    isBulkMode = false;
     renderApplications();
     updateBadge();
+  });
+  
+  // Row Click for Details (excluding interactive elements)
+  document.querySelectorAll('.app-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      // Don't open details if they clicked a checkbox, select dropdown, action button, or link
+      if (e.target.closest('.app-chk') || e.target.closest('#select-all-chk') || e.target.closest('select') || e.target.closest('button') || e.target.closest('a')) {
+        return;
+      }
+      const id = row.getAttribute('data-id');
+      const app = apps.find(a => a.id === id);
+      if (app) openDetailModal(app);
+    });
   });
 }
 
