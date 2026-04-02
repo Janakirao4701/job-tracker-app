@@ -1410,10 +1410,60 @@ function renderExport() {
 
 // ── PRIVACY PAGE ──
 function renderPrivacy() {
-  // Quality fix #4: load local privacy.html — was using fragile external Vercel iframe URL
   document.getElementById('page-content').innerHTML = `
-    <div style="max-width:700px;">
-      <iframe src="privacy.html" style="width:100%;height:800px;border:none;border-radius:12px;"></iframe>
+    <div style="max-width:800px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px;">
+      
+      <div class="settings-content-card">
+        <div class="settings-section-title">Privacy Policy</div>
+        <div class="settings-section-sub">Last updated: March 2026 · Effective immediately</div>
+        
+        <div class="settings-info-box" style="margin-top:20px;">
+          <strong>Privacy-first design:</strong> We do not sell your data. We do not show ads. Your job applications are entirely private to you.
+        </div>
+      </div>
+
+      <div class="settings-content-card">
+        <div class="settings-section-title">Data We Collect</div>
+        <div class="settings-section-sub">What information is stored when you use the app.</div>
+        
+        <div class="privacy-block">
+          <strong>Account Information:</strong> When you create an account, we store your email address and an encrypted password (handled securely by Supabase Auth — we never see your password).
+        </div>
+        <div class="privacy-block">
+          <strong>Job Application Data:</strong> When you save an application, we store the company name, job title, posting URL, job description text, resume text, status, notes, and dates. This allows you to track your progress across devices.
+        </div>
+        <div class="privacy-block">
+          <strong>What We Do NOT Collect:</strong> We do not collect browsing history, personal financial information, location data, or any analytics/usage tracking. Your Gemini API key is stored <strong>only in your browser's local storage</strong>.
+        </div>
+      </div>
+
+      <div class="settings-content-card">
+        <div class="settings-section-title">Third-Party Services</div>
+        <div class="settings-section-sub">External services required to run the extension.</div>
+        
+        <div class="privacy-block">
+          <strong>Supabase:</strong> Your account and data are securely stored in Supabase, a PostgreSQL cloud database. Data is encrypted in transit and at rest. Row Level Security ensures only you can access your own data.
+        </div>
+        <div class="privacy-block">
+          <strong>Google Gemini API:</strong> The Extract & Save feature sends the job description text to Google's Gemini API to extract the company and job title. This uses your personal API key directly from your browser.
+        </div>
+      </div>
+
+      <div class="settings-content-card">
+        <div class="settings-section-title">Your Rights</div>
+        <div class="settings-section-sub">Managing and deleting your information.</div>
+        
+        <div class="privacy-block">
+          <strong>Access your data:</strong> You can export all your data at any time using the Export page to generate Excel or CSV files.
+        </div>
+        <div class="privacy-block">
+          <strong>Delete your data:</strong> You can permanently delete all your applications directly from the Settings page.
+        </div>
+      </div>
+      
+      <div style="text-align: center; margin-top: 20px; color: var(--text-muted); font-size: 12px;">
+        Job Application Tracker v5.0 · This extension is free and open. Your data belongs to you.
+      </div>
     </div>`;
 }
 
