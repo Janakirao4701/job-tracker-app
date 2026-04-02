@@ -21,6 +21,7 @@
   "action": {
     "default_popup": "pages/popup.html",
     "default_icon": {
+      "16": "icons/icon48.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
@@ -80,7 +81,6 @@
       "resources": [
         "lib/xlsxbuilder.js",
         "pages/privacy.html",
-        "icons/icon16.png",
         "icons/icon48.png",
         "icons/icon128.png"
       ],
@@ -88,6 +88,7 @@
     }
   ],
   "icons": {
+    "16": "icons/icon48.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
