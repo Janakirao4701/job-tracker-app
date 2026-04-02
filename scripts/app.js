@@ -632,8 +632,8 @@ function renderDashboard() {
         <div class="section-card-header"><div class="section-card-title">📅 Application Calendar</div></div>
         <div style="padding:12px 16px 16px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-            <span style="font-size:13px;font-weight:600;color:#1a202c;">${monthName}</span>
-            <span style="font-size:12px;color:#718096;">${apps.filter(a=>a.dateRaw&&new Date(a.dateRaw).getMonth()===calMonth&&new Date(a.dateRaw).getFullYear()===calYear).length} applied this month</span>
+            <span style="font-size:13px;font-weight:600;color:var(--text);">${monthName}</span>
+            <span style="font-size:12px;color:var(--text-muted);">${apps.filter(a=>a.dateRaw&&new Date(a.dateRaw).getMonth()===calMonth&&new Date(a.dateRaw).getFullYear()===calYear).length} applied this month</span>
           </div>
           <div style="display:grid;grid-template-columns:repeat(7,32px);gap:2px;justify-content:space-between;">
             ${['S','M','T','W','T','F','S'].map(d=>`<div style="width:32px;height:20px;font-size:10px;color:#a0aec0;font-weight:600;text-align:center;line-height:20px;">${d}</div>`).join('')}
@@ -643,7 +643,7 @@ function renderDashboard() {
               const key = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
               const count = calendarData[key]||0;
               const isToday = key === todayISO();
-              let bg = 'transparent', color = '#4a5568', fontWeight = '400', border = 'none';
+              let bg = 'transparent', color = 'var(--text2)', fontWeight = '400', border = 'none';
               if (count > 0) { bg = 'linear-gradient(135deg,#4f46e5,#7c3aed)'; color = '#fff'; fontWeight = '600'; }
               else if (isToday) { bg = '#eef2ff'; color = '#4f46e5'; fontWeight = '600'; border = '1.5px solid #4f46e5'; }
               return `<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${bg};color:${color};font-size:11px;font-weight:${fontWeight};border:${border};" title="${count>0?count+' application'+(count>1?'s':''):''}">${d}</div>`;
@@ -660,17 +660,17 @@ function renderDashboard() {
         <div class="section-card-header"><div class="section-card-title">📊 Weekly Progress</div></div>
         <div style="padding:12px 16px 16px;">
           <div style="display:flex;gap:12px;margin-bottom:14px;">
-            <div style="flex:1;background:#f8fafc;border-radius:8px;padding:10px 12px;">
-              <div style="font-size:11px;color:#718096;margin-bottom:2px;">This week</div>
-              <div style="font-size:22px;font-weight:700;color:#1F4E79;">${weeklyData[weeklyData.length-1].count}</div>
+            <div style="flex:1;background:var(--bg);border-radius:8px;padding:10px 12px;">
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">This week</div>
+              <div style="font-size:22px;font-weight:700;color:var(--accent);">${weeklyData[weeklyData.length-1].count}</div>
             </div>
-            <div style="flex:1;background:#f8fafc;border-radius:8px;padding:10px 12px;">
-              <div style="font-size:11px;color:#718096;margin-bottom:2px;">Last week</div>
-              <div style="font-size:22px;font-weight:700;color:#4a5568;">${weeklyData[weeklyData.length-2].count}</div>
+            <div style="flex:1;background:var(--bg);border-radius:8px;padding:10px 12px;">
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">Last week</div>
+              <div style="font-size:22px;font-weight:700;color:var(--text2);">${weeklyData[weeklyData.length-2].count}</div>
             </div>
-            <div style="flex:1;background:#f8fafc;border-radius:8px;padding:10px 12px;">
-              <div style="font-size:11px;color:#718096;margin-bottom:2px;">6-week total</div>
-              <div style="font-size:22px;font-weight:700;color:#4a5568;">${weeklyData.reduce((s,w)=>s+w.count,0)}</div>
+            <div style="flex:1;background:var(--bg);border-radius:8px;padding:10px 12px;">
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">6-week total</div>
+              <div style="font-size:22px;font-weight:700;color:var(--text2);">${weeklyData.reduce((s,w)=>s+w.count,0)}</div>
             </div>
           </div>
           <div style="position:relative;height:120px;" id="weekly-chart-wrap">
@@ -688,10 +688,10 @@ function renderDashboard() {
           <tbody>
             ${apps.slice(0,6).map(a => `
               <tr>
-                <td><div style="font-size:13px;font-weight:600;color:#1a202c;">${esc(a.company||'—')}</div>
-                    <div style="font-size:11px;color:#718096;">${esc(a.jobTitle||'—')}</div></td>
+                <td><div style="font-size:13px;font-weight:600;color:var(--text);">${esc(a.company||'—')}</div>
+                    <div style="font-size:11px;color:var(--text-muted);">${esc(a.jobTitle||'—')}</div></td>
                 <td><span class="status-badge ${STATUS_COLORS[a.status]||'s-applied'}">${esc(a.status)}</span></td>
-                <td style="font-size:11px;color:#a0aec0;text-align:right;">${esc(a.date||'—')}</td>
+                <td style="font-size:11px;color:var(--text-faint);text-align:right;">${esc(a.date||'—')}</td>
               </tr>`).join('') || '<tr><td colspan="3" class="empty-row">No applications yet</td></tr>'}
           </tbody>
         </table>
@@ -811,25 +811,25 @@ function renderApplications() {
             : filtered.map((a,i) => `
               <tr data-id="${a.id}">
                 <td><input type="checkbox" class="app-chk" data-id="${a.id}"/></td>
-                <td style="color:#a0aec0;font-size:12px;">${i+1}</td>
-                <td><div style="font-weight:600;font-size:13px;">${esc(a.company||'—')}</div>
+                <td style="color:var(--text-faint);font-size:12px;">${i+1}</td>
+                <td><div style="font-weight:600;font-size:13px;color:var(--text);">${esc(a.company||'—')}</div>
                     <div style="margin-top:3px;display:flex;gap:4px;">
-                      ${a.jd     ? `<span style="font-size:10px;background:#EBF4FF;color:#1F4E79;border-radius:4px;padding:1px 5px;font-weight:600;">JD</span>` : ''}
-                      ${a.resume ? `<span style="font-size:10px;background:#F0FFF4;color:#276749;border-radius:4px;padding:1px 5px;font-weight:600;">Resume</span>` : ''}
+                      ${a.jd     ? `<span style="font-size:10px;background:var(--accent-light);color:var(--accent);border-radius:4px;padding:1px 5px;font-weight:600;">JD</span>` : ''}
+                      ${a.resume ? `<span style="font-size:10px;background:#ecfdf5;color:#059669;border-radius:4px;padding:1px 5px;font-weight:600;">Resume</span>` : ''}
                     </div>
                 </td>
-                <td style="font-size:13px;color:#4a5568;">${esc(a.jobTitle||'—')}</td>
+                <td style="font-size:13px;color:var(--text2);">${esc(a.jobTitle||'—')}</td>
                 <td>${a.url?`<a href="${esc(a.url)}" target="_blank" class="url-link">Open ↗</a>`:'—'}</td>
                 <td>
                   <select class="status-select" data-id="${a.id}" style="background:${(STATUS_BG[a.status]||STATUS_BG.Applied).bg};color:${(STATUS_BG[a.status]||STATUS_BG.Applied).color};">
                     ${STATUSES.map(s=>`<option value="${s}" ${a.status===s?'selected':''}>${s}</option>`).join('')}
                   </select>
                 </td>
-                <td style="font-size:12px;color:#718096;white-space:nowrap;">${esc(a.dateKey||a.date||'—')}</td>
-                <td style="font-size:12px;color:#718096;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(a.notes||'—')}</td>
+                <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${esc(a.dateKey||a.date||'—')}</td>
+                <td style="font-size:12px;color:var(--text-muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(a.notes||'—')}</td>
                 <td style="white-space:nowrap;">
-                  <button class="auth-link view-btn" data-id="${a.id}" style="color:#2E75B6;font-size:12px;margin-right:8px;">View</button>
-                  <button class="auth-link del-btn" data-id="${a.id}" style="color:#c53030;font-size:12px;">Delete</button>
+                  <button class="auth-link view-btn" data-id="${a.id}" style="color:var(--accent);font-size:12px;margin-right:8px;">View</button>
+                  <button class="auth-link del-btn" data-id="${a.id}" style="color:var(--danger);font-size:12px;">Delete</button>
                 </td>
               </tr>`).join('')}
         </tbody>
