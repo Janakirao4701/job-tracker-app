@@ -31,6 +31,21 @@ let currentUser = null;
 let apps        = [];
 let currentPage = 'dashboard';
 let authMode    = 'signin';
+
+// ── THEME LOGIC ──
+let isDarkMode = localStorage.getItem('rjd_theme') === 'dark';
+if (isDarkMode) document.documentElement.setAttribute('data-theme', 'dark');
+
+function toggleTheme() {
+  isDarkMode = !isDarkMode;
+  if (isDarkMode) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    localStorage.setItem('rjd_theme', 'dark');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem('rjd_theme', 'light');
+  }
+}
 let filterStatus = 'all';
 let filterSearch = '';
 let filterDate   = '';
@@ -406,6 +421,17 @@ document.getElementById('auth-password').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('auth-submit').click();
 });
 
+const showPwdBtn = document.getElementById('auth-show-password');
+if (showPwdBtn) {
+  let isPwdShown = false;
+  showPwdBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    isPwdShown = !isPwdShown;
+    document.getElementById('auth-password').type = isPwdShown ? 'text' : 'password';
+    showPwdBtn.textContent = isPwdShown ? '🙈' : '👁️';
+  });
+}
+
 function showAuthMsg(msg, isError) {
   document.getElementById('auth-msg').innerHTML =
     `<div class="auth-msg ${isError?'error':'success'}">${esc(msg)}</div>`;
@@ -440,6 +466,16 @@ async function showApp() {
   // Click topbar user → go to settings
   const tb = document.getElementById('topbar-user-btn');
   if (tb) tb.addEventListener('click', () => navigateTo('settings'));
+  
+  // Theme button
+  const themeBtn = document.getElementById('theme-btn');
+  if (themeBtn) {
+    themeBtn.textContent = isDarkMode ? '☀️ Light' : '🌙 Dark';
+    themeBtn.addEventListener('click', () => {
+      toggleTheme();
+      themeBtn.textContent = isDarkMode ? '☀️ Light' : '🌙 Dark';
+    });
+  }
   // Refresh button
   const refreshBtn = document.getElementById('refresh-btn');
   if (refreshBtn) {
@@ -1082,8 +1118,14 @@ function renderSettingsSection(sec) {
           <div style="font-size:12px;color:#718096;">${esc(currentUser.email)}</div>
         </div>
       </div>
-      <div style="background:#fff8f0;border:1px solid #fbd38d;border-radius:8px;padding:12px 16px;font-size:13px;color:#975a16;margin-bottom:20px;">
-        To change your password, sign out and use the Forgot Password option on the sign-in screen.
+      <div style="border-top:1px solid #f1f5f9;padding-top:20px;margin-top:20px;">
+        <div style="font-size:13px;font-weight:700;color:#1F4E79;margin-bottom:4px;">🔑 Change Password</div>
+        <div style="font-size:12px;color:#718096;margin-bottom:12px;">Update your Supabase authentication password.</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <input type="password" id="new-pwd-input" class="settings-input" placeholder="New password (min 6 chars)" style="max-width:280px;"/>
+          <button class="settings-btn" id="update-pwd-btn" style="padding:10px 24px;">Update</button>
+        </div>
+        <div id="pwd-msg" style="margin-top:10px;"></div>
       </div>
       <div style="border-top:1px solid #f1f5f9;padding-top:20px;margin-top:4px;">
         <div style="font-size:13px;font-weight:700;color:#1a202c;margin-bottom:4px;">🌙 Night Shift Cutoff</div>
@@ -1107,6 +1149,31 @@ function renderSettingsSection(sec) {
       const msg = document.getElementById('cutoff-msg');
       msg.textContent = h === 0 ? 'Disabled ✓' : 'Saved — cutoff set to ' + h + ':00 AM ✓';
       setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
+    });
+
+    const updBtn = document.getElementById('update-pwd-btn');
+    updBtn.addEventListener('click', async () => {
+      const np = document.getElementById('new-pwd-input').value;
+      const msgEl = document.getElementById('pwd-msg');
+      if (np.length < 6) { msgEl.innerHTML = '<div class="auth-msg error">Password must be at least 6 characters</div>'; return; }
+      updBtn.disabled = true; updBtn.textContent = "Updating...";
+      try {
+        const r = await fetch(SUPABASE_URL+'/auth/v1/user', {
+          method:'PUT', headers:headers(), body: JSON.stringify({password: np})
+        });
+        if (r.ok) {
+          msgEl.innerHTML = '<div class="auth-msg success">Password updated! Please sign in again.</div>';
+          setTimeout(async () => {
+             document.getElementById('signout-btn')?.click();
+          }, 2000);
+        } else {
+          msgEl.innerHTML = '<div class="auth-msg error">Update failed. Your session might be too old, please sign out and sign in again.</div>';
+          updBtn.disabled = false; updBtn.textContent = "Update";
+        }
+      } catch(e) {
+        msgEl.innerHTML = '<div class="auth-msg error">Network error.</div>';
+        updBtn.disabled = false; updBtn.textContent = "Update";
+      }
     });
 
     document.getElementById('delete-all-btn').addEventListener('click', async () => {
