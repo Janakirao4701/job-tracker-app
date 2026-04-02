@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Job Application Tracker",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "Premium AI-powered job application tracker with cloud sync, Gemini extraction, and beautiful UI",
   "permissions": [
     "storage",
