@@ -24,6 +24,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --text2: #475569;
   --text-muted: #94a3b8;
   --text-faint: #cbd5e1;
+  --bg-inset: #f1f5f9;
   --success: #059669;
   --warning: #d97706;
   --danger: #dc2626;
@@ -43,6 +44,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --text-faint: #475569;
   --accent-light: rgba(79, 70, 229, 0.15);
   --accent-border: rgba(79, 70, 229, 0.3);
+  --bg-inset: #0b1120;
 }
 
 /* ── AUTH SCREENS ── */
@@ -158,7 +160,7 @@ tr:hover td{background:var(--bg)}
 .settings-section-sub{font-size:13px;color:var(--text-muted);margin-bottom:24px}
 .settings-field{margin-bottom:18px}
 .settings-field label{display:block;font-size:12px;font-weight:700;color:var(--text2);margin-bottom:5px}
-.settings-input{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;color:var(--text);outline:none;transition:border-color 0.2s}
+.settings-input{background:var(--bg-card);width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;color:var(--text);outline:none;transition:border-color 0.2s}
 .settings-input:focus{border-color:var(--accent)}
 .settings-btn{padding:10px 22px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(79,70,229,0.2);transition:all 0.2s}
 .settings-btn:hover{transform:translateY(-1px)}
@@ -169,12 +171,12 @@ tr:hover td{background:var(--bg)}
 .settings-row:last-child{border-bottom:none}
 .settings-row-label{font-size:13px;color:var(--text);font-weight:500}
 .settings-row-val{font-size:13px;color:var(--text2)}
-.kbd{display:inline-block;background:#f1f5f9;border:1px solid #cbd5e1;border-bottom:2px solid #cbd5e1;border-radius:6px;padding:3px 10px;font-size:11px;font-family:'SF Mono',monospace;color:var(--accent);font-weight:700}
-.privacy-block{background:#f8fafc;border-radius:10px;padding:16px 18px;font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:10px;border:1px solid var(--border)}
+.kbd{display:inline-block;background:var(--bg-inset);border:1px solid var(--border);border-bottom:2px solid var(--border);border-radius:6px;padding:3px 10px;font-size:11px;font-family:'SF Mono',monospace;color:var(--accent);font-weight:700}
+.privacy-block{background:var(--bg-inset);border-radius:10px;padding:16px 18px;font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:10px;border:1px solid var(--border)}
 .privacy-block strong{color:var(--accent)}
 
 /* ── Export date btns ── */
-.export-date-btn{padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;background:#fff;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.2s}
+.export-date-btn{padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.2s}
 .export-date-btn:hover{border-color:var(--accent-border);color:var(--accent)}
 .export-date-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 
@@ -190,9 +192,9 @@ tr:hover td{background:var(--bg)}
 
 /* ── Detail Modal ── */
 .detail-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
-.detail-tabs{display:flex;gap:4px;margin-bottom:16px;background:#f1f5f9;border-radius:10px;padding:4px}
+.detail-tabs{display:flex;gap:4px;margin-bottom:16px;background:var(--bg-inset);border-radius:10px;padding:4px}
 .detail-tab{flex:1;padding:8px;font-size:12px;font-weight:600;border:none;background:transparent;border-radius:7px;cursor:pointer;color:var(--text-muted);transition:all 0.2s;font-family:inherit;text-align:center}
-.detail-tab.active{background:#fff;color:var(--accent);box-shadow:var(--shadow)}
+.detail-tab.active{background:var(--bg-card);color:var(--accent);box-shadow:var(--shadow)}
 
 /* UTIL */
 .hidden{display:none!important}
@@ -350,9 +352,9 @@ tr:hover td{background:var(--bg)}
       <button class="modal-close" id="modal-close">✕</button>
     </div>
     <div class="modal-body">
-      <div class="field-group"><label>Company Name</label><input type="text" id="m-company" placeholder="e.g. Google"/></div>
-      <div class="field-group"><label>Job Title</label><input type="text" id="m-title" placeholder="e.g. Senior Data Analyst"/></div>
-      <div class="field-group"><label>Job URL</label><input type="url" id="m-url" placeholder="https://..."/></div>
+      <div class="field-group"><label>Company Name</label><input type="text" class="settings-input" id="m-company" placeholder="e.g. Google"/></div>
+      <div class="field-group"><label>Job Title</label><input type="text" class="settings-input" id="m-title" placeholder="e.g. Senior Data Analyst"/></div>
+      <div class="field-group"><label>Job URL</label><input type="url" class="settings-input" id="m-url" placeholder="https://..."/></div>
       <div class="field-group"><label>Status</label>
         <select class="settings-input" id="m-status">
           <option>Applied</option><option>Interview Scheduled</option><option>Interview Done</option>
@@ -393,10 +395,10 @@ tr:hover td{background:var(--bg)}
         <button class="detail-tab" data-tab="notes">Notes</button>
       </div>
       <div id="detail-tab-jd" class="detail-tab-panel">
-        <div id="detail-jd-text" style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:16px;font-size:12px;font-family:'SF Mono',monospace;line-height:1.7;color:var(--text2);max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-word"></div>
+        <div id="detail-jd-text" style="background:var(--bg-inset);border:1px solid var(--border);border-radius:10px;padding:16px;font-size:12px;font-family:'SF Mono',monospace;line-height:1.7;color:var(--text2);max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-word"></div>
       </div>
       <div id="detail-tab-resume" class="detail-tab-panel hidden">
-        <div id="detail-resume-text" style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:16px;font-size:12px;font-family:'SF Mono',monospace;line-height:1.7;color:var(--text2);max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-word"></div>
+        <div id="detail-resume-text" style="background:var(--bg-inset);border:1px solid var(--border);border-radius:10px;padding:16px;font-size:12px;font-family:'SF Mono',monospace;line-height:1.7;color:var(--text2);max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-word"></div>
       </div>
       <div id="detail-tab-notes" class="detail-tab-panel hidden">
         <div class="field-group" style="margin-bottom:12px">

@@ -965,12 +965,12 @@ function openDetailModal(app) {
   // JD tab
   const jdEl = document.getElementById('detail-jd-text');
   jdEl.textContent = app.jd || 'No job description saved for this application.';
-  jdEl.style.color = app.jd ? '#2d3748' : '#a0aec0';
+  jdEl.style.color = app.jd ? 'var(--text)' : 'var(--text-muted)';
 
   // Resume tab
   const resumeEl = document.getElementById('detail-resume-text');
   resumeEl.textContent = app.resume || 'No resume saved for this application.';
-  resumeEl.style.color = app.resume ? '#2d3748' : '#a0aec0';
+  resumeEl.style.color = app.resume ? 'var(--text)' : 'var(--text-muted)';
 
   // Notes tab
   document.getElementById('detail-notes-input').value    = app.notes || '';
