@@ -506,16 +506,6 @@ tr:hover td{background:var(--bg)}
 <script src="lib/config.js?v=3"></script>
 <script src="lib/xlsxbuilder.js?v=3"></script>
 <script src="scripts/app.js?v=3"></script>
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js?v=3')
-      .then(reg => {
-        console.log('Service Worker registered:', reg.scope);
-      })
-      .catch(err => console.log('Service Worker registration failed:', err));
-  });
-}
-</script>
+<script src="scripts/sw-register.js?v=3"></script>
 </body>
 </html>

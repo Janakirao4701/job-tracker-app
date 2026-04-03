@@ -190,6 +190,10 @@
       renderTable();
       return true; // treat as success so UI updates
     }
+    if (!currentUser || !currentUser.id) {
+      showToast('Please sign in to save applications', true);
+      return false;
+    }
     const body = {
       id:        app.id,
       username:  currentUser.id,
