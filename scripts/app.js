@@ -458,25 +458,59 @@ document.getElementById('forgot-submit').addEventListener('click', async () => {
 async function showApp() {
   showSection('app-section');
   // Topbar user info
-  const ta = document.getElementById('topbar-avatar');
-  const tn = document.getElementById('topbar-name');
-  const te = document.getElementById('topbar-email');
-  if (ta) ta.textContent = initials(currentUser.name);
-  if (tn) tn.textContent = currentUser.name;
-  if (te) te.textContent = currentUser.email;
+  function updateUserInfo(u) {
+    const ta = document.getElementById('topbar-avatar');
+    const tn = document.getElementById('topbar-name');
+    const te = document.getElementById('topbar-email');
+    const ma = document.getElementById('m-avatar');
+    const mn = document.getElementById('m-name');
+    const me = document.getElementById('m-email');
+    const init = initials(u.name);
+    if (ta) ta.textContent = init;
+    if (tn) tn.textContent = u.name;
+    if (te) te.textContent = u.email;
+    if (ma) ma.textContent = init;
+    if (mn) mn.textContent = u.name;
+    if (me) me.textContent = u.email;
+  }
+  updateUserInfo(currentUser);
+
   // Click topbar user → go to settings
   const tb = document.getElementById('topbar-user-btn');
   if (tb) tb.addEventListener('click', () => navigateTo('settings'));
   
-  // Theme button
-  const themeBtn = document.getElementById('theme-btn');
-  if (themeBtn) {
-    themeBtn.textContent = isDarkMode ? '☀️ Light' : '🌙 Dark';
-    themeBtn.addEventListener('click', () => {
-      toggleTheme();
-      themeBtn.textContent = isDarkMode ? '☀️ Light' : '🌙 Dark';
-    });
+  // ── MOBILE DRAWER LOGIC ──
+  const drawer = document.getElementById('mobile-drawer');
+  const overlay = document.getElementById('drawer-overlay');
+  const toggleBtn = document.getElementById('menu-toggle-btn');
+  const closeBtn = document.getElementById('drawer-close-btn');
+
+  function toggleDrawer(open) {
+    if (!drawer || !overlay) return;
+    drawer.classList.toggle('open', open);
+    overlay.classList.toggle('open', open);
+    document.body.style.overflow = open ? 'hidden' : '';
   }
+
+  if (toggleBtn) toggleBtn.addEventListener('click', () => toggleDrawer(true));
+  if (closeBtn) closeBtn.addEventListener('click', () => toggleDrawer(false));
+  if (overlay) overlay.addEventListener('click', () => toggleDrawer(false));
+  
+  // Theme buttons
+  const themeBtn = document.getElementById('theme-btn');
+  const mThemeBtn = document.getElementById('m-theme-btn');
+  const updateThemeBtns = () => {
+    const text = isDarkMode ? '☀️ Light' : '🌙 Dark';
+    if (themeBtn) themeBtn.textContent = text;
+    if (mThemeBtn) mThemeBtn.textContent = text;
+  };
+  updateThemeBtns();
+  [themeBtn, mThemeBtn].forEach(btn => {
+    if (btn) btn.addEventListener('click', () => {
+      toggleTheme();
+      updateThemeBtns();
+    });
+  });
   // Refresh button
   const refreshBtn = document.getElementById('refresh-btn');
   if (refreshBtn) {
@@ -524,6 +558,18 @@ async function showApp() {
       chrome.storage.local.set({ rjd_gemini_key: geminiKey });
     }
   } catch(e) {}
+  // Signout buttons
+  const signoutBtn = document.getElementById('signout-btn');
+  const mSignoutBtn = document.getElementById('m-signout-btn');
+  [signoutBtn, mSignoutBtn].forEach(btn => {
+    if (btn) btn.addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to exit?')) return;
+      await signOut();
+      clearStoredSession();
+      window.location.reload();
+    });
+  });
+
   navigateTo('dashboard');
 }
 
@@ -539,7 +585,15 @@ function showLoading() {
 
 // ── NAVIGATION ──
 document.querySelectorAll('.nav-item').forEach(item => {
-  item.addEventListener('click', () => navigateTo(item.dataset.page));
+  item.addEventListener('click', () => {
+    navigateTo(item.dataset.page);
+    // Close mobile drawer on nav
+    const drawer = document.getElementById('mobile-drawer');
+    const overlay = document.getElementById('drawer-overlay');
+    if (drawer) drawer.classList.remove('open');
+    if (overlay) overlay.classList.remove('open');
+    document.body.style.overflow = '';
+  });
 });
 
 function navigateTo(page) {

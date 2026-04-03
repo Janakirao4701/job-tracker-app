@@ -110,6 +110,15 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 .topbar-title{font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.3px}
 .topbar-right{display:flex;align-items:center;gap:12px}
 .topbar-badge{font-size:11px;background:var(--accent-light);color:var(--accent);padding:4px 12px;border-radius:20px;font-weight:600}
+.menu-toggle{display:none;background:none;border:none;font-size:24px;color:var(--text);cursor:pointer;padding:8px;margin-left:-8px;align-items:center;justify-content:center}
+
+/* ── MOBILE DRAWER ── */
+.mobile-drawer{position:fixed;top:0;left:-280px;bottom:0;width:280px;background:var(--bg-sidebar);z-index:1000;transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);display:flex;flex-direction:column;box-shadow:20px 0 50px rgba(0,0,0,0.3)}
+.mobile-drawer.open{transform:translateX(280px)}
+.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);z-index:999;opacity:0;pointer-events:none;transition:opacity 0.3s}
+.drawer-overlay.open{opacity:1;pointer-events:auto}
+.drawer-header{padding:20px;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between}
+.drawer-close{background:none;border:none;color:#64748b;font-size:20px;cursor:pointer}
 .content{flex:1;padding:28px 32px}
 
 /* ── STATS GRID ── */
@@ -211,10 +220,23 @@ tr:hover td{background:var(--bg)}
 @media(max-width:768px){
   .sidebar{display:none}
   .main{margin-left:0}
-  .stats-grid{grid-template-columns:repeat(2,1fr)}
+  .menu-toggle{display:flex}
+  .stats-grid{grid-template-columns:repeat(2,1fr);gap:12px}
+  .stat-card{padding:16px}
+  .stat-card-value{font-size:24px}
   .settings-layout{grid-template-columns:1fr}
   .topbar{padding:0 16px}
   .content{padding:16px}
+  .topbar-title{font-size:16px}
+  .topbar-badge{display:none}
+  .section-card-header{flex-direction:column;align-items:flex-start;gap:12px}
+  .filters-row{width:100%}
+  .filter-input, .filter-select{flex:1}
+  .btn-new{white-space:nowrap}
+}
+@media(max-width:480px){
+  .stats-grid{grid-template-columns:1fr}
+  .modal{width:95%}
 }
 </style>
 </head>
@@ -332,10 +354,58 @@ tr:hover td{background:var(--bg)}
     </div>
   </div>
 
+  <!-- MOBILE DRAWER -->
+  <div class="drawer-overlay" id="drawer-overlay"></div>
+  <div class="mobile-drawer" id="mobile-drawer">
+    <div class="drawer-header">
+      <div class="sidebar-logo" style="border:none;padding:0">
+        <img src="../icons/icon48.png" style="width:28px; height:28px; border-radius:6px;" alt="Logo"/>
+        <span class="sidebar-logo-text" style="font-size:14px">Job Tracker</span>
+      </div>
+      <button class="drawer-close" id="drawer-close-btn">✕</button>
+    </div>
+    <div class="sidebar-user" style="border-bottom:1px solid #1e293b">
+      <div class="sidebar-avatar" id="m-avatar">?</div>
+      <div>
+        <div class="sidebar-user-name" id="m-name">—</div>
+        <div class="sidebar-user-email" id="m-email">—</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Main</div>
+      <div class="nav-item active" data-page="dashboard">
+        <span class="nav-item-icon">📊</span> Dashboard
+      </div>
+      <div class="nav-item" data-page="applications">
+        <span class="nav-item-icon">📋</span> Applications
+      </div>
+      <div class="nav-section">Manage</div>
+      <div class="nav-item" data-page="settings">
+        <span class="nav-item-icon">⚙️</span> Settings
+      </div>
+      <div class="nav-item" data-page="export">
+        <span class="nav-item-icon">📤</span> Export
+      </div>
+      <div class="nav-section">Info</div>
+      <div class="nav-item" data-page="privacy">
+        <span class="nav-item-icon">🛡️</span> Privacy
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div style="display:flex;gap:10px;">
+        <button class="signout-btn" id="m-theme-btn" style="flex:1;">🌙 Theme</button>
+        <button class="signout-btn" id="m-signout-btn" style="flex:1;border-color:#dc2626;color:#f87171;">Exit</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MAIN -->
   <div class="main">
     <div class="topbar">
-      <div class="topbar-title" id="page-title">Dashboard</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="menu-toggle" id="menu-toggle-btn">☰</button>
+        <div class="topbar-title" id="page-title">Dashboard</div>
+      </div>
       <div class="topbar-right">
         <span class="topbar-badge" id="total-badge">0 applications</span>
         <button class="btn-new" id="add-app-btn">+ Add Application</button>
