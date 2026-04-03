@@ -1268,7 +1268,7 @@ ${context}`;
           <div id="rjd-session-bar">
             <div class="rjd-session-row">
               <span class="rjd-session-label">📅 Session:</span>
-              <input type="date" id="rjd-working-date-input" class="rjd-session-input"/>
+              <input type="date" id="rjd-working-date-input" class="rjd-session-input" max="${todayISO()}"/>
               <button id="rjd-working-date-today" class="rjd-session-btn">Today</button>
             </div>
             <div class="rjd-session-row">
@@ -1289,7 +1289,7 @@ ${context}`;
               <option value="all">All Statuses</option>
               ${STATUSES.map(s=>`<option value="${s}">${s}</option>`).join('')}
             </select>
-            <input type="date" id="rjd-date-filter" title="Filter by date" value="${filterDate || ''}" />
+            <input type="date" id="rjd-date-filter" title="Filter by date" value="${filterDate || ''}" max="${todayISO()}" />
             <button id="rjd-export-csv-btn" title="Export Excel">Export XLSX</button>
           </div>
 

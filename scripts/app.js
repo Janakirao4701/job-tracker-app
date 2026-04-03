@@ -479,6 +479,11 @@ async function showApp() {
   const tb = document.getElementById('topbar-user-btn');
   if (tb) tb.addEventListener('click', () => navigateTo('settings'));
   
+  // Set max date for static date inputs (past/today only)
+  const todayVal = todayISO();
+  const sDateInp = document.getElementById('detail-session-date-input');
+  if (sDateInp) sDateInp.setAttribute('max', todayVal);
+  
   // ── MOBILE DRAWER LOGIC ──
   const drawer = document.getElementById('mobile-drawer');
   const overlay = document.getElementById('drawer-overlay');
@@ -835,7 +840,7 @@ function renderApplications() {
     <div id="bulk-bar" style="display:${isBulkMode ? 'flex' : 'none'};align-items:center;gap:12px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;padding:12px 18px;border-radius:12px;margin-bottom:14px;flex-wrap:wrap;box-shadow:0 4px 16px rgba(79,70,229,0.3);">
       <span id="bulk-count" style="font-size:13px;font-weight:700;">0 selected</span>
       <span style="font-size:13px;">→ Reassign to session:</span>
-      <input type="date" id="bulk-session-date" style="padding:6px 12px;border-radius:8px;border:none;font-size:13px;font-family:inherit;background:#fff;color:var(--text,#1e293b);"/>
+      <input type="date" id="bulk-session-date" max="${todayISO()}" style="padding:6px 12px;border-radius:8px;border:none;font-size:13px;font-family:inherit;background:#fff;color:var(--text,#1e293b);"/>
       <button id="bulk-reassign-btn" style="padding:7px 18px;background:rgba(255,255,255,0.2);backdrop-filter:blur(8px);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Reassign</button>
     </div>
 
@@ -852,7 +857,7 @@ function renderApplications() {
             <button class="export-date-btn ${filterDate===workTodayISO()?'active':''}" id="filter-today-btn" style="padding:6px 12px;border:none;">Today</button>
             <button class="export-date-btn ${filterDate===''?'active':''}" id="filter-all-btn" style="padding:6px 12px;border:none;">All</button>
             <div style="position:relative;display:flex;align-items:center;">
-              <input class="filter-input ${filterDate!=='' && filterDate!==workTodayISO()?'active':''}" type="date" id="app-date-filter" value="${filterDate}" style="width:130px;padding:5px 10px;border-radius:6px;${filterDate!=='' && filterDate!==workTodayISO()?'background:var(--accent);color:#fff;border-color:var(--accent);':''}"/>
+              <input class="filter-input ${filterDate!=='' && filterDate!==workTodayISO()?'active':''}" type="date" id="app-date-filter" value="${filterDate}" max="${todayISO()}" style="width:130px;padding:5px 10px;border-radius:6px;${filterDate!=='' && filterDate!==workTodayISO()?'background:var(--accent);color:#fff;border-color:var(--accent);':''}"/>
             </div>
           </div>
           <button class="btn-new" id="toggle-bulk-mode-btn" style="padding:8px 12px;margin-left:auto;">${isBulkMode ? 'Cancel Select' : '≡ Select'}</button>
@@ -1330,7 +1335,7 @@ function renderExport() {
         ${uniqueDates.filter(d => d !== wToday).map(d => `
           <button class="export-date-btn" data-date="${d}">${d} (${dateCounts[d]})</button>
         `).join('')}
-        <input type="date" id="export-custom-date" class="filter-input" style="height:34px;" title="Pick a custom date"/>
+        <input type="date" id="export-custom-date" class="filter-input" max="${todayISO()}" style="height:34px;" title="Pick a custom date"/>
       </div>
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid #f1f5f9;font-size:13px;color:#718096;">
         Exporting: <strong id="export-count-label" style="color:#1F4E79;">${apps.length} applications</strong>
