@@ -155,10 +155,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     try {
-      const r = await fetch(SUPABASE_URL + '/rest/v1/applications?select=*&username=eq.' + session.user.id + '&order=created_at.desc', {
+      let r = await fetch(SUPABASE_URL + '/rest/v1/applications?select=*&username=eq.' + session.user.id + '&order=created_at.desc', {
         headers: { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+session.token }
       });
+      
+      if (r.status === 401 && session.refreshToken) {
+        // Attempt refresh
+        const refreshRes = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+          body: JSON.stringify({ refresh_token: session.refreshToken })
+        });
+        const refreshData = await refreshRes.json();
+        if (refreshData.access_token) {
+          session.token = refreshData.access_token;
+          if (refreshData.refresh_token) session.refreshToken = refreshData.refresh_token;
+          chrome.storage.local.set({ rjd_session: session });
+          chrome.runtime.sendMessage({ action: 'session_saved', payload: session });
+          // Retry original fetch
+          r = await fetch(SUPABASE_URL + '/rest/v1/applications?select=*&username=eq.' + session.user.id + '&order=created_at.desc', {
+            headers: { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+session.token }
+          });
+        }
+      }
+
       if (!r.ok) { 
+        if (r.status === 401) {
+          chrome.storage.local.remove('rjd_session');
+          renderNotLoggedIn();
+          return;
+        }
         if (!res.rjd_apps_cache) renderLoggedIn(session.user, []);
         return; 
       }
