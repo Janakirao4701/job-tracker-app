@@ -48,7 +48,7 @@ function toggleTheme() {
 }
 let filterStatus = 'all';
 let filterSearch = '';
-let filterDate   = '';
+let filterDate   = workTodayISO();
 let isBulkMode   = false;
 
 // ── UTILS ──
@@ -843,13 +843,19 @@ function renderApplications() {
       <div class="section-card-header">
         <div class="section-card-title">All Applications (${filtered.length})</div>
         <div class="filters-row">
-          <input class="filter-input" id="app-search" placeholder="Search..." value="${esc(filterSearch)}" style="width:160px"/>
-          <select class="filter-select" id="app-status-filter">
+          <input class="filter-input" id="app-search" placeholder="Search..." value="${esc(filterSearch)}" style="width:140px"/>
+          <select class="filter-select" id="app-status-filter" style="width:130px">
             <option value="all" ${filterStatus==='all'?'selected':''}>All Statuses</option>
             ${STATUSES.map(s=>`<option value="${s}" ${filterStatus===s?'selected':''}>${s}</option>`).join('')}
           </select>
-          <input class="filter-input" type="date" id="app-date-filter" value="${filterDate}" style="width:150px"/>
-          <button class="btn-new" id="toggle-bulk-mode-btn" style="padding:8px 12px;margin-left:8px;">${isBulkMode ? 'Cancel Select' : '≡ Select'}</button>
+          <div style="display:flex;gap:6px;align-items:center;background:var(--bg-inset);padding:4px;border-radius:10px;border:1px solid var(--border);">
+            <button class="export-date-btn ${filterDate===workTodayISO()?'active':''}" id="filter-today-btn" style="padding:6px 12px;border:none;">Today</button>
+            <button class="export-date-btn ${filterDate===''?'active':''}" id="filter-all-btn" style="padding:6px 12px;border:none;">All</button>
+            <div style="position:relative;display:flex;align-items:center;">
+              <input class="filter-input ${filterDate!=='' && filterDate!==workTodayISO()?'active':''}" type="date" id="app-date-filter" value="${filterDate}" style="width:130px;padding:5px 10px;border-radius:6px;${filterDate!=='' && filterDate!==workTodayISO()?'background:var(--accent);color:#fff;border-color:var(--accent);':''}"/>
+            </div>
+          </div>
+          <button class="btn-new" id="toggle-bulk-mode-btn" style="padding:8px 12px;margin-left:auto;">${isBulkMode ? 'Cancel Select' : '≡ Select'}</button>
         </div>
       </div>
       <div style="overflow-x:auto">
@@ -904,6 +910,8 @@ function renderApplications() {
   document.getElementById('app-search').addEventListener('input', e => { filterSearch = e.target.value; renderApplications(); });
   document.getElementById('app-status-filter').addEventListener('change', e => { filterStatus = e.target.value; renderApplications(); });
   document.getElementById('app-date-filter').addEventListener('change', e => { filterDate = e.target.value; renderApplications(); });
+  document.getElementById('filter-today-btn').addEventListener('click', () => { filterDate = workTodayISO(); renderApplications(); });
+  document.getElementById('filter-all-btn').addEventListener('click', () => { filterDate = ''; renderApplications(); });
 
   document.querySelectorAll('.status-select').forEach(sel => {
     sel.addEventListener('change', async () => {
@@ -1283,7 +1291,7 @@ function renderSettingsSection(sec) {
       <div class="settings-section-sub">Version and technology info.</div>
       ${[
         ['Version',    '4.2.0'],
-        ['AI Model',   'Google Gemini 2.5 Flash'],
+        ['AI Model',   'Google Gemini 1.5 Flash'],
         ['Database',   'Supabase (PostgreSQL)'],
         ['Auth',       'Supabase Auth'],
         ['Extension',  'Chrome Manifest V3'],

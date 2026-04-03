@@ -615,7 +615,7 @@ CONTEXT:
 ${context}`;
 
     const res = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + GEMINI_KEY,
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + GEMINI_KEY,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -897,7 +897,7 @@ ${context}`;
               <span style="color:#718096;">Version</span><span style="font-weight:600;color:#1a202c;">4.2.0</span>
             </div>
             <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12px;">
-              <span style="color:#718096;">AI Model</span><span style="font-weight:600;color:#1a202c;">Gemini 2.5 Flash</span>
+              <span style="color:#718096;">AI Model</span><span style="font-weight:600;color:#1a202c;">Gemini 1.5 Flash</span>
             </div>
             <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12px;">
               <span style="color:#718096;">Database</span><span style="font-weight:600;color:#1a202c;">Supabase</span>
