@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Job Application Tracker — Dashboard</title>
-<link rel="manifest" href="../pwa-manifest.json">
-<link rel="apple-touch-icon" href="../icons/icon128.png">
-<link rel="icon" href="../icons/icon48.png" sizes="48x48" type="image/png">
-<link rel="icon" href="../icons/icon128.png" sizes="128x128" type="image/png">
+<link rel="manifest" href="../pwa-manifest.json?v=3">
+<link rel="apple-touch-icon" href="../icons/icon128.png?v=3">
+<link rel="icon" href="../icons/icon48.png?v=3" sizes="48x48" type="image/png">
+<link rel="icon" href="../icons/icon128.png?v=3" sizes="128x128" type="image/png">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -110,13 +110,13 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 .topbar-title{font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.3px}
 .topbar-right{display:flex;align-items:center;gap:12px}
 .topbar-badge{font-size:11px;background:var(--accent-light);color:var(--accent);padding:4px 12px;border-radius:20px;font-weight:600}
-.menu-toggle{display:none;background:none;border:none;font-size:24px;color:var(--text);cursor:pointer;padding:8px;margin-left:-8px;align-items:center;justify-content:center}
-
 /* ── MOBILE DRAWER ── */
-.mobile-drawer{position:fixed;top:0;left:-280px;bottom:0;width:280px;background:var(--bg-sidebar);z-index:1000;transition:transform 0.2s cubic-bezier(0.4,0,0.2,1);display:flex;flex-direction:column;box-shadow:20px 0 50px rgba(0,0,0,0.3);will-change:transform}
+.mobile-drawer{position:fixed;top:0;left:-280px;bottom:0;width:280px;background:var(--bg-sidebar);z-index:1000;transition:transform 0.25s cubic-bezier(0.16,1,0.3,1);display:flex;flex-direction:column;box-shadow:20px 0 60px rgba(0,0,0,0.4);will-change:transform}
 .mobile-drawer.open{transform:translateX(280px)}
-.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);z-index:999;opacity:0;pointer-events:none;transition:opacity 0.2s}
+.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:999;opacity:0;pointer-events:none;transition:opacity 0.25s}
 .drawer-overlay.open{opacity:1;pointer-events:auto}
+.menu-toggle{display:none;background:none;border:none;font-size:24px;color:var(--text);cursor:pointer;padding:8px;margin-left:-4px;align-items:center;justify-content:center;opacity:0.8}
+.menu-toggle:hover{opacity:1}
 .drawer-header{padding:20px;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between}
 .drawer-close{background:none;border:none;color:#64748b;font-size:20px;cursor:pointer}
 .content{flex:1;padding:28px 32px}
@@ -222,21 +222,23 @@ tr:hover td{background:var(--bg)}
   .main{margin-left:0}
   .menu-toggle{display:flex}
   .stats-grid{grid-template-columns:repeat(2,1fr);gap:12px}
-  .stat-card{padding:16px}
+  .stat-card{padding:16px; border-radius:10px}
   .stat-card-value{font-size:24px}
   .settings-layout{grid-template-columns:1fr}
-  .topbar{padding:0 16px}
+  .topbar{padding:0 16px; height:56px}
   .content{padding:16px}
   .topbar-title{font-size:16px}
   .topbar-badge{display:none}
   .section-card-header{flex-direction:column;align-items:flex-start;gap:12px}
   .filters-row{width:100%}
   .filter-input, .filter-select{flex:1}
-  .btn-new{white-space:nowrap}
+  .btn-new{white-space:nowrap; padding:8px 12px; font-size:11px}
+  .auth-card{border-radius:16px}
+  .auth-card-body{padding:24px}
 }
 @media(max-width:480px){
   .stats-grid{grid-template-columns:1fr}
-  .modal{width:95%}
+  .modal{width:95%; border-radius:16px}
 }
 </style>
 </head>
@@ -501,14 +503,16 @@ tr:hover td{background:var(--bg)}
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
-<script src="../lib/config.js"></script>
-<script src="../lib/xlsxbuilder.js"></script>
-<script src="../scripts/app.js"></script>
+<script src="../lib/config.js?v=3"></script>
+<script src="../lib/xlsxbuilder.js?v=3"></script>
+<script src="../scripts/app.js?v=3"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then(reg => console.log('Service Worker registered:', reg.scope))
+    navigator.serviceWorker.register('/sw.js?v=3')
+      .then(reg => {
+        console.log('Service Worker registered:', reg.scope);
+      })
       .catch(err => console.log('Service Worker registration failed:', err));
   });
 }
