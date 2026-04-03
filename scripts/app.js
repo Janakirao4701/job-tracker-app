@@ -548,7 +548,7 @@ async function showApp() {
           renderPage(currentPage);
         }
       } catch(e) {}
-    }, 30000); // Polling every 30 seconds is enough if we have change detection
+    }, 15000); // Polling every 15 seconds for 'instant' feel
   }
   // Load and sync Gemini key to extension (non-blocking)
   loadGeminiKeyDB().then(key => {
