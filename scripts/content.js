@@ -1276,7 +1276,7 @@ ${context}`;
               <option value="all">All Statuses</option>
               ${STATUSES.map(s=>`<option value="${s}">${s}</option>`).join('')}
             </select>
-            <input type="date" id="rjd-date-filter" title="Filter by date" />
+            <input type="date" id="rjd-date-filter" title="Filter by date" value="${filterDate || ''}" />
             <button id="rjd-export-csv-btn" title="Export Excel">Export XLSX</button>
           </div>
 
@@ -1884,6 +1884,7 @@ ${context}`;
       sessionRefreshToken = sess.refreshToken || '';
       currentUser         = sess.user;
       loadGeminiKey(k => { GEMINI_KEY = k || ''; });
+      filterDate          = todayISO(); // Default to today in the list
       if (tog) tog.classList.add('rjd-visible');
       updateTrackBadge();
       // Preload apps silently
