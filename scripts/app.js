@@ -536,28 +536,26 @@ async function showApp() {
   // ── BACKGROUND SYNC: poll for changes from other browsers/sessions ──
   if (!window._appSyncTimer) {
     window._appSyncTimer = setInterval(async () => {
-      if (!session || !currentUser) return;
+      if (!session || !currentUser || document.hidden) return; // Don't poll if tab is hidden
       try {
         const fresh = await loadApps();
-        const oldIds  = apps.map(a => a.id).sort().join(',');
-        const newIds  = fresh.map(a => a.id).sort().join(',');
-        const oldSigs = apps.map(a => a.id + a.status + a.notes + a.followUpDate).sort().join('|');
-        const newSigs = fresh.map(a => a.id + a.status + a.notes + a.followUpDate).sort().join('|');
-        if (oldIds !== newIds || oldSigs !== newSigs) {
+        // Fast signature check to see if anything meaningful changed
+        const newSig = fresh.length + '|' + fresh.map(a => a.id + a.status).join('|');
+        if (window._lastAppSig !== newSig) {
+          window._lastAppSig = newSig;
           apps = fresh;
           updateBadge();
           renderPage(currentPage);
         }
       } catch(e) {}
-    }, 20 * 1000); // poll every 20 seconds
+    }, 30000); // Polling every 30 seconds is enough if we have change detection
   }
   // Load and sync Gemini key to extension (non-blocking)
-  try {
-    const geminiKey = await loadGeminiKeyDB();
-    if (geminiKey && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      chrome.storage.local.set({ rjd_gemini_key: geminiKey });
+  loadGeminiKeyDB().then(key => {
+    if (key && typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.set({ rjd_gemini_key: key });
     }
-  } catch(e) {}
+  }).catch(() => {});
   // Signout buttons
   const signoutBtn = document.getElementById('signout-btn');
   const mSignoutBtn = document.getElementById('m-signout-btn');
