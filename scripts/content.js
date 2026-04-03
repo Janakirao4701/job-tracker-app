@@ -97,7 +97,7 @@
   // Fix #15: Single in-flight promise prevents multiple simultaneous refresh calls
   let _refreshPromise = null;
   async function refreshSession() {
-    if (!sessionToken) return;
+    if (!sessionRefreshToken) return false;
     if (_refreshPromise) return _refreshPromise; // coalesce concurrent callers
     _refreshPromise = (async () => {
       try {
@@ -118,18 +118,27 @@
               payload: { token: sessionToken, user: currentUser, refreshToken: sessionRefreshToken }
             }, () => { if (chrome.runtime.lastError) {} });
           }
+          return true;
         }
       } catch(e) { console.warn('Token refresh failed', e); }
+      return false;
     })();
-    try { await _refreshPromise; } finally { _refreshPromise = null; }
+    try { return await _refreshPromise; } finally { _refreshPromise = null; }
   }
 
   async function sbFetch(url, opts) {
     if (!navigator.onLine) throw new Error('You are offline. Check your internet connection.');
-    const res = await fetch(url, opts);
+    let res = await fetch(url, opts);
+    if (res.status === 401 && sessionRefreshToken) {
+      const ok = await refreshSession();
+      if (ok) {
+        if (opts.headers) opts.headers['Authorization'] = 'Bearer ' + sessionToken;
+        res = await fetch(url, opts);
+      }
+    }
     if (res.status === 401) {
       sessionToken = null; currentUser = null; clearSession();
-            showToast('Session expired — please sign in again', true);
+      showToast('Session expired — please sign in again', true);
       throw new Error('Session expired');
     }
     return res;
@@ -1889,6 +1898,10 @@ ${context}`;
       updateTrackBadge();
       // Preload apps silently
       dbLoadApps().then(apps => { applications = apps; updateTrackBadge(); }).catch(() => {});
+      // Proactive refresh every 50m
+      if (!window._rjdRefreshTimer) {
+        window._rjdRefreshTimer = setInterval(() => refreshSession(), 50 * 60 * 1000);
+      }
     } else {
       currentUser = null;
       applications = [];
