@@ -75,57 +75,6 @@
     <div class="resume-page" id="preview"></div>
 </div>
 
-<script>
-    const STORAGE_KEY = 'resume_builder_profile';
-    const profile = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    
-    const inputs = {
-        name: document.getElementById('in-name'),
-        email: document.getElementById('in-email'),
-        resume: document.getElementById('in-resume')
-    };
-    
-    inputs.name.value = profile.name || '';
-    inputs.email.value = profile.email || '';
-    inputs.resume.value = localStorage.getItem('rjd_resume_text') || profile.resume || '';
-
-    function render() {
-        const name = inputs.name.value || 'Your Name';
-        const email = inputs.email.value || 'Email';
-        const txt = inputs.resume.value;
-        
-        let html = `
-            <div class="header">
-                <div class="name">${name}</div>
-                <div class="contact">${email}</div>
-            </div>
-        `;
-        
-        const sections = txt.split(/\[(.*?)\]/);
-        for(let i=1; i<sections.length; i+=2) {
-            const h = sections[i].trim();
-            const b = (sections[i+1]||'').trim();
-            html += `<div class="section">${h}</div>`;
-            if (h.toLowerCase().includes('experience')) {
-                b.split('\n').forEach(l => {
-                    const ps = l.split('|').map(x => x.trim());
-                    if (ps.length >= 2) html += `<div class="item-head"><span>${ps[0]}</span><span>${ps[ps.length-1]}</span></div>`;
-                    else if (l.trim()) html += `<div>${l}</div>`;
-                });
-            } else {
-                html += `<div style="white-space:pre-wrap;">${b}</div>`;
-            }
-        }
-        document.getElementById('preview').innerHTML = html;
-    }
-
-    Object.keys(inputs).forEach(k => inputs[k].oninput = render);
-    render();
-    
-    document.getElementById('dl-btn').onclick = () => {
-        // Reuse or redirect to builder logic
-        alert('Downloading using Standard template...');
-    };
-</script>
+<script src="../scripts/standard_resume.js"></script>
 </body>
 </html>
