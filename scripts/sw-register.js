@@ -1,4 +1,4 @@
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && (window.location.protocol === 'http:' || window.location.protocol === 'https:')) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js?v=3')
       .then(reg => {
