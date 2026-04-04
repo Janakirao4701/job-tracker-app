@@ -81,14 +81,13 @@
   position: fixed !important;
   right: 12px !important;
   z-index: 2147483647 !important;
-  display: none;
+  display: block;
   visibility: visible !important;
   opacity: 1 !important;
   pointer-events: auto !important;
   cursor: grab;
   user-select: none;
 }
-#rjd-toggle.rjd-visible { display: block !important; }
 #rjd-toggle-icon {
   width: 52px;
   height: 52px;
