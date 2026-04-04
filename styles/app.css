@@ -480,7 +480,7 @@ tr:hover td { background: var(--bg); }
 .s-applied { background: var(--accent-light); color: var(--accent); }
 .s-interview { background: var(--success-bg); color: var(--success); }
 .s-done { background: var(--warning-bg); color: var(--warning); }
-.s-offer { background: #d1fae5; color: #065f46; }
+.s-offer { background: #d1fae5; color: #065f46; } /* Kept as is for high-contrast offer state, or could be var(--success-bg) */
 .s-rejected { background: var(--danger-bg); color: var(--danger); }
 .s-skipped { background: var(--bg-inset); color: var(--text-muted); }
 .status-select {

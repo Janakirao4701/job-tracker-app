@@ -611,7 +611,7 @@
   padding: 10px;
   background: var(--danger-light);
   color: var(--danger);
-  border: 1px solid #fecaca;
+  border: 1px solid var(--accent-border);
   border-radius: var(--radius-sm);
   font-size: 12px;
   font-weight: 600;

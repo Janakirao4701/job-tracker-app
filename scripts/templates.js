@@ -206,9 +206,9 @@ window.rjdTemplates = {
           </div>
           <button class="settings-btn" id="save-key-btn" style="padding:10px 28px;font-size:14px;">Save Key</button>
         </div>
-        <div style="font-size:13px;color:#4a5568;background:#f8fafc;border-radius:8px;padding:14px;border:1px solid #e2e8f0;margin-top:20px;">
+        <div style="font-size:13px;color:var(--text2);background:var(--bg-inset);border-radius:8px;padding:14px;border:1px solid var(--border);margin-top:20px;">
           <strong>Get a free key:</strong><br>
-          1. Go to <a href="https://aistudio.google.com" target="_blank" style="color:#2E75B6;">aistudio.google.com</a><br>
+          1. Go to <a href="https://aistudio.google.com" target="_blank" style="color:var(--accent);">aistudio.google.com</a><br>
           2. Click <strong>Get API Key → Create API key</strong>
         </div>`;
     }
@@ -216,20 +216,20 @@ window.rjdTemplates = {
       return `
         <div class="settings-section-title">Account</div>
         <div class="settings-section-sub">Your profile and login details.</div>
-        <div style="display:flex;align-items:center;gap:14px;background:#f8fafc;border-radius:10px;padding:16px;margin-bottom:20px;border:1px solid #e2e8f0;">
-          <div style="width:48px;height:48px;border-radius:50%;background:#1F4E79;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;">${esc(initials(currentUser.name))}</div>
+        <div style="display:flex;align-items:center;gap:14px;background:var(--bg-inset);border-radius:10px;padding:16px;margin-bottom:20px;border:1px solid var(--border);">
+          <div style="width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;">${esc(initials(currentUser.name))}</div>
           <div>
-            <div style="font-size:15px;font-weight:700;">${esc(currentUser.name)}</div>
-            <div style="font-size:12px;color:#718096;">${esc(currentUser.email)}</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);">${esc(currentUser.name)}</div>
+            <div style="font-size:12px;color:var(--text-muted);">${esc(currentUser.email)}</div>
           </div>
         </div>
-        <div style="border-top:1px solid #f1f5f9;padding-top:20px;">
-          <div style="font-size:13px;font-weight:700;color:#1F4E79;margin-bottom:4px;">🔑 Change Password</div>
+        <div style="border-top:1px solid var(--border-light);padding-top:20px;">
+          <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:4px;">🔑 Change Password</div>
           <div style="display:flex;gap:10px;"><input type="password" id="new-pwd-input" class="settings-input" placeholder="New password" style="max-width:280px;"/><button class="settings-btn" id="update-pwd-btn">Update</button></div>
           <div id="pwd-msg"></div>
         </div>
-        <div style="border-top:1px solid #f1f5f9;padding-top:20px;margin-top:20px;">
-          <div style="font-size:13px;font-weight:700;color:#1a202c;margin-bottom:4px;">🌙 Night Shift Cutoff</div>
+        <div style="border-top:1px solid var(--border-light);padding-top:20px;margin-top:20px;">
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">🌙 Night Shift Cutoff</div>
           <div style="display:flex;gap:10px;">
             <select id="cutoff-select" class="settings-input" style="width:160px;">
               ${[0,1,2,3,4,5,6].map(h => "<option value='"+h+"' "+(getWorkDayCutoff()===h?"selected":"")+">"+(h===0?"Disabled":h+":00 AM")+"</option>").join('')}
@@ -237,7 +237,7 @@ window.rjdTemplates = {
             <button class="settings-btn" id="save-cutoff-btn">Save</button>
           </div>
         </div>
-        <div style="border-top:1px solid #f1f5f9;padding-top:20px;margin-top:20px;"><button class="settings-danger-btn" id="delete-all-btn">Delete all data</button></div>`;
+        <div style="border-top:1px solid var(--border-light);padding-top:20px;margin-top:20px;"><button class="settings-danger-btn" id="delete-all-btn">Delete all data</button></div>`;
     }
     if (sec === 'shortcuts') {
       return `
