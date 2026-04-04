@@ -1031,7 +1031,7 @@ ${context}`;
       const isOverdue = app.followUpDate && app.followUpDate < todayKey().slice(0,10) && app.status !== 'Offer' && app.status !== 'Rejected';
       const followUpBadge = app.followUpDate ? `<div style="font-size:9px;color:${isOverdue?'#dc2626':'#94a3b8'};margin-top:1px;">${isOverdue?'⚠ ':'📅 '}${app.followUpDate}</div>` : '';
       // Status chip (click to cycle)
-      const shortStatus = { 'Applied':'Applied','Interview Scheduled':'Interview','Interview Done':'Done','Offer':'Offer','Rejected':'Rejected','Skipped':'Skipped' };
+      const shortStatus = { 'Applied':'Applied','Interview Scheduled':'Interview','Interview Done':'IV Done','Offer':'Offer','Rejected':'Rejected','Skipped':'Skipped' };
       const statusChip = `<button class="rjd-status-chip-btn" data-id="${app.id}" style="background:${sc.bg};color:${sc.color};border:1.5px solid ${sc.color}33;padding:4px 9px;border-radius:20px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all 0.15s;letter-spacing:0.1px;" title="Click to change status">${shortStatus[app.status]||app.status} ▾</button>`;
       return `<tr class="rjd-row" data-id="${app.id}" style="${isOverdue?'background:#fff5f5 !important;':''}">
         <td class="rjd-td rjd-td-sno">${idx+1}</td>
@@ -1040,7 +1040,7 @@ ${context}`;
         <td class="rjd-td rjd-td-url">${urlBtn}</td>
         <td class="rjd-td rjd-td-resume">${resumeBtn}</td>
         <td class="rjd-td rjd-td-dl">${dlBtn}</td>
-        <td class="rjd-td rjd-td-date">${escHtml(app.date||'—')}</td>
+        <td class="rjd-td rjd-td-date">${escHtml(app.date ? app.date.replace(/, \d{4}$/, '') : '—')}</td>
         <td class="rjd-td rjd-td-status">${statusChip}</td>
       </tr>`;
     }).join('');
@@ -1303,187 +1303,13 @@ ${context}`;
 
     const initials = getInitials(currentUser.name);
 
-    main.innerHTML = `
-      <div id="rjd-tracker-wrap">
-        <div id="rjd-main" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
-          <div id="rjd-toolbar">
-            <div class="rjd-toolbar-left">
-              <div class="rjd-toolbar-avatar">${escHtml(initials)}</div>
-              <span id="rjd-username-display">${escHtml(currentUser.name)}</span>
-            </div>
-            <div style="display:flex;gap:6px;">
-              <button id="rjd-quick-extract-btn" class="rjd-primary-btn" style="font-size:11px;padding:6px 12px;white-space:nowrap;">✦ Extract & Save</button>
-              <button id="rjd-new-app-btn" class="rjd-primary-btn" style="background:var(--bg-secondary,#f8fafc);color:var(--accent-primary,#4f46e5);border:1.5px solid var(--accent-border,#c7d2fe);box-shadow:none;">+ New</button>
-              <button id="rjd-refresh-btn" title="Refresh" style="background:var(--bg-secondary,#f8fafc);border:1px solid var(--border-color,#e2e8f0);color:var(--text-muted,#94a3b8);font-size:14px;cursor:pointer;padding:6px 8px;border-radius:8px;line-height:1;transition:all 0.2s;">↻</button>
-              <button id="rjd-settings-btn" title="Settings" style="background:var(--bg-secondary,#f8fafc);border:1px solid var(--border-color,#e2e8f0);color:var(--text-muted,#94a3b8);font-size:14px;cursor:pointer;padding:6px 8px;border-radius:8px;line-height:1;transition:all 0.2s;">⚙</button>
-            </div>
-          </div>
-
-          <div id="rjd-stats"></div>
-
-          <!-- Session Bar -->
-          <div id="rjd-session-bar">
-            <div class="rjd-session-row">
-              <span class="rjd-session-label">📅 Session:</span>
-              <input type="date" id="rjd-working-date-input" class="rjd-session-input" max="${todayISO()}"/>
-              <button id="rjd-working-date-today" class="rjd-session-btn">Today</button>
-            </div>
-            <div class="rjd-session-row">
-              <span class="rjd-session-label">🎯 Target:</span>
-              <select id="rjd-target-select" class="rjd-session-input">
-                ${[10,15,20,25,30,35,40,50].map(n=>`<option value="${n}">${n} applications</option>`).join('')}
-              </select>
-              <span id="rjd-session-progress" style="font-weight:700;white-space:nowrap;color:var(--accent-primary,#4f46e5);font-size:12px;">0/30</span>
-            </div>
-            <div id="rjd-progress-bar-wrap">
-              <div id="rjd-progress-bar"></div>
-            </div>
-          </div>
-
-          <div id="rjd-filters">
-            <input type="text" id="rjd-search-input" placeholder="Search company or title..." />
-            <select id="rjd-status-filter">
-              <option value="all">All Statuses</option>
-              ${STATUSES.map(s=>`<option value="${s}">${s}</option>`).join('')}
-            </select>
-            <input type="date" id="rjd-date-filter" title="Filter by date" value="${filterDate || ''}" max="${todayISO()}" />
-            <button id="rjd-export-csv-btn" title="Export Excel">Export XLSX</button>
-          </div>
-
-          <div id="rjd-table-wrap">
-            <table id="rjd-table">
-              <thead>
-                <tr>
-                  <th class="rjd-th">#</th>
-                  <th class="rjd-th">Company</th>
-                  <th class="rjd-th">Job Title</th>
-                  <th class="rjd-th">URL</th>
-                  <th class="rjd-th">Resume</th>
-                  <th class="rjd-th">DL</th>
-                  <th class="rjd-th">Date</th>
-                  <th class="rjd-th">Status</th>
-                </tr>
-              </thead>
-              <tbody id="rjd-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <div id="rjd-new-app-panel" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
-          <!-- Panel Header -->
-          <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:14px 18px;display:flex;align-items:center;gap:10px;flex-shrink:0;position:relative;overflow:hidden;">
-            <div style="position:absolute;top:-20px;right:-10px;width:70px;height:70px;background:rgba(255,255,255,0.07);border-radius:50%;"></div>
-            <button id="rjd-new-back" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600;backdrop-filter:blur(8px);transition:all 0.2s;flex-shrink:0;">← Back</button>
-            <div style="flex:1;">
-              <div style="font-size:15px;font-weight:700;color:#fff;letter-spacing:-0.2px;">New Application</div>
-              <div style="font-size:11px;color:rgba(255,255,255,0.65);margin-top:1px;" id="rjd-extract-status"></div>
-            </div>
-          </div>
-
-          <!-- Scrollable Body -->
-          <div style="flex:1;overflow-y:auto;padding:18px 18px 24px;">
-
-            <!-- Extract Button -->
-            <button id="rjd-extract-btn" style="width:100%;padding:14px 16px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:20px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(79,70,229,0.3);transition:all 0.2s;letter-spacing:0.1px;">
-              <span style="font-size:16px;">✦</span> Extract from Clipboard + Page URL
-            </button>
-
-            <!-- Divider -->
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
-              <div style="flex:1;height:1px;background:#e2e8f0;"></div>
-              <span style="font-size:11px;color:#94a3b8;font-weight:600;white-space:nowrap;">OR FILL MANUALLY</span>
-              <div style="flex:1;height:1px;background:#e2e8f0;"></div>
-            </div>
-
-            <!-- Company + Title side-by-side -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
-              <div>
-                <label style="display:block;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px;">Company Name</label>
-                <input type="text" id="rjd-new-company" placeholder="e.g. Google" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;background:#fff !important;color:#1e293b !important;-webkit-text-fill-color:#1e293b !important;outline:none;transition:border-color 0.2s,box-shadow 0.2s;"/>
-              </div>
-              <div>
-                <label style="display:block;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px;">Job Title</label>
-                <input type="text" id="rjd-new-title" placeholder="e.g. Data Analyst" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;background:#fff !important;color:#1e293b !important;-webkit-text-fill-color:#1e293b !important;outline:none;transition:border-color 0.2s,box-shadow 0.2s;"/>
-              </div>
-            </div>
-
-            <!-- Status -->
-            <div style="margin-bottom:14px;">
-              <label style="display:block;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px;">Status</label>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                ${STATUSES.map(s => `<button class="rjd-status-chip" data-val="${s}" style="padding:6px 12px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid #e2e8f0;background:#f8fafc;color:#64748b;font-family:inherit;transition:all 0.15s;">${s}</button>`).join('')}
-              </div>
-              <input type="hidden" id="rjd-new-status" value="Applied"/>
-            </div>
-
-            <!-- Job URL -->
-            <div style="margin-bottom:14px;">
-              <label style="display:block;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px;">Job URL</label>
-              <input type="url" id="rjd-new-url" placeholder="Auto-filled or paste manually" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:13px;font-family:inherit;background:#fff !important;color:#1e293b !important;-webkit-text-fill-color:#1e293b !important;outline:none;transition:border-color 0.2s,box-shadow 0.2s;"/>
-            </div>
-
-            <!-- Job Description -->
-            <div style="margin-bottom:20px;">
-              <label style="display:block;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px;">Job Description</label>
-              <textarea id="rjd-new-jd" placeholder="Auto-filled from clipboard, or paste JD here..." rows="6" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:9px;font-size:12px;font-family:inherit;background:#fff !important;color:#1e293b !important;-webkit-text-fill-color:#1e293b !important;resize:vertical;outline:none;line-height:1.6;transition:border-color 0.2s,box-shadow 0.2s;"></textarea>
-            </div>
-
-            <!-- Save Button -->
-            <button id="rjd-save-app-btn" style="width:100%;padding:13px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(79,70,229,0.3);transition:all 0.2s;letter-spacing:-0.1px;">
-              💾 Save Application
-            </button>
-
-          </div>
-        </div>
-
-        <div id="rjd-detail-panel" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
-          <div class="rjd-panel-header">
-            <button class="rjd-back-btn" id="rjd-detail-back">← Back</button>
-            <span class="rjd-panel-title" id="rjd-detail-company">Detail</span>
-          </div>
-          <div class="rjd-panel-body">
-            <div class="rjd-detail-row"><span class="rjd-detail-lbl">Job Title</span><span id="rjd-detail-title"></span></div>
-            <div class="rjd-detail-row"><span class="rjd-detail-lbl">URL</span>
-              <div style="display:flex;gap:6px;align-items:center;flex:1;">
-                <input type="url" id="rjd-detail-url-input" style="flex:1;padding:4px 8px;border:1px solid #cbd5e0;border-radius:5px;font-size:12px;font-family:inherit;background:#fff;color:#1a202c;" placeholder="https://..."/>
-                <a id="rjd-detail-url" target="_blank" class="rjd-url-link" style="white-space:nowrap;flex-shrink:0;">Open</a>
-                <button id="rjd-copy-url-btn" style="padding:3px 8px;border:1px solid #e2e8f0;border-radius:5px;font-size:11px;background:#f8fafc;color:#4a5568;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;">Copy</button>
-              </div>
-            </div>
-            <div class="rjd-detail-row"><span class="rjd-detail-lbl">Date</span><span id="rjd-detail-date"></span></div>
-            <div class="rjd-detail-row"><span class="rjd-detail-lbl">Status</span><span id="rjd-detail-status"></span></div>
-            <div class="rjd-detail-section"><div class="rjd-detail-lbl" style="display:flex;align-items:center;justify-content:space-between;">Resume</div><div id="rjd-detail-resume-section" style="margin-top:6px;"></div></div>
-            <div class="rjd-detail-section">
-              <div class="rjd-detail-lbl" style="display:flex;align-items:center;justify-content:space-between;">
-                <span>Job Description</span>
-                <button id="rjd-copy-jd-btn" style="padding:3px 8px;border:1px solid #e2e8f0;border-radius:5px;font-size:11px;background:#f8fafc;color:#4a5568;cursor:pointer;font-family:inherit;">Copy JD</button>
-              </div>
-              <pre id="rjd-detail-jd" class="rjd-jd-text"></pre>
-            </div>
-            <div class="rjd-detail-section">
-              <div class="rjd-detail-lbl">Follow-up Date</div>
-              <input type="date" id="rjd-detail-followup" style="width:100%;padding:6px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:12px;font-family:inherit;background:#fff !important;color:#1a202c !important;margin-top:4px;"/>
-            </div>
-            <div class="rjd-detail-section">
-              <div class="rjd-detail-lbl">Notes</div>
-              <textarea id="rjd-detail-notes" class="rjd-notes-input" rows="3"></textarea>
-              <button id="rjd-save-notes-btn" class="rjd-action-btn" style="margin-top:6px;">Save Notes</button>
-            </div>
-            <div style="margin-top:12px;"><button id="rjd-delete-app-btn" class="rjd-delete-app-btn">Delete Application</button></div>
-          </div>
-        </div>
-
-        <div id="rjd-resume-panel" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
-          <div class="rjd-panel-header">
-            <button class="rjd-back-btn" id="rjd-resume-back">← Back</button>
-            <span class="rjd-panel-title" id="rjd-resume-title">Resume</span>
-          </div>
-          <div id="rjd-resume-body" class="rjd-resume-body"></div>
-          <div style="padding:10px 12px;border-top:1px solid #e2e8f0;flex-shrink:0;">
-            <button id="rjd-resume-copy-btn" class="rjd-primary-btn">Copy Resume Text</button>
-          </div>
-        </div>
-      </div>`;
+    main.innerHTML = window.rjdTemplates.trackerScreen({
+      initials,
+      name: currentUser.name,
+      todayISO: todayISO(),
+      filterDate,
+      STATUSES
+    });
 
     renderTable();
     bindTrackerEvents();

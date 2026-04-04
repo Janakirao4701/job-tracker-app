@@ -660,121 +660,11 @@ function renderDashboard() {
   const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
   const monthName = now.toLocaleDateString('en-US',{month:'long',year:'numeric'});
 
-  const dashHTML = `
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-card-label">Total Applications</div>
-        <div class="stat-card-value">${apps.length}</div>
-        <div class="stat-card-sub">${week} this week</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card-label">Today</div>
-        <div class="stat-card-value blue">${today}</div>
-        <div class="stat-card-sub">applied today</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card-label">Interviews</div>
-        <div class="stat-card-value orange">${ints}</div>
-        <div class="stat-card-sub">${offers} offers received</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card-label">Success Rate</div>
-        <div class="stat-card-value green">${rate}%</div>
-        <div class="stat-card-sub">${rejected} rejected</div>
-      </div>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
-
-      <div class="section-card">
-        <div class="section-card-header"><div class="section-card-title">📅 Application Calendar</div></div>
-        <div style="padding:12px 16px 16px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-            <span style="font-size:13px;font-weight:600;color:var(--text);">${monthName}</span>
-            <span style="font-size:12px;color:var(--text-muted);">${apps.filter(a=>a.dateRaw&&new Date(a.dateRaw).getMonth()===calMonth&&new Date(a.dateRaw).getFullYear()===calYear).length} applied this month</span>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(7,32px);gap:2px;justify-content:space-between;">
-            ${['S','M','T','W','T','F','S'].map(d=>`<div style="width:32px;height:20px;font-size:10px;color:#a0aec0;font-weight:600;text-align:center;line-height:20px;">${d}</div>`).join('')}
-            ${Array(firstDay).fill(`<div style="width:32px;height:32px;"></div>`).join('')}
-            ${Array.from({length:daysInMonth},(_,i)=>{
-              const d = i+1;
-              const key = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-              const count = calendarData[key]||0;
-              const isToday = key === todayISO();
-              let bg = 'transparent', color = 'var(--text2)', fontWeight = '400', border = 'none';
-              if (count > 0) { bg = 'linear-gradient(135deg,#4f46e5,#7c3aed)'; color = '#fff'; fontWeight = '600'; }
-              else if (isToday) { bg = '#eef2ff'; color = '#4f46e5'; fontWeight = '600'; border = '1.5px solid #4f46e5'; }
-              return `<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${bg};color:${color};font-size:11px;font-weight:${fontWeight};border:${border};" title="${count>0?count+' application'+(count>1?'s':''):''}">${d}</div>`;
-            }).join('')}
-          </div>
-          <div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid #f1f5f9;">
-            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted,#94a3b8);"><span style="width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:inline-block;"></span>Applied</div>
-            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted,#94a3b8);"><span style="width:8px;height:8px;border-radius:50%;background:#eef2ff;border:1.5px solid #4f46e5;display:inline-block;"></span>Today</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="section-card">
-        <div class="section-card-header"><div class="section-card-title">📊 Weekly Progress</div></div>
-        <div style="padding:12px 16px 16px;">
-          <div style="display:flex;gap:12px;margin-bottom:14px;">
-            <div style="flex:1;background:var(--bg);border-radius:8px;padding:10px 12px;">
-              <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">This week</div>
-              <div style="font-size:22px;font-weight:700;color:var(--accent);">${weeklyData[weeklyData.length-1].count}</div>
-            </div>
-            <div style="flex:1;background:var(--bg);border-radius:8px;padding:10px 12px;">
-              <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">Last week</div>
-              <div style="font-size:22px;font-weight:700;color:var(--text2);">${weeklyData[weeklyData.length-2].count}</div>
-            </div>
-            <div style="flex:1;background:var(--bg);border-radius:8px;padding:10px 12px;">
-              <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">6-week total</div>
-              <div style="font-size:22px;font-weight:700;color:var(--text2);">${weeklyData.reduce((s,w)=>s+w.count,0)}</div>
-            </div>
-          </div>
-          <div style="position:relative;height:120px;" id="weekly-chart-wrap">
-            <canvas id="weekly-chart"></canvas>
-          </div>
-        </div>
-      </div>
-
-    </div>
-
-    <div style="margin-bottom:24px">
-      <div class="section-card">
-        <div class="section-card-header"><div class="section-card-title">Recent Applications</div></div>
-        <table>
-          <tbody>
-            ${apps.slice(0,6).map(a => `
-              <tr>
-                <td><div style="font-size:13px;font-weight:600;color:var(--text);">${esc(a.company||'—')}</div>
-                    <div style="font-size:11px;color:var(--text-muted);">${esc(a.jobTitle||'—')}</div></td>
-                <td><span class="status-badge ${STATUS_COLORS[a.status]||'s-applied'}">${esc(a.status)}</span></td>
-                <td style="font-size:11px;color:var(--text-faint);text-align:right;">${esc(a.date||'—')}</td>
-              </tr>`).join('') || '<tr><td colspan="3" class="empty-row">No applications yet</td></tr>'}
-          </tbody>
-        </table>
-        ${apps.length > 6 ? `<div style="padding:10px 16px;border-top:1px solid #f1f5f9;text-align:center;"><button class="auth-link" id="view-all-btn">View all ${apps.length} →</button></div>` : ''}
-      </div>
-    </div>
-
-    ${apps.filter(a=>a.followUpDate && a.followUpDate >= todayISO()).length > 0 ? `
-    <div class="section-card">
-      <div class="section-card-header"><div class="section-card-title">📅 Upcoming Follow-ups</div></div>
-      <table>
-        <thead><tr><th>Company</th><th>Job Title</th><th>Status</th><th>Follow-up Date</th></tr></thead>
-        <tbody>
-          ${apps.filter(a=>a.followUpDate && a.followUpDate >= todayISO())
-            .sort((a,b) => a.followUpDate.localeCompare(b.followUpDate))
-            .slice(0,5).map(a => `
-            <tr>
-              <td style="font-weight:600">${esc(a.company||'—')}</td>
-              <td>${esc(a.jobTitle||'—')}</td>
-              <td><span class="status-badge ${STATUS_COLORS[a.status]||'s-applied'}">${esc(a.status)}</span></td>
-              <td style="color:${a.followUpDate===todayISO()?'#c53030':'#276749'};font-weight:600;">${a.followUpDate===todayISO()?'⚠ Today':esc(a.followUpDate)}</td>
-            </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>` : ''}`;
+  const dashHTML = window.rjdTemplates.dashboardDashboard({
+    apps, week, today, ints, offers, rejected, rate,
+    monthName, calMonth, calYear, firstDay, daysInMonth,
+    calendarData, weeklyData, todayISO: todayISO(), STATUS_COLORS, esc
+  });
 
   // Critical fix: render chart after innerHTML is set — scripts inside innerHTML don't execute
   document.getElementById('page-content').innerHTML = dashHTML;
@@ -829,310 +719,203 @@ function renderDashboard() {
 
 // ── APPLICATIONS TABLE ──
 function renderApplications() {
-  const isMobile = window.innerWidth <= 768;
   let filtered = [...apps];
   if (filterStatus !== 'all') filtered = filtered.filter(a => a.status === filterStatus);
-  if (filterDate)   filtered = filtered.filter(a => a.dateRaw && new Date(a.dateRaw).toLocaleDateString('en-CA') === filterDate);
+  if (filterDate)   filtered = filtered.filter(a => a.dateRaw && getWorkDayISO(a.dateRaw) === filterDate);
   if (filterSearch) { const q = filterSearch.toLowerCase(); filtered = filtered.filter(a => (a.company+a.jobTitle+a.url).toLowerCase().includes(q)); }
 
-  document.getElementById('page-content').innerHTML = `
-    <!-- Bulk Action Bar -->
-    <div id="bulk-bar" style="display:${isBulkMode ? 'flex' : 'none'};align-items:center;gap:12px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;padding:12px 18px;border-radius:12px;margin-bottom:14px;flex-wrap:wrap;box-shadow:0 4px 16px rgba(79,70,229,0.3);">
-      <span id="bulk-count" style="font-size:13px;font-weight:700;">0 selected</span>
-      <span style="font-size:13px;">→ Reassign to session:</span>
-      <input type="date" id="bulk-session-date" max="${todayISO()}" style="padding:6px 12px;border-radius:8px;border:none;font-size:13px;font-family:inherit;background:#fff;color:var(--text,#1e293b);"/>
-      <button id="bulk-reassign-btn" style="padding:7px 18px;background:rgba(255,255,255,0.2);backdrop-filter:blur(8px);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Reassign</button>
-    </div>
+  document.getElementById('page-content').innerHTML = window.rjdTemplates.dashboardApplications({
+    isBulkMode, todayISO: todayISO(), filterSearch, filterStatus, STATUSES, filtered, esc
+  });
 
-    <div class="section-card">
-      <div class="section-card-header">
-        <div class="section-card-title">All Applications (${filtered.length})</div>
-        <div class="filters-row">
-          <input class="filter-input" id="app-search" placeholder="Search..." value="${esc(filterSearch)}" style="width:140px"/>
-          <select class="filter-select" id="app-status-filter" style="width:130px">
-            <option value="all" ${filterStatus==='all'?'selected':''}>All Statuses</option>
-            ${STATUSES.map(s=>`<option value="${s}" ${filterStatus===s?'selected':''}>${s}</option>`).join('')}
-          </select>
-          <div style="display:flex;gap:6px;align-items:center;background:var(--bg-inset);padding:4px;border-radius:10px;border:1px solid var(--border);">
-            <button class="export-date-btn ${filterDate===workTodayISO()?'active':''}" id="filter-today-btn" style="padding:6px 12px;border:none;">Today</button>
-            <button class="export-date-btn ${filterDate===''?'active':''}" id="filter-all-btn" style="padding:6px 12px;border:none;">All</button>
-            <div style="position:relative;display:flex;align-items:center;">
-              <input class="filter-input ${filterDate!=='' && filterDate!==workTodayISO()?'active':''}" type="date" id="app-date-filter" value="${filterDate}" max="${todayISO()}" style="width:130px;padding:5px 10px;border-radius:6px;${filterDate!=='' && filterDate!==workTodayISO()?'background:var(--accent);color:#fff;border-color:var(--accent);':''}"/>
-            </div>
-          </div>
-          <button class="btn-new" id="toggle-bulk-mode-btn" style="padding:8px 12px;margin-left:auto;">${isBulkMode ? 'Cancel Select' : '≡ Select'}</button>
-        </div>
-      </div>
-      <div style="overflow-x:auto">
-      <table>
-        <thead><tr>
-          <th class="bulk-col" style="width:36px;display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" id="select-all-chk" title="Select all"/></th>
-          <th>#</th><th>Company</th><th>Job Title</th><th>URL</th><th>Status</th><th>Session Date</th><th>Notes</th><th>Actions</th>
-        </tr></thead>
-        <tbody>
-          ${filtered.length === 0
-            ? `<tr><td colspan="${isBulkMode ? 9 : 8}" class="empty-row">No applications match your filters</td></tr>`
-            : filtered.map((a,i) => `
-              <tr data-id="${a.id}" class="app-row" style="cursor:pointer;transition:background 0.2s;">
-                <td class="bulk-col" style="display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" class="app-chk" data-id="${a.id}"/></td>
-                <td style="color:var(--text-faint);font-size:12px;">${i+1}</td>
-                <td><div style="font-weight:600;font-size:13px;color:var(--text);">${esc(a.company||'—')}</div>
-                    <div style="margin-top:3px;display:flex;gap:4px;">
-                      ${a.jd     ? `<span style="font-size:10px;background:var(--accent-light);color:var(--accent);border-radius:4px;padding:1px 5px;font-weight:600;">JD</span>` : ''}
-                      ${a.resume ? `<span style="font-size:10px;background:#ecfdf5;color:#059669;border-radius:4px;padding:1px 5px;font-weight:600;">Resume</span>` : ''}
-                    </div>
-                </td>
-                <td style="font-size:13px;color:var(--text2);">${esc(a.jobTitle||'—')}</td>
-                <td>${a.url?`<a href="${esc(a.url)}" target="_blank" class="url-link">Open ↗</a>`:'—'}</td>
-                <td>
-                  <select class="status-select" data-id="${a.id}" style="background:${(STATUS_BG[a.status]||STATUS_BG.Applied).bg};color:${(STATUS_BG[a.status]||STATUS_BG.Applied).color};">
-                    ${STATUSES.map(s=>`<option value="${s}" ${a.status===s?'selected':''}>${s}</option>`).join('')}
-                  </select>
-                </td>
-                <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${esc(a.dateKey||a.date||'—')}</td>
-                <td style="font-size:12px;color:var(--text-muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(a.notes||'—')}</td>
-                <td style="white-space:nowrap;">
-                  <button class="auth-link del-btn" data-id="${a.id}" style="color:var(--danger);font-size:12px;">Delete</button>
-                </td>
-              </tr>`).join('')}
-        </tbody>
-      </table>
-      </div>
-    </div>`;
+  const tbody = document.getElementById('app-tbody');
+  if (tbody) {
+    tbody.innerHTML = filtered.length === 0 
+      ? `<tr><td colspan="${isBulkMode ? 8 : 7}" class="empty-row">No applications found matching your filters.</td></tr>`
+      : filtered.map((a,i) => `
+        <tr data-id="${a.id}" class="app-row" style="cursor:pointer;transition:background 0.2s;">
+          <td class="bulk-col" style="display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" class="app-chk" data-id="${a.id}"/></td>
+          <td style="color:var(--text-faint);font-size:12px;">${i+1}</td>
+          <td><div style="font-weight:600;font-size:13px;color:var(--text);">${esc(a.company||'—')}</div>
+              <div style="margin-top:3px;display:flex;gap:4px;">
+                ${a.jd     ? `<span style="font-size:10px;background:var(--accent-light);color:var(--accent);border-radius:4px;padding:1px 5px;font-weight:600;">JD</span>` : ''}
+                ${a.resume ? `<span style="font-size:10px;background:#ecfdf5;color:#059669;border-radius:4px;padding:1px 5px;font-weight:600;">Resume</span>` : ''}
+              </div>
+          </td>
+          <td style="font-size:13px;color:var(--text2);">${esc(a.jobTitle||'—')}</td>
+          <td>${a.url?`<a href="${esc(a.url)}" target="_blank" class="url-link">Open ↗</a>`:'—'}</td>
+          <td>
+            <div class="status-chip ${STATUS_COLORS[a.status]||'s-applied'}" data-id="${a.id}" style="cursor:pointer;display:inline-block;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;">${a.status}</div>
+          </td>
+          <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${esc(a.dateKey||getWorkDayISO(a.dateRaw)||'—')}</td>
+          <td style="white-space:nowrap;">
+            <button class="auth-link del-btn" data-id="${a.id}" style="color:var(--danger);font-size:12px;">Delete</button>
+          </td>
+        </tr>`).join('');
+  }
 
   // Mobile FAB button
   if (window.innerWidth <= 768) {
+    const old = document.getElementById('mobile-fab'); if (old) old.remove();
     const fab = document.createElement('button');
-    fab.id = 'mobile-fab';
-    fab.innerHTML = '+ Add';
-    fab.style.cssText = 'position:fixed;bottom:72px;right:16px;background:#1F4E79;color:#fff;border:none;border-radius:50px;padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(31,78,121,0.4);z-index:50;font-family:inherit;';
-    fab.addEventListener('click', () => document.getElementById('add-modal').classList.remove('hidden'));
-    const old = document.getElementById('mobile-fab');
-    if (old) old.remove();
+    fab.id = 'mobile-fab'; fab.innerHTML = '+ Add';
+    fab.style.cssText = 'position:fixed;bottom:72px;right:16px;background:#1F4E79;color:#fff;border:none;border-radius:50px;padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(31,78,121,0.4);z-index:50;';
+    fab.onclick = () => document.getElementById('add-modal').classList.remove('hidden');
     document.body.appendChild(fab);
   }
 
-  document.getElementById('app-search').addEventListener('input', e => { filterSearch = e.target.value; renderApplications(); });
-  document.getElementById('app-status-filter').addEventListener('change', e => { filterStatus = e.target.value; renderApplications(); });
-  document.getElementById('app-date-filter').addEventListener('change', e => { filterDate = e.target.value; renderApplications(); });
-  document.getElementById('filter-today-btn').addEventListener('click', () => { filterDate = workTodayISO(); renderApplications(); });
-  document.getElementById('filter-all-btn').addEventListener('click', () => { filterDate = ''; renderApplications(); });
+  // Event Listeners
+  document.getElementById('app-search').oninput = (e) => { filterSearch = e.target.value; renderApplications(); };
+  document.getElementById('app-status-filter').onchange = (e) => { filterStatus = e.target.value; renderApplications(); };
+  document.getElementById('app-date-filter').onchange = (e) => { filterDate = e.target.value; renderApplications(); };
 
-  document.querySelectorAll('.status-select').forEach(sel => {
-    sel.addEventListener('change', async () => {
-      const app = apps.find(a => String(a.id) === String(sel.dataset.id));
-      if (app) { app.status = sel.value; await updateApp(app); sel.style.background=(STATUS_BG[sel.value]||STATUS_BG.Applied).bg; sel.style.color=(STATUS_BG[sel.value]||STATUS_BG.Applied).color; showToast('Status updated'); }
-    });
+  const toggleBulkBtn = document.getElementById('toggle-bulk-mode-btn');
+  if (toggleBulkBtn) {
+    toggleBulkBtn.onclick = () => { isBulkMode = !isBulkMode; renderApplications(); };
+  }
+
+  const selectAll = document.getElementById('select-all-chk');
+  if (selectAll) {
+    selectAll.onchange = (e) => {
+      document.querySelectorAll('.app-chk').forEach(c => c.checked = e.target.checked);
+      updateBulkBar();
+    };
+  }
+
+  document.querySelectorAll('.app-chk').forEach(chk => {
+    chk.onchange = updateBulkBar;
   });
 
+  function updateBulkBar() {
+    const selected = document.querySelectorAll('.app-chk:checked');
+    const bulkCount = document.getElementById('bulk-count');
+    if (bulkCount) bulkCount.textContent = selected.length + ' selected';
+  }
+
+  // Bulk Status Change
+  const bulkStatus = document.getElementById('bulk-status-box');
+  if (bulkStatus) {
+    bulkStatus.onclick = async () => {
+      const idx = STATUSES.indexOf(bulkStatus.dataset.value || 'Applied');
+      const next = STATUSES[(idx + 1) % STATUSES.length];
+      bulkStatus.dataset.value = next;
+      bulkStatus.textContent = next + ' ▾';
+      const ids = [...document.querySelectorAll('.app-chk:checked')].map(c => c.dataset.id);
+      if (ids.length && confirm(`Change status of ${ids.length} applications to ${next}?`)) {
+        showToast('Updating statuses...');
+        for (const id of ids) {
+          const app = apps.find(a => String(a.id) === String(id));
+          if (app) { app.status = next; await updateApp(app); }
+        }
+        renderApplications(); updateBadge();
+      }
+    };
+  }
+
+  // Bulk Delete
+  const bulkDel = document.getElementById('bulk-delete-btn');
+  if (bulkDel) {
+    bulkDel.onclick = async () => {
+      const ids = [...document.querySelectorAll('.app-chk:checked')].map(c => c.dataset.id);
+      if (!ids.length) return;
+      if (!confirm(`Delete ${ids.length} applications?`)) return;
+      showToast('Deleting...');
+      for (const id of ids) {
+        await deleteApp(id);
+        apps = apps.filter(a => String(a.id) !== String(id));
+      }
+      renderApplications(); updateBadge();
+    };
+  }
+
+  // Bulk Reassign Date
+  const bulkReassign = document.getElementById('bulk-reassign-btn');
+  if (bulkReassign) {
+    bulkReassign.onclick = async () => {
+      const ids = [...document.querySelectorAll('.app-chk:checked')].map(c => c.dataset.id);
+      const newDate = document.getElementById('bulk-session-date').value;
+      if (!ids.length || !newDate) return;
+      showToast('Reassigning date...');
+      for (const id of ids) {
+        const app = apps.find(a => String(a.id) === String(id));
+        if (app) { app.dateKey = newDate; await updateApp(app); }
+      }
+      renderApplications();
+    };
+  }
+
+  // Status Chip Click (Inline Toggle)
+  document.querySelectorAll('.status-chip').forEach(chip => {
+    chip.onclick = async (e) => {
+      e.stopPropagation();
+      const idx = STATUSES.indexOf(chip.textContent.trim());
+      const next = STATUSES[(idx + 1) % STATUSES.length];
+      const app = apps.find(a => String(a.id) === String(chip.dataset.id));
+      if (app) {
+        app.status = next;
+        await updateApp(app);
+        chip.textContent = next;
+        chip.className = 'status-chip ' + (STATUS_COLORS[next] || 's-applied');
+        updateBadge();
+        showToast('Status updated ✓');
+      }
+    };
+  });
+
+  // Individual Delete
   document.querySelectorAll('.del-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation(); // Prevent row click
+    btn.onclick = async (e) => {
+      e.stopPropagation();
       if (!confirm('Delete this application?')) return;
       await deleteApp(btn.dataset.id);
       apps = apps.filter(a => String(a.id) !== String(btn.dataset.id));
-      renderApplications(); updateBadge(); showToast('Deleted');
-    });
+      renderApplications(); updateBadge();
+    };
   });
 
-
-
-  // ── BULK SELECTION ──
-  function getSelectedIds() {
-    return [...document.querySelectorAll('.app-chk:checked')].map(c => c.dataset.id);
-  }
-  function updateBulkBar() {
-    const ids = getSelectedIds();
-    const countEl = document.getElementById('bulk-count');
-    if (countEl) countEl.textContent = ids.length + ' selected';
-  }
-  
-  const toggleBulkBtn = document.getElementById('toggle-bulk-mode-btn');
-  if (toggleBulkBtn) {
-    toggleBulkBtn.addEventListener('click', () => {
-      isBulkMode = !isBulkMode;
-      // also uncheck everything when turning off
-      if (!isBulkMode) document.querySelectorAll('.app-chk').forEach(c => c.checked = false);
-      renderApplications();
-    });
-  }
-
-  // Select all checkbox
-  document.getElementById('select-all-chk').addEventListener('change', e => {
-    document.querySelectorAll('.app-chk').forEach(c => c.checked = e.target.checked);
-    updateBulkBar();
-  });
-
-  // Individual checkboxes
-  document.querySelectorAll('.app-chk').forEach(chk => {
-    chk.addEventListener('change', () => {
-      const all = document.querySelectorAll('.app-chk');
-      const allChk = document.getElementById('select-all-chk');
-      if (allChk) allChk.checked = [...all].every(c => c.checked);
-      updateBulkBar();
-    });
-  });
-
-
-
-  // Bulk reassign to session date
-  document.getElementById('bulk-reassign-btn').addEventListener('click', async () => {
-    const ids = getSelectedIds();
-    const newDate = document.getElementById('bulk-session-date').value;
-    if (!newDate) { showToast('Pick a session date first', true); return; }
-    if (!ids.length) { showToast('No apps selected', true); return; }
-    const d = new Date(newDate + 'T12:00:00');
-    const displayDate = d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
-    const btn = document.getElementById('bulk-reassign-btn');
-    btn.textContent = 'Saving...'; btn.disabled = true;
-    let successCount = 0;
-    await Promise.all(ids.map(async id => {
-      const app = apps.find(a => String(a.id) === String(id));
-      if (app) {
-        app.dateKey = newDate;
-        app.date    = displayDate;
-        const ok = await updateApp(app);
-        if (ok) successCount++;
-      }
-    }));
-    btn.textContent = '✓ Reassign'; btn.disabled = false;
-    showToast(successCount + ' apps moved to ' + newDate + ' ✓');
-    document.querySelectorAll('.app-chk').forEach(c => c.checked = false);
-    isBulkMode = false;
-    renderApplications();
-    updateBadge();
-  });
-  
-  // Row Click for Details (excluding interactive elements)
+  // Row Click for Details
   document.querySelectorAll('.app-row').forEach(row => {
-    row.addEventListener('click', (e) => {
-      // Don't open details if they clicked an interactive element
-      if (e.target.closest('.app-chk') || e.target.closest('#select-all-chk') || e.target.closest('select') || e.target.closest('button') || e.target.closest('a')) {
-        return;
-      }
-      const id = row.getAttribute('data-id');
-      const app = apps.find(a => String(a.id) === String(id));
-      if (app) {
-        openDetailModal(app);
-      } else {
-        console.error("Could not find app with ID:", id, "Available apps:", apps);
-      }
-    });
+    row.onclick = (e) => {
+      if (e.target.closest('.app-chk') || e.target.closest('button') || e.target.closest('a') || e.target.closest('.status-chip')) return;
+      const app = apps.find(a => String(a.id) === String(row.dataset.id));
+      if (app) openDetailModal(app);
+    };
   });
 }
 
 // ── DETAIL MODAL ──
 function openDetailModal(app) {
-  // Title & subtitle
   document.getElementById('detail-modal-title').textContent = app.company || 'Application';
   document.getElementById('detail-modal-sub').textContent   = app.jobTitle || '';
+  document.getElementById('detail-jd-text').textContent     = app.jd || 'No JD';
+  document.getElementById('detail-resume-text').textContent = app.resume || 'No Resume';
+  document.getElementById('detail-notes-input').value       = app.notes || '';
+  document.getElementById('detail-followup-input').value    = app.followUpDate || '';
+  
+  const statusBtn = document.getElementById('detail-status-sel');
+  statusBtn.dataset.value = app.status;
+  statusBtn.textContent = app.status + ' ▾';
+  statusBtn.style.background = (STATUS_BG[app.status]||STATUS_BG.Applied).bg;
+  statusBtn.style.color      = (STATUS_BG[app.status]||STATUS_BG.Applied).color;
+  statusBtn.onclick = () => {
+    const idx = STATUSES.indexOf(statusBtn.dataset.value);
+    const next = STATUSES[(idx + 1) % STATUSES.length];
+    statusBtn.dataset.value = next;
+    statusBtn.textContent = next + ' ▾';
+    statusBtn.style.background = (STATUS_BG[next]||STATUS_BG.Applied).bg;
+    statusBtn.style.color      = (STATUS_BG[next]||STATUS_BG.Applied).color;
+  };
 
-  // JD tab
-  const jdEl = document.getElementById('detail-jd-text');
-  jdEl.textContent = app.jd || 'No job description saved for this application.';
-  jdEl.style.color = app.jd ? 'var(--text)' : 'var(--text-muted)';
-
-  // Resume tab
-  const resumeEl = document.getElementById('detail-resume-text');
-  resumeEl.textContent = app.resume || 'No resume saved for this application.';
-  resumeEl.style.color = app.resume ? 'var(--text)' : 'var(--text-muted)';
-
-  // Resume tab buttons
-  const dlBtn = document.getElementById('detail-resume-dl-btn');
-  const addBtn = document.getElementById('detail-resume-add-btn');
-  if (dlBtn) {
-    dlBtn.style.opacity = app.resume ? '1' : '0.5';
-    dlBtn.style.pointerEvents = app.resume ? 'auto' : 'none';
-    dlBtn.onclick = () => {
-      if (!app.resume) { showToast('No resume to download', true); return; }
-      let rp = {};
-      try { rp = JSON.parse(localStorage.getItem('resume_builder_profile') || '{}'); } catch(e) {}
-      if (!rp.name && currentUser) rp.name = currentUser.name || '';
-      if (!rp.email && currentUser) rp.email = currentUser.email || '';
-      const filename = (app.company || 'Resume').replace(/[^a-z0-9]/gi, '_') + '_Resume';
-      try {
-        window.downloadResumeDocx(rp, app.resume, filename);
-        showToast('Resume downloaded ✓');
-      } catch(err) { showToast('Download failed', true); }
-    };
-  }
-  if (addBtn) {
-    addBtn.textContent = app.resume ? '📋 Update from Clipboard' : '📋 Add from Clipboard';
-    addBtn.onclick = async () => {
-      try {
-        const text = await navigator.clipboard.readText();
-        if (!text.trim()) { showToast('Clipboard is empty', true); return; }
-        app.resume = text.trim();
-        await updateApp(app);
-        resumeEl.textContent = app.resume;
-        resumeEl.style.color = 'var(--text)';
-        dlBtn.style.opacity = '1';
-        dlBtn.style.pointerEvents = 'auto';
-        addBtn.textContent = '📋 Update from Clipboard';
-        showToast('Resume ' + (app.resume ? 'updated' : 'added') + ' ✓');
-        renderPage(currentPage);
-      } catch(err) { showToast('Could not read clipboard', true); }
-    };
-  }
-
-  // Notes tab
-  document.getElementById('detail-notes-input').value    = app.notes || '';
-  document.getElementById('detail-followup-input').value = app.followUpDate || '';
-  // Session date — use dateKey (YYYY-MM-DD) or derive from dateRaw
-  const sessionDateInput = document.getElementById('detail-session-date-input');
-  if (sessionDateInput) {
-    let sd = app.dateKey || '';
-    // normalize in case old format YYYY-M-D
-    if (sd && sd.split('-').length === 3) {
-      const p = sd.split('-');
-      sd = p[0] + '-' + p[1].padStart(2,'0') + '-' + p[2].padStart(2,'0');
-    }
-    sessionDateInput.value = sd;
-  }
-  const statusSel = document.getElementById('detail-status-sel');
-  statusSel.innerHTML = STATUSES.map(s => `<option value="${s}" ${app.status===s?'selected':''}>${s}</option>`).join('');
-  statusSel.style.background = (STATUS_BG[app.status]||STATUS_BG.Applied).bg;
-  statusSel.style.color      = (STATUS_BG[app.status]||STATUS_BG.Applied).color;
-  statusSel.addEventListener('change', () => {
-    statusSel.style.background = (STATUS_BG[statusSel.value]||STATUS_BG.Applied).bg;
-    statusSel.style.color      = (STATUS_BG[statusSel.value]||STATUS_BG.Applied).color;
-  });
-
-  // URL input + Open button
-  const urlInput = document.getElementById('detail-url-input');
-  const urlLink  = document.getElementById('detail-url-link');
-  if (urlInput) urlInput.value = app.url || '';
-  function syncUrlLink() {
-    const v = urlInput ? urlInput.value.trim() : '';
-    if (v) { urlLink.href = v; urlLink.style.opacity = '1'; urlLink.style.pointerEvents = 'auto'; }
-    else   { urlLink.href = '#'; urlLink.style.opacity = '0.4'; urlLink.style.pointerEvents = 'none'; }
-  }
-  syncUrlLink();
-  if (urlInput) urlInput.addEventListener('input', syncUrlLink);
-
-  // Default to JD tab (or resume if no JD)
-  switchDetailTab(app.jd ? 'jd' : (app.resume ? 'resume' : 'notes'));
-
-  // Show modal
   document.getElementById('detail-modal').classList.remove('hidden');
 
-  // Save changes
   document.getElementById('detail-modal-save').onclick = async () => {
-    app.notes        = document.getElementById('detail-notes-input').value.trim();
+    app.notes = document.getElementById('detail-notes-input').value.trim();
     app.followUpDate = document.getElementById('detail-followup-input').value;
-    app.status       = document.getElementById('detail-status-sel').value;
-    app.url          = (document.getElementById('detail-url-input')?.value || '').trim();
-    // Save session date if changed
-    const newSessionDate = document.getElementById('detail-session-date-input')?.value;
-    if (newSessionDate) {
-      app.dateKey = newSessionDate;
-      // Also update the display date
-      const d = new Date(newSessionDate + 'T12:00:00');
-      app.date = d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
-    }
-    const ok = await updateApp(app);
-    if (ok) { showToast('Saved ✓'); document.getElementById('detail-modal').classList.add('hidden'); renderPage(currentPage); }
-    else    { showToast('Save failed', true); }
+    app.status = statusBtn.dataset.value;
+    await updateApp(app);
+    showToast('Saved ✓');
+    document.getElementById('detail-modal').classList.add('hidden');
+    renderApplications();
   };
 }
 
@@ -1141,542 +924,107 @@ function switchDetailTab(tab) {
   document.querySelectorAll('.detail-tab-panel').forEach(p => p.classList.toggle('hidden', p.id !== 'detail-tab-' + tab));
 }
 
-// Tab clicks
-document.addEventListener('click', e => {
-  if (e.target.classList.contains('detail-tab')) switchDetailTab(e.target.dataset.tab);
-});
-
-// Close detail modal
-document.getElementById('detail-modal-close').addEventListener('click',  () => document.getElementById('detail-modal').classList.add('hidden'));
-document.getElementById('detail-modal-cancel').addEventListener('click', () => document.getElementById('detail-modal').classList.add('hidden'));
-
 // ── SETTINGS ──
 let settingsSection = 'apikey';
 function renderSettings() {
-  document.getElementById('page-content').innerHTML = `
-    <div class="settings-layout">
-      <div class="settings-nav-card">
-        ${[['apikey','🔑','API Key'],['resume','📝','Resume Profile'],['account','👤','Account'],['shortcuts','⌨️','Shortcuts'],['privacy-s','🛡️','Privacy'],['about','ℹ️','About']].map(([id,icon,label]) =>
-          `<div class="settings-nav-item ${settingsSection===id?'active':''}" data-sec="${id}">${icon} ${label}</div>`
-        ).join('')}
-      </div>
-      <div class="settings-content-card" id="settings-panel"></div>
-    </div>`;
-
+  document.getElementById('page-content').innerHTML = window.rjdTemplates.dashboardSettingsNav({ settingsSection });
   document.querySelectorAll('.settings-nav-item').forEach(item => {
-    item.addEventListener('click', () => { settingsSection = item.dataset.sec; renderSettings(); });
+    item.onclick = () => { settingsSection = item.dataset.sec; renderSettings(); };
   });
   renderSettingsSection(settingsSection);
 }
 
-function renderSettingsSection(sec) {
+async function renderSettingsSection(sec) {
   const panel = document.getElementById('settings-panel');
   if (!panel) return;
+  const savedKey = await loadGeminiKeyDB();
+  let rp = {}; try { rp = JSON.parse(localStorage.getItem('resume_builder_profile') || '{}'); } catch(e) {}
+  panel.innerHTML = window.rjdTemplates.dashboardSettingsSection({
+    sec, currentUser, initials, getWorkDayCutoff, STATUSES, esc, savedKey, rp
+  });
 
   if (sec === 'apikey') {
-    // Critical fix #5: read from chrome.storage first (shared with extension), fall back to localStorage
-    const localKey = localStorage.getItem('rjd_gemini_key_' + (currentUser?.id||'')) || '';
-    let savedKey = localKey;
-    if (!savedKey && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      chrome.storage.local.get('rjd_gemini_key', r => {
-        if (r.rjd_gemini_key) {
-          const input = document.getElementById('key-input');
-          if (input) input.value = r.rjd_gemini_key;
-        }
-      });
-    }
-    panel.innerHTML = `
-      <div class="settings-section-title">Gemini API Key</div>
-      <div class="settings-section-sub">Powers AI extraction in the Chrome extension. Free from Google.</div>
-      <div class="settings-info-box">Your key is stored only in your browser. It is sent directly to Google Gemini — never to any other server.</div>
-      <div id="settings-msg"></div>
-      <div class="settings-field" style="max-width:480px;"><label>API Key</label>
-        <div style="display:flex;gap:8px;margin-bottom:10px;">
-          <input type="password" class="settings-input" id="key-input" value="${esc(savedKey)}" placeholder="AIzaSy..." style="flex:1;max-width:520px;"/>
-          <button class="btn-new" id="show-key-btn" style="white-space:nowrap;padding:0 16px;height:42px;">Show</button>
-        </div>
-        <div style="display:flex;gap:10px;margin-bottom:20px;">
-          <button class="settings-btn" id="save-key-btn" style="padding:10px 28px;font-size:14px;">Save Key</button>
-        </div>
-      </div>
-      <div style="font-size:13px;color:#4a5568;background:#f8fafc;border-radius:8px;padding:14px;border:1px solid #e2e8f0;">
-        <strong>Get a free key:</strong><br>
-        1. Go to <a href="https://aistudio.google.com" target="_blank" style="color:#2E75B6;">aistudio.google.com</a><br>
-        2. Click <strong>Get API Key → Create API key</strong><br>
-        3. Copy and paste it above
-      </div>`;
-
-    let shown = false;
-    document.getElementById('show-key-btn').addEventListener('click', () => {
-      shown = !shown;
-      document.getElementById('key-input').type = shown ? 'text' : 'password';
-      document.getElementById('show-key-btn').textContent = shown ? 'Hide' : 'Show';
-    });
-    document.getElementById('save-key-btn').addEventListener('click', () => {
+    document.getElementById('save-key-btn').onclick = async () => {
       const key = document.getElementById('key-input').value.trim();
-      if (!key) { document.getElementById('settings-msg').innerHTML='<div class="auth-msg error">Enter your API key</div>'; return; }
-      if (!key.startsWith('AIza')) { document.getElementById('settings-msg').innerHTML='<div class="auth-msg error">Key should start with AIza...</div>'; return; }
-      saveGeminiKeyDB(key).then(saved => {
-        document.getElementById('settings-msg').innerHTML='<div class="auth-msg success">Key saved ' + (saved ? '& synced ✓' : '(locally) ✓') + '</div>';
-        setTimeout(() => { const el=document.getElementById('settings-msg'); if(el) el.innerHTML=''; }, 3000);
-      });
-    });
-
+      if (await saveGeminiKeyDB(key)) showToast('Key saved & synced ✓');
+    };
   } else if (sec === 'account') {
-    panel.innerHTML = `
-      <div class="settings-section-title">Account</div>
-      <div class="settings-section-sub">Your profile and login details.</div>
-      <div style="display:flex;align-items:center;gap:14px;background:#f8fafc;border-radius:10px;padding:16px;margin-bottom:20px;border:1px solid #e2e8f0;">
-        <div style="width:48px;height:48px;border-radius:50%;background:#1F4E79;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0;">${esc(initials(currentUser.name))}</div>
-        <div>
-          <div style="font-size:15px;font-weight:700;color:#1a202c;">${esc(currentUser.name)}</div>
-          <div style="font-size:12px;color:#718096;">${esc(currentUser.email)}</div>
-        </div>
-      </div>
-      <div style="border-top:1px solid #f1f5f9;padding-top:20px;margin-top:20px;">
-        <div style="font-size:13px;font-weight:700;color:#1F4E79;margin-bottom:4px;">🔑 Change Password</div>
-        <div style="font-size:12px;color:#718096;margin-bottom:12px;">Update your Supabase authentication password.</div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <input type="password" id="new-pwd-input" class="settings-input" placeholder="New password (min 6 chars)" style="max-width:280px;"/>
-          <button class="settings-btn" id="update-pwd-btn" style="padding:10px 24px;">Update</button>
-        </div>
-        <div id="pwd-msg" style="margin-top:10px;"></div>
-      </div>
-      <div style="border-top:1px solid #f1f5f9;padding-top:20px;margin-top:4px;">
-        <div style="font-size:13px;font-weight:700;color:#1a202c;margin-bottom:4px;">🌙 Night Shift Cutoff</div>
-        <div style="font-size:12px;color:#718096;margin-bottom:10px;">If you work past midnight, applications before this hour are counted as the <strong>previous day</strong>. Affects Today count, calendar, and date export filters.</div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <select id="cutoff-select" class="settings-input" style="width:160px;">
-            ${[0,1,2,3,4,5,6].map(h => `<option value="${h}" ${getWorkDayCutoff()===h?'selected':''}>${h===0?'Disabled (midnight)':h+':00 AM'}</option>`).join('')}
-          </select>
-          <button class="settings-btn" id="save-cutoff-btn" style="padding:8px 20px;">Save</button>
-          <span id="cutoff-msg" style="font-size:12px;color:#276749;"></span>
-        </div>
-      </div>
-      <div style="border-top:1px solid #f1f5f9;padding-top:20px;margin-top:20px;">
-        <div style="font-size:13px;font-weight:700;color:#c53030;margin-bottom:10px;">Danger Zone</div>
-        <button class="settings-danger-btn" id="delete-all-btn">Delete all my applications</button>
-      </div>`;
-
-    document.getElementById('save-cutoff-btn').addEventListener('click', () => {
+    document.getElementById('save-cutoff-btn').onclick = () => {
       const h = parseInt(document.getElementById('cutoff-select').value, 10);
-      saveWorkDayCutoff(h);
-      const msg = document.getElementById('cutoff-msg');
-      msg.textContent = h === 0 ? 'Disabled ✓' : 'Saved — cutoff set to ' + h + ':00 AM ✓';
-      setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
-    });
-
-    const updBtn = document.getElementById('update-pwd-btn');
-    updBtn.addEventListener('click', async () => {
-      const np = document.getElementById('new-pwd-input').value;
-      const msgEl = document.getElementById('pwd-msg');
-      if (np.length < 6) { msgEl.innerHTML = '<div class="auth-msg error">Password must be at least 6 characters</div>'; return; }
-      updBtn.disabled = true; updBtn.textContent = "Updating...";
-      try {
-        const r = await fetch(SUPABASE_URL+'/auth/v1/user', {
-          method:'PUT', headers:headers(), body: JSON.stringify({password: np})
-        });
-        if (r.ok) {
-          msgEl.innerHTML = '<div class="auth-msg success">Password updated! Please sign in again.</div>';
-          setTimeout(async () => {
-             document.getElementById('signout-btn')?.click();
-          }, 2000);
-        } else {
-          msgEl.innerHTML = '<div class="auth-msg error">Update failed. Your session might be too old, please sign out and sign in again.</div>';
-          updBtn.disabled = false; updBtn.textContent = "Update";
-        }
-      } catch(e) {
-        msgEl.innerHTML = '<div class="auth-msg error">Network error.</div>';
-        updBtn.disabled = false; updBtn.textContent = "Update";
+      saveWorkDayCutoff(h); showToast('Cutoff saved ✓');
+    };
+    document.getElementById('delete-all-btn').onclick = async () => {
+      if (confirm('Delete ALL data?')) {
+        await Promise.all(apps.map(a => deleteApp(a.id)));
+        apps = []; renderPage(currentPage); showToast('All data deleted');
       }
-    });
-
-    document.getElementById('delete-all-btn').addEventListener('click', async () => {
-      if (!confirm('Delete ALL your applications? This cannot be undone.')) return;
-      await Promise.all(apps.map(a => deleteApp(a.id)));
-      apps = [];
-      updateBadge();
-      showToast('All data deleted');
-      renderSettings();
-    });
-
-  } else if (sec === 'shortcuts') {
-    panel.innerHTML = `
-      <div class="settings-section-title">Keyboard Shortcuts</div>
-      <div class="settings-section-sub">Use these shortcuts in the Chrome extension sidebar.</div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        ${[
-          ['Open / close sidebar',  'Alt + Shift + T'],
-          ['Extract & Save',        'Alt + Shift + E'],
-          ['New application',       'Alt + Shift + N'],
-          ['Open settings',         'Alt + Shift + S'],
-          ['Close panel / back',    'Escape'],
-        ].map(([action, key]) => `
-          <div class="settings-row">
-            <div><div class="settings-row-label">${action}</div></div>
-            <span class="kbd">${key}</span>
-          </div>`).join('')}
-      </div>`;
-
-  } else if (sec === 'privacy-s') {
-    panel.innerHTML = `
-      <div class="settings-section-title">Privacy</div>
-      <div class="settings-section-sub">What we collect and how we use it.</div>
-      <div class="privacy-block"><strong>What we store:</strong> Your email, name, and job applications (company, title, URL, JD, resume, status, notes). Stored in Supabase with Row Level Security.</div>
-      <div class="privacy-block"><strong>Gemini API key:</strong> Stored only in your browser. Never sent to our servers — goes directly to Google.</div>
-      <div class="privacy-block"><strong>No tracking:</strong> We do not collect analytics, usage data, or advertising data of any kind.</div>
-      <div class="privacy-block"><strong>Your rights:</strong> Export your data anytime via the Export page. Delete all data from the Account settings. Contact us to delete your account entirely.</div>
-      <div style="margin-top:16px;"><a href="privacy.html" target="_blank" class="auth-link">View full privacy policy →</a></div>`;
-
-  } else if (sec === 'about') {
-    panel.innerHTML = `
-      <div class="settings-section-title">About</div>
-      <div class="settings-section-sub">Version and technology info.</div>
-      ${[
-        ['Version',    '4.2.0'],
-        ['AI Model',   'Google Gemini 1.5 Flash'],
-        ['Database',   'Supabase (PostgreSQL)'],
-        ['Auth',       'Supabase Auth'],
-        ['Extension',  'Chrome Manifest V3'],
-        ['Storage',    'Cloud + Browser local'],
-      ].map(([k,v]) => `
-        <div class="settings-row">
-          <div class="settings-row-label">${k}</div>
-          <div class="settings-row-val">${v}</div>
-        </div>`).join('')}
-      <div style="margin-top:20px;background:#f8fafc;border-radius:8px;padding:14px;font-size:13px;color:#718096;text-align:center;">
-        Built for job seekers who mean business · <strong style="color:#1F4E79;">Free forever</strong>
-      </div>`;
-
+    };
   } else if (sec === 'resume') {
-    // Load existing profile from localStorage
-    const profileKey = 'resume_builder_profile';
-    let rp = {};
-    try { rp = JSON.parse(localStorage.getItem(profileKey) || '{}'); } catch(e) {}
-    panel.innerHTML = `
-      <div class="settings-section-title">Resume Profile</div>
-      <div class="settings-section-sub">Your personal details for generating Word document resumes. Auto-saves as you type.</div>
-      <div class="settings-info-box">This profile is used when you click the <strong>⬇ Download</strong> button in the sidebar table. It populates the header of your resume .docx file.</div>
-      <div id="rp-msg"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px;">
-        <div class="settings-field"><label>Full Name</label><input class="settings-input rp-input" id="rp-name" value="${esc(rp.name||'')}" placeholder="e.g. John Smith"/></div>
-        <div class="settings-field"><label>Professional Title</label><input class="settings-input rp-input" id="rp-title" value="${esc(rp.title||'')}" placeholder="e.g. Senior Data Engineer"/></div>
-        <div class="settings-field"><label>Email</label><input class="settings-input rp-input" id="rp-email" value="${esc(rp.email||'')}" placeholder="you@email.com"/></div>
-        <div class="settings-field"><label>Phone</label><input class="settings-input rp-input" id="rp-phone" value="${esc(rp.phone||'')}" placeholder="+1 234 567 8900"/></div>
-        <div class="settings-field"><label>Location</label><input class="settings-input rp-input" id="rp-location" value="${esc(rp.location||'')}" placeholder="City, State"/></div>
-        <div class="settings-field"><label>LinkedIn URL</label><input class="settings-input rp-input" id="rp-linkedin" value="${esc(rp.linkedin||'')}" placeholder="linkedin.com/in/..."/></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
-        <div class="settings-field">
-          <label>Education</label>
-          <textarea class="settings-input rp-input" id="rp-education" rows="4" placeholder="Degree | University | Year&#10;e.g. B.Tech CS | MIT | 2022" style="resize:vertical;min-height:80px;font-size:13px;line-height:1.6;">${esc(rp.education||'')}</textarea>
-        </div>
-        <div class="settings-field">
-          <label>Certifications</label>
-          <textarea class="settings-input rp-input" id="rp-certs" rows="4" placeholder="One per line&#10;e.g. AWS Solutions Architect" style="resize:vertical;min-height:80px;font-size:13px;line-height:1.6;">${esc(rp.certs||'')}</textarea>
-        </div>
-      </div>
-      <div style="margin-top:16px;display:flex;gap:10px;align-items:center;">
-        <div id="rp-status" style="font-size:12px;color:#059669;"></div>
-      </div>`;
-
-    // Auto-save on every input
-    function saveResumeProfile() {
-      const profile = {
-        name:      document.getElementById('rp-name')?.value.trim() || '',
-        title:     document.getElementById('rp-title')?.value.trim() || '',
-        email:     document.getElementById('rp-email')?.value.trim() || '',
-        phone:     document.getElementById('rp-phone')?.value.trim() || '',
-        location:  document.getElementById('rp-location')?.value.trim() || '',
-        linkedin:  document.getElementById('rp-linkedin')?.value.trim() || '',
-        education: document.getElementById('rp-education')?.value.trim() || '',
-        certs:     document.getElementById('rp-certs')?.value.trim() || '',
+    document.querySelectorAll('.rp-input').forEach(inp => {
+      inp.oninput = () => {
+        const profile = {
+          name: document.getElementById('rp-name').value,
+          title: document.getElementById('rp-title').value,
+          email: document.getElementById('rp-email').value,
+          phone: document.getElementById('rp-phone').value,
+          education: document.getElementById('rp-education').value
+        };
+        localStorage.setItem('resume_builder_profile', JSON.stringify(profile));
+        document.getElementById('rp-status').textContent = 'Auto-saved ✓';
       };
-      localStorage.setItem(profileKey, JSON.stringify(profile));
-      // Sync to chrome.storage for the extension sidebar
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-        chrome.storage.local.set({ resume_builder_profile: profile });
-      }
-      const el = document.getElementById('rp-status');
-      if (el) { el.textContent = 'Auto-saved ✓'; setTimeout(() => { if (el) el.textContent = ''; }, 2000); }
-    }
-    document.querySelectorAll('.rp-input').forEach(input => {
-      input.addEventListener('input', saveResumeProfile);
     });
   }
 }
 
-// ── EXPORT PAGE ──
+// ── EXPORT ──
 function renderExport() {
-  // Build list of unique WORK-DAY dates that have applications
-  // Use dateKey (working date chosen in extension) if available, else fallback to workday from dateRaw
   const dateCounts = {};
-  apps.forEach(a => {
-    // dateKey is YYYY-MM-DD (zero-padded) — use directly
-    const k = a.dateKey || (a.dateRaw ? getWorkDayISO(a.dateRaw) : '');
-    if (k) dateCounts[k] = (dateCounts[k]||0)+1;
-  });
+  apps.forEach(a => { const k = a.dateKey || (a.dateRaw ? getWorkDayISO(a.dateRaw) : ''); if (k) dateCounts[k] = (dateCounts[k]||0)+1; });
   const uniqueDates = Object.keys(dateCounts).sort().reverse().slice(0, 7);
   const wToday = workTodayISO();
-
-  document.getElementById('page-content').innerHTML = `
-    <!-- Filter bar -->
-    <div class="section-card" style="padding:20px;max-width:700px;margin-bottom:20px;">
-      <div style="font-size:14px;font-weight:700;color:#1a202c;margin-bottom:12px;">📅 Filter by Date</div>
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <button class="export-date-btn active" data-date="" style="">All (${apps.length})</button>
-        <button class="export-date-btn" data-date="${wToday}">Today (${dateCounts[wToday]||0})</button>
-        ${uniqueDates.filter(d => d !== wToday).map(d => `
-          <button class="export-date-btn" data-date="${d}">${d} (${dateCounts[d]})</button>
-        `).join('')}
-        <input type="date" id="export-custom-date" class="filter-input" max="${todayISO()}" style="height:34px;" title="Pick a custom date"/>
-      </div>
-      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #f1f5f9;font-size:13px;color:#718096;">
-        Exporting: <strong id="export-count-label" style="color:#1F4E79;">${apps.length} applications</strong>
-      </div>
-    </div>
-
-    <!-- Export buttons -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:700px;">
-      <div class="section-card" style="padding:24px;">
-        <div style="font-size:32px;margin-bottom:12px;">📊</div>
-        <div style="font-size:15px;font-weight:700;color:#1a202c;margin-bottom:6px;">Excel Report (.xlsx)</div>
-        <div style="font-size:13px;color:#718096;margin-bottom:20px;line-height:1.6;">Color-coded spreadsheet with Applications sheet and Summary Dashboard.</div>
-        <button class="btn-export" id="export-xlsx-btn" style="width:100%;padding:10px;">Download Excel</button>
-      </div>
-      <div class="section-card" style="padding:24px;">
-        <div style="font-size:32px;margin-bottom:12px;">📄</div>
-        <div style="font-size:15px;font-weight:700;color:#1a202c;margin-bottom:6px;">CSV File (.csv)</div>
-        <div style="font-size:13px;color:#718096;margin-bottom:20px;line-height:1.6;">Simple comma-separated file. Open in Excel, Google Sheets, or any spreadsheet app.</div>
-        <button class="btn-new" id="export-csv-btn" style="width:100%;padding:10px;">Download CSV</button>
-      </div>
-    </div>
-    <div style="margin-top:16px;background:#ebf4ff;border-radius:10px;border:1px solid #bee3f8;padding:16px;max-width:700px;">
-      <div style="font-size:13px;font-weight:700;color:#2E75B6;margin-bottom:4px;">💡 Daily Target Tip</div>
-      <div style="font-size:12px;color:#4a5568;line-height:1.6;">
-        Applied 30 today? Click <strong>Today</strong> above then download — you'll get only today's applications in the sheet.
-      </div>
-    </div>`;
-
-  // ── Date filter state ──
-  let exportDate = ''; // '' = all
-
-  function getFilteredApps() {
-    if (!exportDate) return apps;
-    // dateKey is now always YYYY-MM-DD (zero-padded), direct match
-    return apps.filter(a => {
-      if (a.dateKey) return a.dateKey === exportDate;
-      return a.dateRaw && getWorkDayISO(a.dateRaw) === exportDate;
-    });
-  }
-
-  function updateExportLabel() {
-    const filtered = getFilteredApps();
-    document.getElementById('export-count-label').textContent = filtered.length + ' application' + (filtered.length !== 1 ? 's' : '');
-  }
-
-  function setExportDate(date) {
-    exportDate = date;
-    document.querySelectorAll('.export-date-btn').forEach(b => b.classList.toggle('active', b.dataset.date === date));
-    if (date) document.getElementById('export-custom-date').value = date;
-    else document.getElementById('export-custom-date').value = '';
-    updateExportLabel();
-  }
-
-  document.querySelectorAll('.export-date-btn').forEach(btn => {
-    btn.addEventListener('click', () => setExportDate(btn.dataset.date));
+  document.getElementById('page-content').innerHTML = window.rjdTemplates.dashboardExport({
+    dateCounts, wToday, apps, uniqueDates, todayISO: todayISO(), esc
   });
-
-  document.getElementById('export-custom-date').addEventListener('change', e => {
-    setExportDate(e.target.value);
-    // Deselect all quick buttons since custom date is picked
-    document.querySelectorAll('.export-date-btn').forEach(b => b.classList.remove('active'));
-  });
-
-  // ── CSV Export ──
-  document.getElementById('export-csv-btn').addEventListener('click', () => {
-    const filtered = getFilteredApps();
-    if (!filtered.length) { showToast('No applications to export', true); return; }
-    const hdrs = ['#','Company','Job Title','URL','Status','Date','Follow-up Date','Notes'];
-    const rows = filtered.map((a,i) => [i+1,a.company,a.jobTitle,a.url,a.status,a.date,a.followUpDate||'',a.notes].map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(','));
+  
+  document.getElementById('export-csv-btn').onclick = () => {
+    const hdrs = ['Company','Job Title','Status','Date'];
+    const rows = apps.map(a => [a.company, a.jobTitle, a.status, a.date].map(v => '"'+String(v||'').replace(/"/g,'""')+'"').join(','));
     const blob = new Blob([[hdrs.join(','),...rows].join('\n')], {type:'text/csv'});
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = (currentUser.name||'applications') + '_' + (exportDate||todayISO()) + '.csv';
-    link.click();
-    showToast('CSV exported (' + filtered.length + ' rows)');
-  });
-
-  // ── XLSX Export ──
-  document.getElementById('export-xlsx-btn').addEventListener('click', async () => {
-    const filtered = getFilteredApps();
-    if (!filtered.length) { showToast('No applications to export', true); return; }
-    showToast('Preparing export...');
-    try {
-      const now = new Date();
-      const dateLabel = exportDate ? ' — ' + exportDate : '';
-      const statusStyleMap = { 'Applied':2,'Interview Scheduled':3,'Interview Done':4,'Offer':5,'Rejected':6,'Skipped':7 };
-      const numCols = 8;
-      const colWidths = [5, 22, 30, 28, 20, 14, 45, 55];
-      const rowHeights = {};
-      const sheetRows = [];
-      sheetRows.push([{ v: 'Job Application Report — ' + currentUser.name + dateLabel, t:'s', s:15 }, ...Array(numCols-1).fill(null)]);
-      rowHeights[0] = 30;
-      sheetRows.push([{ v: 'Exported on ' + now.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) + '   ·   Total: ' + filtered.length, t:'s', s:16 }, ...Array(numCols-1).fill(null)]);
-      rowHeights[1] = 18;
-      sheetRows.push(Array(numCols).fill(null)); rowHeights[2] = 6;
-      const xlsxHeaders = ['#','Company','Job Title','Job URL','Status','Date Applied','Resume Text','Job Description'];
-      sheetRows.push(xlsxHeaders.map(h=>({ v:h, t:'s', s:1 }))); rowHeights[3] = 22;
-      filtered.forEach((a,i) => {
-        const isAlt = i%2===1; const sStat = statusStyleMap[a.status]||2;
-        const def=isAlt?8:0, wrap=isAlt?10:9, ctr=isAlt?14:13;
-        const urlCell = a.url ? { v:'Open Link', t:'s', s:11, url:a.url } : { v:'—', t:'s', s:def };
-        rowHeights[4+i] = (a.resume||a.jd) ? 90 : 18;
-        sheetRows.push([
-          { v:String(i+1), t:'n', s:ctr }, { v:a.company||'—', t:'s', s:def },
-          { v:a.jobTitle||'—', t:'s', s:def }, urlCell, { v:a.status||'—', t:'s', s:sStat },
-          { v:a.date||'—', t:'s', s:ctr }, { v:a.resume||'', t:'s', s:wrap }, { v:a.jd||'', t:'s', s:wrap },
-        ]);
-      });
-      const STATUSES2 = ['Applied','Interview Scheduled','Interview Done','Offer','Rejected','Skipped'];
-      const statusCounts = {}; STATUSES2.forEach(s=>{ statusCounts[s]=filtered.filter(a=>a.status===s).length; });
-      const s2rows = []; const s2heights = {};
-      s2rows.push([{ v:'Summary Dashboard' + dateLabel, t:'s', s:15 }, null,null,null,null,null]); s2heights[0]=28;
-      s2rows.push([{ v:'User: '+currentUser.name+'   ·   '+now.toLocaleDateString(), t:'s', s:16 }, null,null,null,null,null]); s2heights[1]=16;
-      s2rows.push(Array(6).fill(null)); s2heights[2]=10;
-      const kpis=[{label:'Total',value:String(filtered.length)},{label:'This Week',value:String(apps.filter(a=>{const d=new Date(a.dateRaw);return(now-d)<=7*86400000;}).length)},{label:'Interviews',value:String((statusCounts['Interview Scheduled']||0)+(statusCounts['Interview Done']||0))},{label:'Offers',value:String(statusCounts['Offer']||0)},{label:'With Resume',value:String(filtered.filter(a=>a.resume).length)},{label:'Success %',value:filtered.length>0?Math.round(((statusCounts['Offer']||0)/filtered.length)*100)+'%':'0%'}];
-      const kpiStyles=[17,22,23,24,25,26];
-      s2rows.push(kpis.map((k,i)=>({ v:k.label, t:'s', s:kpiStyles[i] }))); s2heights[3]=18;
-      s2rows.push(kpis.map(k=>({ v:k.value, t:'s', s:18 }))); s2heights[4]=40;
-      s2rows.push(Array(6).fill(null)); s2heights[5]=12;
-      s2rows.push([{v:'Status',t:'s',s:19},{v:'Count',t:'s',s:19},{v:'%',t:'s',s:19},null,null,null]); s2heights[6]=20;
-      STATUSES2.forEach((st,i)=>{ const c=statusCounts[st]||0; const pct=filtered.length>0?((c/filtered.length)*100).toFixed(1)+'%':'0%'; const ss=statusStyleMap[st]||2; s2rows.push([{v:st,t:'s',s:ss},{v:String(c),t:'n',s:13},{v:pct,t:'s',s:13},null,null,null]); s2heights[7+i]=18; });
-      const bytes = await window.buildXLSX([
-        { name:'Applications', headers:xlsxHeaders, rows:sheetRows, colWidths, merges:['A1:H1','A2:H2'], rowHeights },
-        { name:'Summary', headers:[], rows:s2rows, colWidths:[22,12,12,12,12,12], merges:['A1:F1','A2:F2'], rowHeights:s2heights }
-      ]);
-      const blob = new Blob([bytes], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = currentUser.name + '_' + (exportDate||todayISO()) + '.xlsx';
-      document.body.appendChild(link); link.click(); document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      showToast('Excel exported ✓ (' + filtered.length + ' rows)');
-    } catch(err) { showToast('Export failed: ' + err.message, true); }
-  });
-}
-
-// ── PRIVACY PAGE ──
-function renderPrivacy() {
-  document.getElementById('page-content').innerHTML = `
-    <div style="max-width:800px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px;">
-      
-      <div class="settings-content-card">
-        <div class="settings-section-title">Privacy Policy</div>
-        <div class="settings-section-sub">Last updated: March 2026 · Effective immediately</div>
-        
-        <div class="settings-info-box" style="margin-top:20px;">
-          <strong>Privacy-first design:</strong> We do not sell your data. We do not show ads. Your job applications are entirely private to you.
-        </div>
-      </div>
-
-      <div class="settings-content-card">
-        <div class="settings-section-title">Data We Collect</div>
-        <div class="settings-section-sub">What information is stored when you use the app.</div>
-        
-        <div class="privacy-block">
-          <strong>Account Information:</strong> When you create an account, we store your email address and an encrypted password (handled securely by Supabase Auth — we never see your password).
-        </div>
-        <div class="privacy-block">
-          <strong>Job Application Data:</strong> When you save an application, we store the company name, job title, posting URL, job description text, resume text, status, notes, and dates. This allows you to track your progress across devices.
-        </div>
-        <div class="privacy-block">
-          <strong>What We Do NOT Collect:</strong> We do not collect browsing history, personal financial information, location data, or any analytics/usage tracking. Your Gemini API key is stored <strong>only in your browser's local storage</strong>.
-        </div>
-      </div>
-
-      <div class="settings-content-card">
-        <div class="settings-section-title">Third-Party Services</div>
-        <div class="settings-section-sub">External services required to run the extension.</div>
-        
-        <div class="privacy-block">
-          <strong>Supabase:</strong> Your account and data are securely stored in Supabase, a PostgreSQL cloud database. Data is encrypted in transit and at rest. Row Level Security ensures only you can access your own data.
-        </div>
-        <div class="privacy-block">
-          <strong>Google Gemini API:</strong> The Extract & Save feature sends the job description text to Google's Gemini API to extract the company and job title. This uses your personal API key directly from your browser.
-        </div>
-      </div>
-
-      <div class="settings-content-card">
-        <div class="settings-section-title">Your Rights</div>
-        <div class="settings-section-sub">Managing and deleting your information.</div>
-        
-        <div class="privacy-block">
-          <strong>Access your data:</strong> You can export all your data at any time using the Export page to generate Excel or CSV files.
-        </div>
-        <div class="privacy-block">
-          <strong>Delete your data:</strong> You can permanently delete all your applications directly from the Settings page.
-        </div>
-      </div>
-      
-      <div style="text-align: center; margin-top: 20px; color: var(--text-muted); font-size: 12px;">
-        Job Application Tracker v5.0 · This extension is free and open. Your data belongs to you.
-      </div>
-    </div>`;
-}
-
-// ── SIGN OUT ──
-document.getElementById('signout-btn').addEventListener('click', async () => {
-  if (!confirm('Sign out of Job Tracker?')) return;
-  await signOut();
-  clearStoredSession();
-  session = null; currentUser = null; apps = [];
-  if (window._appSyncTimer)    { clearInterval(window._appSyncTimer);    window._appSyncTimer    = null; }
-  if (window._appRefreshTimer) { clearInterval(window._appRefreshTimer); window._appRefreshTimer = null; }
-  const fields = ['auth-email','auth-password','auth-name','forgot-email'];
-  fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  document.getElementById('auth-msg').innerHTML = '';
-  showSection('auth-section');
-  setMode('signin');
-});
-
-// ── ADD APP MODAL ──
-document.getElementById('add-app-btn').addEventListener('click', () => {
-  document.getElementById('add-modal').classList.remove('hidden');
-});
-document.getElementById('modal-close').addEventListener('click', () => {
-  document.getElementById('add-modal').classList.add('hidden');
-});
-document.getElementById('modal-cancel').addEventListener('click', () => {
-  document.getElementById('add-modal').classList.add('hidden');
-});
-document.getElementById('modal-save').addEventListener('click', async () => {
-  const company  = document.getElementById('m-company').value.trim();
-  const jobTitle = document.getElementById('m-title').value.trim();
-  const url      = document.getElementById('m-url').value.trim();
-  const status   = document.getElementById('m-status').value;
-  const jd       = document.getElementById('m-jd').value.trim();
-  const notes    = document.getElementById('m-notes').value.trim();
-  if (!company && !jobTitle) { showToast('Enter company or job title', true); return; }
-  const now = new Date();
-  // Fix #13: use crypto.randomUUID() — avoids timestamp collisions and produces proper UUID
-  const app = {
-    id: crypto.randomUUID(), company, jobTitle, url, jd, resume:'',
-    status, date: today(), dateRaw: now.toISOString(),
-    dateKey: `${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`,
-    notes, followUpDate:''
+    link.href = URL.createObjectURL(blob); link.download = 'applications.csv'; link.click();
   };
-  const ok = await saveApp(app);
-  if (ok) {
-    apps.push(app);
+}
+
+// ── MODALS & SHORTCUTS ──
+document.getElementById('add-app-btn').onclick = () => {
+  document.getElementById('add-modal').classList.remove('hidden');
+  const mStatus = document.getElementById('m-status');
+  mStatus.onclick = () => {
+    const idx = STATUSES.indexOf(mStatus.dataset.value || 'Applied');
+    const next = STATUSES[(idx + 1) % STATUSES.length];
+    mStatus.dataset.value = next; mStatus.textContent = next + ' ▾';
+    mStatus.style.background = (STATUS_BG[next]||STATUS_BG.Applied).bg;
+    mStatus.style.color      = (STATUS_BG[next]||STATUS_BG.Applied).color;
+  };
+};
+document.getElementById('modal-save').onclick = async () => {
+  const company = document.getElementById('m-company').value.trim();
+  const title = document.getElementById('m-title').value.trim();
+  if (!company) { showToast('Company name required', true); return; }
+  const app = {
+    id: crypto.randomUUID(), company, jobTitle: title,
+    status: document.getElementById('m-status').dataset.value || 'Applied',
+    date: today(), dateRaw: new Date().toISOString(), dateKey: workTodayISO(),
+    notes: document.getElementById('m-notes').value, jd: document.getElementById('m-jd').value
+  };
+  if (await saveApp(app)) {
+    apps.push(app); renderPage(currentPage);
     document.getElementById('add-modal').classList.add('hidden');
-    ['m-company','m-title','m-url','m-jd','m-notes'].forEach(id => document.getElementById(id).value='');
-    updateBadge();
-    renderPage(currentPage);
-    showToast('Application saved');
-  } else { showToast('Save failed — check connection', true); }
-});
+    showToast('Saved ✓');
+  }
+};
+document.querySelectorAll('.modal-close').forEach(b => b.onclick = () => b.closest('.modal-wrap').classList.add('hidden'));
 
 // ── INIT ──
 setupAuth();
+

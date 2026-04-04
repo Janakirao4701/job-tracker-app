@@ -71,6 +71,7 @@
       "js": [
         "lib/config.js",
         "lib/docxbuilder.js",
+        "scripts/templates.js",
         "scripts/content.js"
       ],
       "css": [

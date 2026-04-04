@@ -221,10 +221,18 @@
 }
 .rjd-stat-num {
   font-size: 20px; font-weight: 800;
-  color: var(--accent-primary);
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   line-height: 1.2;
 }
-.rjd-stat-offer { color: var(--success) !important; }
+.rjd-stat-offer { 
+  background: linear-gradient(135deg, var(--success), #10b981);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 .rjd-stat-lbl {
   font-size: 9px;
   color: var(--text-muted);
@@ -670,7 +678,6 @@
   box-shadow: 0 4px 16px rgba(79,70,229,0.3);
 }
 #rjd-toast.show { opacity: 1; transform: translateY(0); }
-#rjd-sidebar.open ~ #rjd-toast { right: 540px; }
 
 /* ── Scrollbars ── */
 #rjd-table-wrap::-webkit-scrollbar,
