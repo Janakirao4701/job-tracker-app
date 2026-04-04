@@ -849,50 +849,65 @@ ${context}`;
 
 
       } else if (sec === 'resumeprofile') {
-        const p = JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}');
-        panel.innerHTML = `
-          <div style="font-size:15px;font-weight:700;color:var(--text-primary,#1e293b);margin-bottom:4px;">Resume Personal Profile</div>
-          <div style="font-size:12px;color:var(--text-muted,#94a3b8);margin-bottom:14px;">These details are used to auto-fill your generated resumes.</div>
-          <div id="rjd-rp-msg"></div>
-          
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-            <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Full Name</label><input type="text" id="rp-name" class="rjd-sidebar-input" value="${escHtml(p.name||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
-            <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Title</label><input type="text" id="rp-title" class="rjd-sidebar-input" value="${escHtml(p.title||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
-            <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Email</label><input type="email" id="rp-email" class="rjd-sidebar-input" value="${escHtml(p.email||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
-            <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Phone</label><input type="text" id="rp-phone" class="rjd-sidebar-input" value="${escHtml(p.phone||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
-            <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Location</label><input type="text" id="rp-location" class="rjd-sidebar-input" value="${escHtml(p.location||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
-            <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">LinkedIn</label><input type="text" id="rp-linkedin" class="rjd-sidebar-input" value="${escHtml(p.linkedin||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
-          </div>
+        // Load profile from chrome.storage.local (shared across all sites)
+        const s = chromeStore();
+        const renderProfileForm = (p) => {
+          panel.innerHTML = `
+            <div style="font-size:15px;font-weight:700;color:var(--text-primary,#1e293b);margin-bottom:4px;">Resume Personal Profile</div>
+            <div style="font-size:12px;color:var(--text-muted,#94a3b8);margin-bottom:14px;">These details are used to auto-fill your generated resumes.</div>
+            <div id="rjd-rp-msg"></div>
+            
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+              <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Full Name</label><input type="text" id="rp-name" class="rjd-sidebar-input" value="${escHtml(p.name||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+              <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Title</label><input type="text" id="rp-title" class="rjd-sidebar-input" value="${escHtml(p.title||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+              <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Email</label><input type="email" id="rp-email" class="rjd-sidebar-input" value="${escHtml(p.email||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+              <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Phone</label><input type="text" id="rp-phone" class="rjd-sidebar-input" value="${escHtml(p.phone||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+              <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Location</label><input type="text" id="rp-location" class="rjd-sidebar-input" value="${escHtml(p.location||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+              <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">LinkedIn</label><input type="text" id="rp-linkedin" class="rjd-sidebar-input" value="${escHtml(p.linkedin||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+            </div>
 
-          <div style="margin-bottom:12px;">
-            <label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">🎓 Education (Degree | Year | Uni | Country)</label>
-            <textarea id="rp-education" class="rjd-sidebar-input" rows="2" style="width:100%;padding:6px;font-size:11px;resize:none;">${escHtml(p.education||'')}</textarea>
-          </div>
+            <div style="margin-bottom:12px;">
+              <label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">🎓 Education (Degree | Year | Uni | Country)</label>
+              <textarea id="rp-education" class="rjd-sidebar-input" rows="2" style="width:100%;padding:6px;font-size:11px;resize:none;">${escHtml(p.education||'')}</textarea>
+            </div>
 
-          <div style="margin-bottom:12px;">
-            <label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">📜 Certifications (one per line)</label>
-            <textarea id="rp-certs" class="rjd-sidebar-input" rows="2" style="width:100%;padding:6px;font-size:11px;resize:none;">${escHtml(p.certs||'')}</textarea>
-          </div>
+            <div style="margin-bottom:12px;">
+              <label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">📜 Certifications (one per line)</label>
+              <textarea id="rp-certs" class="rjd-sidebar-input" rows="2" style="width:100%;padding:6px;font-size:11px;resize:none;">${escHtml(p.certs||'')}</textarea>
+            </div>
 
-          <button id="rjd-rp-save" class="rjd-primary-btn" style="width:100%;padding:10px;font-weight:700;">Save Personal Profile</button>
-        `;
+            <button id="rjd-rp-save" class="rjd-primary-btn" style="width:100%;padding:10px;font-weight:700;">Save Personal Profile</button>
+          `;
 
-        document.getElementById('rjd-rp-save').addEventListener('click', () => {
-          const profile = {
-            name: document.getElementById('rp-name').value.trim(),
-            title: document.getElementById('rp-title').value.trim(),
-            email: document.getElementById('rp-email').value.trim(),
-            phone: document.getElementById('rp-phone').value.trim(),
-            location: document.getElementById('rp-location').value.trim(),
-            linkedin: document.getElementById('rp-linkedin').value.trim(),
-            education: document.getElementById('rp-education').value.trim(),
-            certs: document.getElementById('rp-certs').value.trim()
-          };
-          localStorage.setItem('rjd_resume_profile', JSON.stringify(profile));
-          const msg = document.getElementById('rjd-rp-msg');
-          msg.innerHTML = `<div style="padding:7px;background:#f0fff4;color:#276749;border:1px solid #c6f6d5;border-radius:6px;font-size:11px;margin-bottom:10px;text-align:center;">Profile saved ✓</div>`;
-          setTimeout(() => { if (msg) msg.innerHTML = ''; }, 3000);
-        });
+          document.getElementById('rjd-rp-save').addEventListener('click', () => {
+            const profile = {
+              name: document.getElementById('rp-name').value.trim(),
+              title: document.getElementById('rp-title').value.trim(),
+              email: document.getElementById('rp-email').value.trim(),
+              phone: document.getElementById('rp-phone').value.trim(),
+              location: document.getElementById('rp-location').value.trim(),
+              linkedin: document.getElementById('rp-linkedin').value.trim(),
+              education: document.getElementById('rp-education').value.trim(),
+              certs: document.getElementById('rp-certs').value.trim()
+            };
+            // Save to chrome.storage.local (persists across all sites)
+            const s2 = chromeStore();
+            if (s2) s2.set({ rjd_resume_profile: profile });
+            // Also save to localStorage as fallback for dashboard
+            localStorage.setItem('rjd_resume_profile', JSON.stringify(profile));
+            const msg = document.getElementById('rjd-rp-msg');
+            msg.innerHTML = `<div style="padding:7px;background:#f0fff4;color:#276749;border:1px solid #c6f6d5;border-radius:6px;font-size:11px;margin-bottom:10px;text-align:center;">Profile saved ✓</div>`;
+            setTimeout(() => { if (msg) msg.innerHTML = ''; }, 3000);
+          });
+        };
+        // Load from chrome.storage.local first, fallback to localStorage
+        if (s) {
+          s.get('rjd_resume_profile', r => {
+            renderProfileForm(r.rjd_resume_profile || JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}'));
+          });
+        } else {
+          renderProfileForm(JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}'));
+        }
 
       } else if (sec === 'shortcuts') {
         panel.innerHTML = `
@@ -2033,7 +2048,17 @@ ${context}`;
 
   // -- INTEGRATED RESUME ENGINE --
   async function generateIntegratedResume(app) {
-    const p = JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}');
+    // Load profile from chrome.storage.local (shared across all sites)
+    const p = await new Promise(resolve => {
+      const s = chromeStore();
+      if (s) {
+        s.get('rjd_resume_profile', r => {
+          resolve(r.rjd_resume_profile || JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}'));
+        });
+      } else {
+        resolve(JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}'));
+      }
+    });
     if (!p.name) {
       showToast('Please fill out your Resume Profile in Settings first!', true);
       renderSettingsScreen('tracker');
