@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resume Preview — Standard Style</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --accent: #4f46e5;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg);
+            font-family: 'Inter', sans-serif;
+            color: var(--text);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .sidebar {
+            width: 400px;
+            background: white;
+            border-right: 1px solid var(--border);
+            padding: 24px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        .preview-pane {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            display: flex;
+            justify-content: center;
+            background: #e2e8f0;
+        }
+        .resume-page {
+            background: white;
+            width: 8in;
+            min-height: 11in;
+            padding: 0.7in;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            font-family: Arial, sans-serif;
+            color: black;
+            line-height: 1.5;
+        }
+        .header { text-align: center; margin-bottom: 20px; }
+        .name { font-size: 24pt; font-weight: bold; margin-bottom: 4pt; }
+        .contact { font-size: 10pt; color: #444; }
+        .section { margin-top: 15pt; border-bottom: 1px solid #ccc; padding-bottom: 3pt; font-weight: bold; text-transform: uppercase; margin-bottom: 8pt; }
+        .item-head { display: flex; justify-content: space-between; font-weight: bold; }
+        .item-sub { font-style: italic; color: #555; }
+        .bullets { margin-left: 1.5em; margin-bottom: 10pt; }
+        .field { margin-bottom: 16px; }
+        .field label { display: block; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 4pt; }
+        input, textarea { width: 100%; padding: 10px; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 13px; }
+        textarea { height: 400px; resize: vertical; font-family: monospace; }
+        .btn-dl { background: var(--accent); color: white; border: none; padding: 12px; border-radius: 10px; font-weight: 700; width: 100%; cursor: pointer; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2 style="margin-bottom: 20px;">Standard Preview</h2>
+    <div class="field"><label>Name</label><input type="text" id="in-name"></div>
+    <div class="field"><label>Email</label><input type="text" id="in-email"></div>
+    <div class="field"><label>Resume Content</label><textarea id="in-resume"></textarea></div>
+    <button class="btn-dl" id="dl-btn">Download .docx</button>
+</div>
+
+<div class="preview-pane">
+    <div class="resume-page" id="preview"></div>
+</div>
+
+<script>
+    const STORAGE_KEY = 'resume_builder_profile';
+    const profile = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    
+    const inputs = {
+        name: document.getElementById('in-name'),
+        email: document.getElementById('in-email'),
+        resume: document.getElementById('in-resume')
+    };
+    
+    inputs.name.value = profile.name || '';
+    inputs.email.value = profile.email || '';
+    inputs.resume.value = localStorage.getItem('rjd_resume_text') || profile.resume || '';
+
+    function render() {
+        const name = inputs.name.value || 'Your Name';
+        const email = inputs.email.value || 'Email';
+        const txt = inputs.resume.value;
+        
+        let html = `
+            <div class="header">
+                <div class="name">${name}</div>
+                <div class="contact">${email}</div>
+            </div>
+        `;
+        
+        const sections = txt.split(/\[(.*?)\]/);
+        for(let i=1; i<sections.length; i+=2) {
+            const h = sections[i].trim();
+            const b = (sections[i+1]||'').trim();
+            html += `<div class="section">${h}</div>`;
+            if (h.toLowerCase().includes('experience')) {
+                b.split('\n').forEach(l => {
+                    const ps = l.split('|').map(x => x.trim());
+                    if (ps.length >= 2) html += `<div class="item-head"><span>${ps[0]}</span><span>${ps[ps.length-1]}</span></div>`;
+                    else if (l.trim()) html += `<div>${l}</div>`;
+                });
+            } else {
+                html += `<div style="white-space:pre-wrap;">${b}</div>`;
+            }
+        }
+        document.getElementById('preview').innerHTML = html;
+    }
+
+    Object.keys(inputs).forEach(k => inputs[k].oninput = render);
+    render();
+    
+    document.getElementById('dl-btn').onclick = () => {
+        // Reuse or redirect to builder logic
+        alert('Downloading using Standard template...');
+    };
+</script>
+</body>
+</html>

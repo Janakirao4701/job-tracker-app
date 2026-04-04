@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vinay Resume Builder — Pin to Pin Replica</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --head-black: #111111;
+    --dark-gray: #2B2B2B;
+    --mid-gray: #555555;
+    --light-gray: #888888;
+    --rule-gray: #AAAAAA;
+    --accent: #4f46e5;
+    --accent-hover: #4338ca;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    background: #f8fafc;
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: #1e293b;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── SIDEBAR / INPUTS ── */
+  .sidebar {
+    width: 440px;
+    background: white;
+    border-right: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  .sidebar-header {
+    margin-bottom: 24px;
+  }
+
+  .sidebar-title {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--head-black);
+    letter-spacing: -0.5px;
+  }
+
+  .sidebar-sub {
+    font-size: 13px;
+    color: #64748b;
+    margin-top: 4px;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .field {
+    margin-bottom: 16px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+
+  .input-text, .input-area {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    transition: all 0.2s;
+  }
+
+  .input-text:focus, .input-area:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  }
+
+  .input-area {
+    resize: vertical;
+    min-height: 480px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .btn-group {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+  }
+
+  .btn-primary:hover {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+  }
+
+  /* ── PREVIEW PANE ── */
+  .preview-pane {
+    flex: 1;
+    background: #e2e8f0;
+    padding: 40px;
+    overflow-y: auto;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+  .resume-page {
+    background: white;
+    width: 8.5in;
+    min-height: 11in;
+    padding: 0.55in 0.65in;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    box-sizing: border-box;
+    font-family: "Times New Roman", Times, serif;
+    color: var(--dark-gray);
+    line-height: 1.25;
+    font-size: 10pt;
+    transform-origin: top center;
+  }
+
+  /* ── RESUME STYLES (PIN TO PIN) ── */
+  .r-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 4pt;
+  }
+
+  .r-header-left { text-align: left; }
+  .r-header-right { text-align: right; font-size: 9pt; color: var(--dark-gray); padding-top: 5pt; }
+
+  .r-name {
+    font-size: 18pt;
+    font-weight: bold;
+    color: var(--head-black);
+    line-height: 1;
+    margin-bottom: 2pt;
+  }
+
+  .r-title {
+    font-style: italic;
+    color: var(--mid-gray);
+    font-size: 10.5pt;
+  }
+
+  .r-loc {
+    font-style: italic;
+    color: var(--light-gray);
+    font-size: 10pt;
+  }
+
+  .r-section { margin-top: 10pt; margin-bottom: 4pt; }
+  
+  .r-sec-title {
+    font-size: 10pt;
+    font-weight: bold;
+    color: var(--head-black);
+    text-transform: uppercase;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .r-sec-title::after {
+    content: "";
+    display: block;
+    height: 0.8pt;
+    background: var(--rule-gray);
+    margin-top: 1pt;
+    margin-bottom: 2pt;
+  }
+
+  .r-summary { text-align: justify; margin-bottom: 4pt; }
+
+  .r-skill-line { margin-bottom: 1.5pt; }
+  .r-skill-lbl { font-weight: bold; }
+
+  .r-job { margin-top: 5pt; margin-bottom: 4pt; }
+  .r-job-head { display: flex; justify-content: space-between; font-weight: bold; color: var(--head-black); font-size: 8.5pt; }
+  .r-job-date { font-weight: normal; font-style: italic; color: var(--mid-gray); font-size: 9pt; }
+  .r-job-sub { font-weight: bold; color: var(--dark-gray); margin-top: 1pt; margin-bottom: 2pt; font-size: 8.5pt; }
+  .r-sep { color: var(--light-gray); margin: 0 4pt; font-weight: normal; }
+  .r-job-loc { font-weight: normal; color: var(--mid-gray); font-size: 8.5pt; }
+
+  .r-ul { margin: 2pt 0 4pt 1.25em; padding: 0; list-style-type: "- "; }
+  .r-li { margin-bottom: 1.5pt; padding-left: 0.25em; text-align: justify; }
+
+  .r-edu { margin-top: 6pt; margin-bottom: 4pt; font-size: 8.5pt; }
+  .r-edu-head { display: flex; justify-content: space-between; font-weight: bold; font-size: 8.5pt; }
+  .r-edu-sub { color: var(--mid-gray); margin-top: 1pt; font-size: 8.5pt; }
+
+  .r-key-ach {
+    font-weight: bold;
+    font-size: 8.5pt;
+    color: var(--head-black);
+    margin-top: 4pt;
+    margin-bottom: 1pt;
+    display: block;
+  }
+
+  /* Utils */
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-title">Vinay Resume Builder</div>
+    <div class="sidebar-sub">Enter details for "Pin to Pin" LaTeX matching.</div>
+  </div>
+
+  <div class="form-grid">
+    <div class="field" style="grid-column: span 2;">
+      <label>Full Name</label>
+      <input type="text" id="in-name" class="input-text" placeholder="Venkata Vinay Vamsi Yeddula">
+    </div>
+    <div class="field">
+      <label>Title</label>
+      <input type="text" id="in-title" class="input-text" placeholder="Senior Data Engineer">
+    </div>
+    <div class="field">
+      <label>Location</label>
+      <input type="text" id="in-loc" class="input-text" placeholder="Address / City">
+    </div>
+    <div class="field">
+      <label>Mobile</label>
+      <input type="text" id="in-phone" class="input-text" placeholder="+1 (414) 895-2296">
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input type="text" id="in-email" class="input-text" placeholder="example@gmail.com">
+    </div>
+    <div class="field" style="grid-column: span 2;">
+      <label>LinkedIn (URL or Text)</label>
+      <input type="text" id="in-link" class="input-text" placeholder="linkedin.com/in/vinay">
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Resume Content (LaTeX Style Tags)</label>
+    <textarea id="in-resume" class="input-area" placeholder="[Professional Summary]
+Analyze data...
+
+[Technical Skills]
+SQL: T-SQL, Snowflake...
+
+[Professional Experience]
+Senior Data Analyst | Prudential Financial | NJ | Dec 2023 - Present
+- Analyzed datasets...
+
+[Education]
+Master of Science | Concordia University | USA | 2025
+"></textarea>
+  </div>
+
+  <div class="btn-group">
+    <button class="btn btn-primary" id="btn-dl-word">Download .docx</button>
+  </div>
+</div>
+
+<div class="preview-pane">
+  <div class="resume-page" id="resume-preview">
+    <!-- HEADER -->
+    <div class="r-header">
+      <div class="r-header-left">
+        <div class="r-name" id="view-name">User Name</div>
+        <div class="r-title" id="view-title">Professional Title</div>
+        <div class="r-loc" id="view-loc">General Location</div>
+      </div>
+      <div class="r-header-right">
+        <div id="view-phone">Mobile No.</div>
+        <div id="view-email">email@example.com</div>
+        <div id="view-link">linkedin.com/in/user</div>
+      </div>
+    </div>
+
+    <!-- SECTIONS -->
+    <div id="view-content"></div>
+  </div>
+</div>
+
+<script>
+  // ── DATA SYNC & RENDERING ──
+  const inputs = {
+    name: document.getElementById('in-name'),
+    title: document.getElementById('in-title'),
+    loc: document.getElementById('in-loc'),
+    phone: document.getElementById('in-phone'),
+    email: document.getElementById('in-email'),
+    link: document.getElementById('in-link'),
+    resume: document.getElementById('in-resume')
+  };
+
+  const views = {
+    name: document.getElementById('view-name'),
+    title: document.getElementById('view-title'),
+    loc: document.getElementById('view-loc'),
+    phone: document.getElementById('view-phone'),
+    email: document.getElementById('view-email'),
+    link: document.getElementById('view-link'),
+    content: document.getElementById('view-content')
+  };
+
+  // Load from the same key used by the main app
+  const STORAGE_KEY = 'resume_builder_profile';
+  let profile = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+  
+  if (!profile.name) {
+    // Fallback/Default if empty
+    profile = {
+      name: "Venkata Vinay Vamsi Yeddula",
+      title: "Senior Data Analyst",
+      loc: "United States",
+      phone: "Mobile: +1 (414) 895-2296",
+      email: "yvvinayvamsi1207@gmail.com",
+      link: "linkedin.com/in/venkata-vinay-v-yeddula",
+      resume: `[Professional Summary]
+Senior Data Analyst with 5+ years of experience in healthcare analytics and technical reporting, delivering insights across large-scale datasets supporting clinical and operational decision-making. Analyzed, developed, and delivered solutions using SQL, Python, Tableau, and Power BI.
+
+[Technical Skills]
+Databases and Warehousing: SQL, T-SQL, Snowflake, AWS Redshift, Azure Synapse, Windows Functions
+Programming and ML: Python, Pandas, NumPy, SciPy, Scikit-learn, TensorFlow, R, Predictive Analytics
+BI and Reporting: Tableau, Power BI, Data Visualization, KPI Dashboards, Executive Reporting
+Cloud Platforms: AWS, Azure, GCP
+
+[Professional Experience]
+Senior Data Analyst | Prudential Financial | New Jersey, USA | December 2023 - Present
+- Analyzed healthcare and operational datasets using SQL and Python to support clinical and business decision-making.
+- Developed automated reporting workflows using SQL stored procedures and Python, saving 10+ hours per week.
+- Developed Power BI and Tableau dashboards to deliver insights on performance metrics.
+- Partnered with stakeholders to gather requirements and translate business needs into data-driven solutions.
+
+Data Analyst | Verizon | India | March 2020 - July 2023
+- Developed churn prediction models improving accuracy by 18% using Python, enabling retention strategies.
+- Reduced issue resolution time by 25% by developing Tableau and Power BI dashboards.
+- Built ETL pipelines using Informatica and Azure Data Factory to integrate multi-source data.
+
+[Education]
+Master of Science in Computer Science | Concordia University Wisconsin | USA | 2023 - 2025
+Bachelor of Technology in Computer Science | Sree Vidyanikethan | India | 2015 - 2019
+
+[Certifications]
+- AWS Certified Developer — Associate (in progress)`
+    };
+  }
+
+  // Populate inputs with mapped keys
+  inputs.name.value = profile.name || '';
+  inputs.title.value = profile.title || '';
+  inputs.loc.value = profile.location || ''; // 'location' in profile, 'loc' in this page
+  inputs.phone.value = profile.phone || '';
+  inputs.email.value = profile.email || '';
+  inputs.link.value = profile.linkedin || ''; // 'linkedin' in profile, 'link' in this page
+  inputs.resume.value = localStorage.getItem('rjd_resume_text') || profile.resume || ''; // Try dedicated resume text first
+
+  function render() {
+    profile.name = inputs.name.value;
+    profile.title = inputs.title.value;
+    profile.location = inputs.loc.value; // Map back to 'location'
+    profile.phone = inputs.phone.value;
+    profile.email = inputs.email.value;
+    profile.linkedin = inputs.link.value; // Map back to 'linkedin'
+    profile.resume = inputs.resume.value;
+    
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+    // Also save resume text independently for broader compatibility if needed
+    localStorage.setItem('rjd_resume_text', profile.resume);
+
+    views.name.textContent = profile.name || 'User Name';
+    views.title.textContent = profile.title || '';
+    views.loc.textContent = profile.loc || '';
+    views.phone.textContent = profile.phone || '';
+    views.email.textContent = profile.email || '';
+    views.link.textContent = profile.link || '';
+
+    // Advanced Parser
+    const raw = profile.resume || '';
+    let html = '';
+    
+    // Split by Tag: [Something]
+    const sections = raw.split(/\[(.*?)\]/);
+    for (let i = 1; i < sections.length; i += 2) {
+      const header = sections[i].trim();
+      const body = (sections[i+1] || '').trim();
+      
+      html += `<div class="r-section">
+        <div class="r-sec-title">${header}</div>`;
+      
+      if (header.toLowerCase().includes('experience')) {
+        const lines = body.split('\n').map(l => l.trim()).filter(l => l);
+        let inUl = false;
+        
+        lines.forEach(line => {
+          const parts = line.split('|').map(x => x.trim()).filter(x => x);
+          const textOnly = line.replace(/^[\-•\s\*]+/, '').trim();
+          
+          if (parts.length >= 2) {
+             // New Job Header
+             if (inUl) { html += '</ul>'; inUl = false; }
+             html += `<div class="r-job">
+               <div class="r-job-head"><span>${parts[0].toUpperCase()}</span><span class="r-job-date">${parts[parts.length-1]}</span></div>`;
+             const middle = parts.slice(1, -1);
+             if (middle.length > 0) {
+               html += `<div class="r-job-sub">${middle.join(' | ')}</div>`;
+             }
+             html += '</div>';
+          } else if (textOnly.toLowerCase().startsWith('key achievements')) {
+             if (inUl) { html += '</ul>'; inUl = false; }
+             html += `<div class="r-key-ach">${textOnly}</div>`;
+          } else if (textOnly) {
+             if (!inUl) { html += '<ul class="r-ul">'; inUl = true; }
+             html += `<li class="r-li">${textOnly}</li>`;
+          }
+        });
+        if (inUl) html += '</ul>';
+      } else if (header.toLowerCase().includes('education')) {
+        body.split('\n').filter(l => l.trim()).forEach(line => {
+          const parts = line.split('|').map(x => x.trim()).filter(x => x);
+          if (parts.length >= 2) {
+             html += `<div class="r-edu">
+               <div class="r-edu-head"><span>${parts[0]}</span><span class="r-job-date">${parts[parts.length-1]}</span></div>`;
+               
+             const middle = parts.slice(1, -1);
+             if (middle.length > 0) {
+               html += `<div class="r-edu-sub">${middle.join(' <span class="r-sep">|</span> ')}</div>`;
+             }
+             html += `</div>`;
+          }
+        });
+      } else {
+        // Bullet or Paragraph
+        if (body.includes('\n- ') || body.startsWith('- ')) {
+           html += '<ul class="r-ul">';
+           body.split('\n').forEach(li => { if(li.trim()) html += `<li class="r-li">${li.replace(/^[\-•\s\*]+/, '')}</li>`; });
+           html += '</ul>';
+        } else {
+           html += `<p class="r-summary">${body.replace(/\n/g, '<br>')}</p>`;
+        }
+      }
+      html += `</div>`;
+    }
+    views.content.innerHTML = html;
+  }
+
+  Object.keys(inputs).forEach(k => inputs[k].addEventListener('input', render));
+  render();
+
+  // ── SPECIALIZED DOCX BUILDER ──
+  document.getElementById('btn-dl-word').onclick = function() {
+    const bytes = buildDocx(profile);
+    const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (profile.name || 'Resume').replace(/\s+/g, '_') + '.docx';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  function buildDocx(p) {
+    const enc = new TextEncoder();
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;'); }
+
+    const FONT = 'Times New Roman';
+    const SIZE_BODY = 20; // 10pt
+    const SIZE_NAME = 36; // 18pt
+    const SIZE_HEAD = 20; // 10pt
+
+    // HELPERS
+    function makeP(runs, opts = {}) {
+      const { align, border, before, after, bullet, tabRight } = opts;
+      let pPr = '';
+      if (align) pPr += `<w:jc w:val="${align}"/>`;
+      
+      // Forces explicit spacing to override Word's defaults for "Pin to Pin" precision
+      const b = before || 0;
+      const a = (bullet && after === undefined) ? 30 : (after || 0); // 30 = 1.5pt for bullets
+      pPr += `<w:spacing w:before="${b}" w:after="${a}" w:line="240" w:lineRule="auto"/>`;
+
+      if (border) pPr += `<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="2" w:color="AAAAAA"/></w:pBdr>`;
+      if (bullet) pPr += `<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>`;
+      if (tabRight) pPr += `<w:tabs><w:tab w:val="right" w:pos="10080"/></w:tabs>`;
+
+      return `<w:p>${pPr?'<w:pPr>'+pPr+'</w:pPr>':''}${runs.map(r => {
+        if (r === 'tab') return '<w:r><w:tab/></w:r>';
+        return `<w:r><w:rPr><w:rFonts w:ascii="${FONT}" w:hAnsi="${FONT}" w:cs="${FONT}"/>${r.bold?'<w:b/><w:bCs/>':''}${r.italic?'<w:i/><w:iCs/>':''}<w:sz w:val="${r.size||SIZE_BODY}"/><w:szCs w:val="${r.size||SIZE_BODY}"/><w:color w:val="${r.color||'000000'}"/></w:rPr><w:t xml:space="preserve">${esc(r.text)}</w:t></w:r>`;
+      }).join('')}</w:p>`;
+    }
+
+    let doc = '';
+
+    // NAME & MOBILE
+    doc += makeP([ { text: p.name, bold: true, size: SIZE_NAME }, 'tab', { text: p.phone, color: '111111' } ], { tabRight: true });
+    
+    // TITLE & EMAIL
+    doc += makeP([ { text: p.title, italic: true, color: '555555' }, 'tab', { text: p.email, color: '2B2B2B' } ], { tabRight: true });
+
+    // LOC & LINK
+    doc += makeP([ { text: p.loc, italic: true, color: '888888' }, 'tab', { text: p.link, color: '2B2B2B' } ], { tabRight: true, after: 120 });
+
+    const raw = p.resume || '';
+    const sections = raw.split(/\[(.*?)\]/);
+    for (let i = 1; i < sections.length; i += 2) {
+      const header = sections[i].trim();
+      const body = (sections[i+1] || '').trim();
+
+      // SECTION HEADER
+      doc += makeP([{ text: header.toUpperCase(), bold: true, size: SIZE_HEAD }], { border: true, before: 180, after: 80 });
+
+      if (header.toLowerCase().includes('experience')) {
+        const lines = body.split('\n').map(l => l.trim()).filter(l => l);
+        lines.forEach(line => {
+          const ps = line.split('|').map(x => x.trim()).filter(x => x);
+          const textOnly = line.replace(/^[\-•\s\*]+/, '').trim();
+          
+          if (ps.length >= 2) {
+             doc += makeP([{ text: ps[0].toUpperCase(), bold: true, size: 17 }, 'tab', { text: ps[ps.length-1], italic: true, color: '555555', size: 17 }], { tabRight: true, before: 100 });
+             const mid = ps.slice(1, -1);
+             if (mid.length > 0) {
+               doc += makeP([{ text: mid.join(' | '), bold: true, color: '2B2B2B', size: 17 }], { after: 40 });
+             }
+          } else if (textOnly.toLowerCase().startsWith('key achievements')) {
+             doc += makeP([{ text: textOnly, bold: true, size: 17 }], { before: 80, after: 20 });
+          } else if (textOnly) {
+             doc += makeP([{ text: textOnly }], { bullet: true });
+          }
+        });
+      } else if (header.toLowerCase().includes('skills')) {
+        body.split('\n').forEach(l => {
+          const idx = l.indexOf(':');
+          if (idx > -1) {
+            doc += makeP([{ text: l.substring(0, idx + 1), bold: true }, { text: l.substring(idx+1) }], { after: 20 });
+          } else if (l.trim()) doc += makeP([{ text: l }], { after: 20 });
+        });
+      } else if (header.toLowerCase().includes('education')) {
+        body.split('\n').forEach(l => {
+          const ps = l.split('|').map(x => x.trim());
+          if (ps.length >= 2) {
+            doc += makeP([{ text: ps[0], bold: true, size: 17 }, 'tab', { text: ps[ps.length-1], italic: true, color: '555555', size: 18 }], { tabRight: true, before: 80 });
+            
+            const mid = ps.slice(1, -1);
+            if (mid.length > 0) {
+               doc += makeP([{ text: mid.join(' | '), color: '555555', size: 17 }], { after: 40 });
+            }
+          }
+        });
+      } else {
+        body.split('\n').forEach(l => {
+          if (l.trim().startsWith('-')) doc += makeP([{ text: l.replace(/^\-/, '') }], { bullet: true });
+          else doc += makeP([{ text: l }], { after: 40 });
+        });
+      }
+    }
+
+    const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>${doc}
+    <w:sectPr>
+      <w:pgSz w:w="12240" w:h="15840"/>
+      <w:pgMar w:top="792" w:right="936" w:bottom="792" w:left="936" w:header="720" w:footer="720" w:gutter="0"/>
+    </w:sectPr>
+  </w:body></w:document>`;
+
+    const numberingXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val="-"/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="480" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum>
+  <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>
+</w:numbering>`;
+
+    const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
+</Types>`;
+
+    const relsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
+    const docRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdNum" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/></Relationships>`;
+
+    // ZIP BUILDER
+    function buildZip(files) {
+      function write16(dv, o, v) { dv.setUint16(o, v, true); }
+      function write32(dv, o, v) { dv.setUint32(o, v, true); }
+      function crc32(b) {
+        let c = 0xFFFFFFFF; if (!crc32._t) { crc32._t = new Uint32Array(256); for (let i=0;i<256;i++) { let v=i; for(let j=0;j<8;j++) v=v&1?(0xEDB88320^(v>>>1)):(v>>>1); crc32._t[i]=v; } }
+        for (let i=0;i<b.length;i++) c=crc32._t[(c^b[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0;
+      }
+      const es = files.map(f => { const nb = enc.encode(f.name); const d = typeof f.data==='string'?enc.encode(f.data):f.data; return { nb, d, crc: crc32(d), sz: d.length }; });
+      let tl=0; es.forEach(e => tl += 30 + e.nb.length + e.sz);
+      let tc=0; es.forEach(e => tc += 46 + e.nb.length);
+      const out = new Uint8Array(tl + tc + 22); const dv = new DataView(out.buffer);
+      let pos = 0; const offs = [];
+      es.forEach(e => {
+        offs.push(pos); out.set([0x50,0x4B,0x03,0x04], pos);
+        write16(dv, pos+4, 20); write32(dv, pos+14, e.crc); write32(dv, pos+18, e.sz); write32(dv, pos+22, e.sz); write16(dv, pos+26, e.nb.length);
+        out.set(e.nb, pos+30); out.set(e.d, pos+30+e.nb.length); pos += 30 + e.nb.length + e.sz;
+      });
+      const cds = pos;
+      es.forEach((e, i) => {
+        out.set([0x50,0x4B,0x01,0x02], pos); write16(dv, pos+4, 20); write16(dv, pos+6, 20); write32(dv, pos+16, e.crc); write32(dv, pos+20, e.sz); write32(dv, pos+24, e.sz); write16(dv, pos+28, e.nb.length); write32(dv, pos+42, offs[i]);
+        out.set(e.nb, pos+46); pos += 46 + e.nb.length;
+      });
+      out.set([0x50,0x4B,0x05,0x06], pos); write16(dv, pos+8, es.length); write16(dv, pos+10, es.length); write32(dv, pos+12, pos-cds); write32(dv, pos+16, cds);
+      return out;
+    }
+
+    return buildZip([
+      { name: '[Content_Types].xml', data: contentTypes },
+      { name: '_rels/.rels', data: relsXml },
+      { name: 'word/document.xml', data: documentXml },
+      { name: 'word/numbering.xml', data: numberingXml },
+      { name: 'word/_rels/document.xml.rels', data: docRels }
+    ]);
+  }
+</script>
+
+</body>
+</html>

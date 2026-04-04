@@ -1,19 +1,20 @@
-importScripts('../lib/config.js');
-// ── FORWARD SESSION EVENTS TO ALL TABS ──
-chrome.runtime.onMessage.addListener((msg, sender) => {
-  if (msg.action === 'session_saved' || msg.action === 'session_cleared') {
-    // Broadcast to all open tabs so content scripts update TRACK button immediately
+// ── FORWARD SYNC EVENTS FROM DASHBOARD TO ALL TABS ──
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  const syncActions = ['session_saved', 'session_cleared', 'save_profile', 'save_key'];
+  if (syncActions.includes(msg.action)) {
+    // Broadcast to all open tabs so content scripts update immediately
     chrome.tabs.query({}, (tabs) => {
       tabs.forEach(tab => {
         chrome.tabs.sendMessage(tab.id, msg).catch(e => {
-          // Quality fix #3: only silence expected "no receiver" errors, log real ones
+          // Silence connection errors for inactive/non-matching tabs
           if (!e.message.includes('Receiving end does not exist') &&
               !e.message.includes('Could not establish connection')) {
-            console.warn('[RJD] sendMessage error on tab', tab.id, e.message);
+            console.warn('[RJD] broadcast error on tab', tab.id, e.message);
           }
         });
       });
     });
+    if (sendResponse) sendResponse({ ok: true });
   }
 });
 

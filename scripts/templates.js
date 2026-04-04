@@ -252,15 +252,36 @@ window.rjdTemplates = {
     if (sec === 'resume') {
       return `
         <div class="settings-section-title">Resume Profile</div>
-        <div class="settings-section-sub">Details for Word document generation.</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px;">
-          <div class="settings-field"><label>Full Name</label><input class="settings-input rp-input" id="rp-name" value="${esc(rp.name||'')}"/></div>
-          <div class="settings-field"><label>Title</label><input class="settings-input rp-input" id="rp-title" value="${esc(rp.title||'')}"/></div>
-          <div class="settings-field"><label>Email</label><input class="settings-input rp-input" id="rp-email" value="${esc(rp.email||'')}"/></div>
-          <div class="settings-field"><label>Phone</label><input class="settings-input rp-input" id="rp-phone" value="${esc(rp.phone||'')}"/></div>
+        <div class="settings-section-sub">Details for Word document generation. Style selection is synced to the extension.</div>
+        
+        <!-- TEMPLATE SELECTION -->
+        <div style="background:var(--bg-inset);border:1px solid var(--border-light);border-radius:12px;padding:20px;margin:20px 0;">
+          <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text);">🎓 Resume Template Style</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <label class="tpl-card ${rp.template === 'standard' || !rp.template ? 'active' : ''}">
+              <input type="radio" name="resume-tpl" value="standard" ${rp.template === 'standard' || !rp.template ? 'checked' : ''} style="display:none;"/>
+              <div class="tpl-name">Professional Standard</div>
+              <div class="tpl-desc">Clean, centered Arial design. Great for most corporate roles.</div>
+            </label>
+            <label class="tpl-card ${rp.template === 'p2p_vinay' ? 'active' : ''}">
+              <input type="radio" name="resume-tpl" value="p2p_vinay" ${rp.template === 'p2p_vinay' ? 'checked' : ''} style="display:none;"/>
+              <div class="tpl-name">Pin-to-Pin LaTeX</div>
+              <div class="tpl-desc">High-fidelity academic style with split-headers and Times New Roman.</div>
+            </label>
+          </div>
+          <div style="margin-top:16px;text-align:right;">
+             <button class="auth-link" id="preview-tpl-btn" style="font-size:12px;">👁️ Preview Selected Style</button>
+          </div>
         </div>
-        <div class="settings-field" style="margin-top:14px;"><label>Education</label><textarea class="settings-input rp-input" id="rp-education" rows="2">${esc(rp.education||'')}</textarea></div>
-        <div class="settings-field" style="margin-top:14px;"><label>Certifications</label><textarea class="settings-input rp-input" id="rp-certifications" rows="2">${esc(rp.certifications||'')}</textarea></div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div class="settings-field"><label>Full Name</label><input class="settings-input rp-input" id="rp-name" value="${esc(rp.name || '')}"/></div>
+          <div class="settings-field"><label>Title</label><input class="settings-input rp-input" id="rp-title" value="${esc(rp.title || '')}"/></div>
+          <div class="settings-field"><label>Email</label><input class="settings-input rp-input" id="rp-email" value="${esc(rp.email || '')}"/></div>
+          <div class="settings-field"><label>Phone</label><input class="settings-input rp-input" id="rp-phone" value="${esc(rp.phone || '')}"/></div>
+        </div>
+        <div class="settings-field" style="margin-top:14px;"><label>Education</label><textarea class="settings-input rp-input" id="rp-education" rows="2" placeholder="University | Degree | Date">${esc(rp.education || '')}</textarea></div>
+        <div class="settings-field" style="margin-top:14px;"><label>Certifications</label><textarea class="settings-input rp-input" id="rp-certifications" rows="2">${esc(rp.certifications || '')}</textarea></div>
         <div id="rp-status" style="font-size:12px;color:#059669;margin-top:10px;"></div>`;
     }
     return "";

@@ -84,11 +84,9 @@
       "resources": [
         "lib/xlsxbuilder.js",
         "lib/docxbuilder.js",
-        "pages/privacy.html",
-        "icons/icon16.png",
-        "icons/icon32.png",
-        "icons/icon48.png",
-        "icons/icon128.png"
+        "pages/*.html",
+        "icons/*.png",
+        "styles/*.css"
       ],
       "matches": [
         "<all_urls>"

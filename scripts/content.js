@@ -773,6 +773,7 @@ ${context}`;
               <div class="rjd-settings-nav-item ${activeSection==='apikey'?'rjd-snav-active':''}" data-sec="apikey">🔑 API Key</div>
               <div style="font-size:9px;font-weight:700;color:var(--text-muted,#94a3b8);text-transform:uppercase;letter-spacing:0.8px;padding:12px 14px 4px;">Info</div>
               <div class="rjd-settings-nav-item ${activeSection==='shortcuts'?'rjd-snav-active':''}" data-sec="shortcuts">⌨️ Shortcuts</div>
+              <div class="rjd-settings-nav-item ${activeSection==='resume'?'rjd-snav-active':''}" data-sec="resume">📄 Resume</div>
               <div class="rjd-settings-nav-item ${activeSection==='privacy'?'rjd-snav-active':''}" data-sec="privacy">🛡️ Privacy</div>
               <div class="rjd-settings-nav-item ${activeSection==='about'?'rjd-snav-active':''}" data-sec="about">ℹ️ About</div>
             </div>
@@ -846,6 +847,40 @@ ${context}`;
           });
         });
 
+
+      } else if (sec === 'resume') {
+        const s = chromeStore();
+        s.get('resume_builder_profile', r => {
+          const profile = r.resume_builder_profile || {};
+          panel.innerHTML = `
+            <div style="font-size:14px;font-weight:700;color:var(--accent-primary,#4f46e5);margin-bottom:3px;">Resume Template</div>
+            <div style="font-size:11px;color:var(--text-muted,#94a3b8);margin-bottom:14px;">Select the style for your .docx downloads.</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div class="rjd-tpl-opt ${profile.template==='standard'||!profile.template?'active':''}" data-val="standard" style="padding:12px;border:1.5px solid var(--border-color);border-radius:10px;cursor:pointer;transition:all 0.2s;">
+                <div style="font-size:12px;font-weight:700;margin-bottom:4px;">Professional Standard</div>
+                <div style="font-size:10px;color:var(--text-muted);line-height:1.4;">Clean, centered Arial design.</div>
+              </div>
+              <div class="rjd-tpl-opt ${profile.template==='p2p_vinay'?'active':''}" data-val="p2p_vinay" style="padding:12px;border:1.5px solid var(--border-color);border-radius:10px;cursor:pointer;transition:all 0.2s;">
+                <div style="font-size:12px;font-weight:700;margin-bottom:4px;">Pin-to-Pin LaTeX</div>
+                <div style="font-size:10px;color:var(--text-muted);line-height:1.4;">High-fidelity academic split-headers.</div>
+              </div>
+            </div>
+            <div id="rjd-resume-msg" style="margin-top:12px;"></div>
+            <style>
+              .rjd-tpl-opt.active { border-color: var(--accent-primary) !important; background: var(--accent-light) !important; }
+            </style>
+          `;
+          panel.querySelectorAll('.rjd-tpl-opt').forEach(opt => {
+            opt.onclick = () => {
+              const val = opt.dataset.val;
+              profile.template = val;
+              s.set({ resume_builder_profile: profile }, () => {
+                showSMsg('Template updated ✓', false);
+                renderSection('resume');
+              });
+            };
+          });
+        });
 
       } else if (sec === 'shortcuts') {
         panel.innerHTML = `
@@ -1260,13 +1295,17 @@ ${context}`;
     if (s) {
       s.get('resume_builder_profile', (r) => {
         const profile = r.resume_builder_profile || {};
+        console.log('[RJD DEBUG] resume_builder_profile from chrome.storage:', JSON.stringify(profile));
         // If no profile is set, use current user info as fallback
         if (!profile.name && currentUser) profile.name = currentUser.name || '';
         if (!profile.email && currentUser) profile.email = currentUser.email || '';
+        
+        const templateId = profile.template || 'standard';
         const filename = (app.company || 'Resume').replace(/[^a-z0-9]/gi, '_') + '_Resume';
+        
         try {
-          window.downloadResumeDocx(profile, app.resume, filename);
-          showToast('Resume downloaded ✓');
+          window.downloadResumeDocx(profile, app.resume, filename, templateId);
+          showToast('Downloaded as: ' + templateId);
         } catch(err) {
           showToast('Download failed: ' + (err.message || 'unknown error'), true);
         }
@@ -1822,8 +1861,49 @@ ${context}`;
         applySession(null);
         const sidebar = document.getElementById('rjd-sidebar');
         if (sidebar) sidebar.classList.remove('open');
+      } else if (msg.action === 'save_profile') {
+        const s = chromeStore();
+        if (s) s.set({ resume_builder_profile: msg.profile });
       }
     });
+  }
+
+  // ── BRIDGE: Mirror dashboard localStorage → chrome.storage.local ──
+  // The dashboard (Vercel) saves to localStorage, but the extension reads from
+  // chrome.storage.local. This bridge keeps them in sync whenever the user
+  // is on the dashboard page.
+  if (hasChromeStorage) {
+    // 1. On page load, copy any existing localStorage profile into chrome.storage
+    try {
+      const lsProfile = localStorage.getItem('resume_builder_profile');
+      if (lsProfile) {
+        const parsed = JSON.parse(lsProfile);
+        chrome.storage.local.set({ resume_builder_profile: parsed });
+      }
+    } catch(e) {}
+
+    // 2. Listen for live changes (e.g. user picks a template in the dashboard)
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'resume_builder_profile' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          chrome.storage.local.set({ resume_builder_profile: parsed });
+        } catch(ex) {}
+      }
+    });
+
+    // 3. Also intercept same-page writes (storage event only fires cross-tab)
+    //    Override localStorage.setItem to catch writes from the same page
+    const _origSetItem = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = function(key, value) {
+      _origSetItem(key, value);
+      if (key === 'resume_builder_profile') {
+        try {
+          const parsed = JSON.parse(value);
+          chrome.storage.local.set({ resume_builder_profile: parsed });
+        } catch(ex) {}
+      }
+    };
   }
 
   // Fallback poll every 3 seconds

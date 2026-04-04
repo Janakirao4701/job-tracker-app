@@ -688,3 +688,54 @@ tr:hover td { background: var(--bg); }
   .stats-grid { grid-template-columns: 1fr; }
   .modal { width: 95%; border-radius: 16px; }
 }
+
+/* Resume Template Selection */
+.tpl-card {
+  display: block;
+  padding: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+.tpl-card:hover {
+  border-color: var(--accent-border);
+  transform: translateY(-2px);
+}
+.tpl-card.active {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  box-shadow: 0 4px 20px rgba(79, 70, 229, 0.08);
+}
+.tpl-card.active::after {
+  content: '✓';
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: var(--accent);
+  color: #fff;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 900;
+}
+.tpl-card .tpl-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.tpl-card .tpl-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.tpl-card.active .tpl-name {
+  color: var(--accent);
+}

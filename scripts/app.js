@@ -952,7 +952,21 @@ async function renderSettingsSection(sec) {
   const panel = document.getElementById('settings-panel');
   if (!panel) return;
   const savedKey = await loadGeminiKeyDB();
-  let rp = {}; try { rp = JSON.parse(localStorage.getItem('resume_builder_profile') || '{}'); } catch(e) {}
+
+  // Load resume profile from chrome.storage.local (primary) with localStorage fallback
+  let rp = {};
+  if (sec === 'resume' && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    rp = await new Promise(resolve => {
+      chrome.storage.local.get('resume_builder_profile', r => {
+        resolve(r.resume_builder_profile || {});
+      });
+    });
+    // Also sync to localStorage for the preview pages
+    localStorage.setItem('resume_builder_profile', JSON.stringify(rp));
+  } else {
+    try { rp = JSON.parse(localStorage.getItem('resume_builder_profile') || '{}'); } catch(e) {}
+  }
+
   panel.innerHTML = window.rjdTemplates.dashboardSettingsSection({
     sec, currentUser, initials, getWorkDayCutoff, STATUSES, esc, savedKey, rp
   });
@@ -974,6 +988,43 @@ async function renderSettingsSection(sec) {
       }
     };
   } else if (sec === 'resume') {
+    // Handle template card clicks
+    document.querySelectorAll('.tpl-card').forEach(card => {
+      card.onclick = () => {
+        const rad = card.querySelector('input');
+        rad.checked = true;
+        document.querySelectorAll('.tpl-card').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        // Read current profile from chrome.storage, update template, save to both storages
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.get('resume_builder_profile', (r) => {
+            const profile = r.resume_builder_profile || {};
+            profile.template = rad.value;
+            chrome.storage.local.set({ resume_builder_profile: profile });
+            localStorage.setItem('resume_builder_profile', JSON.stringify(profile));
+            document.getElementById('rp-status').textContent = 'Template updated ✓';
+          });
+        } else {
+          const profile = JSON.parse(localStorage.getItem('resume_builder_profile') || '{}');
+          profile.template = rad.value;
+          localStorage.setItem('resume_builder_profile', JSON.stringify(profile));
+          document.getElementById('rp-status').textContent = 'Template updated ✓';
+        }
+      };
+    });
+
+    // Handle preview button
+    document.getElementById('preview-tpl-btn').onclick = () => {
+      const selected = document.querySelector('input[name="resume-tpl"]:checked').value;
+      if (selected === 'p2p_vinay') {
+        window.open('vinay_resume.html', '_blank');
+      } else if (selected === 'standard') {
+        window.open('standard_resume.html', '_blank');
+      } else {
+        alert('Template preview is currently the default dashboard view.');
+      }
+    };
+
     document.querySelectorAll('.rp-input').forEach(inp => {
       inp.oninput = () => {
         const profile = {
@@ -982,11 +1033,25 @@ async function renderSettingsSection(sec) {
           email: document.getElementById('rp-email').value,
           phone: document.getElementById('rp-phone').value,
           education: document.getElementById('rp-education').value,
-          certifications: document.getElementById('rp-certifications').value
+          certifications: document.getElementById('rp-certifications').value,
+          template: document.querySelector('input[name="resume-tpl"]:checked').value
         };
         localStorage.setItem('resume_builder_profile', JSON.stringify(profile));
+        syncProfileToExtension(profile);
         document.getElementById('rp-status').textContent = 'Auto-saved ✓';
       };
+    });
+  }
+}
+
+function syncProfileToExtension(profile) {
+  // Direct write to chrome.storage.local — works because dashboard runs
+  // as an extension page (chrome-extension:// URL)
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.set({ resume_builder_profile: profile }, () => {
+      if (chrome.runtime.lastError) {
+        console.log('Profile sync error:', chrome.runtime.lastError.message);
+      }
     });
   }
 }
