@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Job Application Tracker",
-  "version": "5.0.2",
+  "version": "5.0.3",
   "description": "Premium AI-powered job application tracker with cloud sync, Gemini extraction, and beautiful UI",
   "permissions": [
     "storage",
@@ -87,6 +87,7 @@
         "lib/FileSaver.min.js",
         "lib/resume-engine.js",
         "lib/xlsxbuilder.js",
+        "pages/app.html",
         "pages/privacy.html",
         "icons/icon16.png",
         "icons/icon32.png",
