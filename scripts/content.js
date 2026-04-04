@@ -596,6 +596,18 @@
     const t = document.createElement('div'); t.id = 'rjd-toast'; document.body.appendChild(t);
   }
 
+  function checkShowToggle() {
+    const url = window.location.href;
+    const hosts = [
+      'linkedin.com', 'indeed.com', 'dice.com', 'glassdoor.com', 'simplyhired.com', 'ziprecruiter.com',
+      'google.com/search', 'job-tracker-app-iota-beryl.vercel.app', 'localhost', '127.0.0.1'
+    ];
+    if (hosts.some(h => url.includes(h))) {
+      const tog = document.getElementById('rjd-toggle');
+      if (tog) tog.classList.add('rjd-visible');
+    }
+  }
+
   function applySession(sess) {
     const tog = document.getElementById('rjd-toggle');
     if (sess && sess.token && sess.user) {
@@ -605,17 +617,19 @@
       dbLoadApps().then(apps => { applications = apps; updateTrackBadge(); }).catch(() => {});
     } else {
       currentUser = null; applications = [];
-      if (tog) tog.classList.remove('rjd-visible');
       updateTrackBadge();
+      checkShowToggle();
     }
   }
 
   buildSidebar();
+  checkShowToggle();
   const cs = chromeStore();
   if (cs) {
     cs.get(['rjd_session', 'resume_builder_profile'], r => {
       if (r.resume_builder_profile) cachedProfile = r.resume_builder_profile;
-      applySession(r.rjd_session);
+      if (r.rjd_session) applySession(r.rjd_session);
+      else checkShowToggle();
     });
     chrome.storage.onChanged.addListener((c, area) => {
       if (area === 'local' && c.resume_builder_profile) cachedProfile = c.resume_builder_profile.newValue || {};
