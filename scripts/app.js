@@ -867,7 +867,7 @@ function renderApplications() {
       <table>
         <thead><tr>
           <th class="bulk-col" style="width:36px;display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" id="select-all-chk" title="Select all"/></th>
-          <th>#</th><th>Company</th><th>Job Title</th><th>URL</th><th>Status</th><th>Session Date</th><th>Notes</th><th>Actions</th>
+          <th>#</th><th>Company</th><th>Job Title</th><th>URL</th><th>Status</th><th>Session Date</th><th>Resume Content</th><th>Download</th><th>Actions</th>
         </tr></thead>
         <tbody>
           ${filtered.length === 0
@@ -876,12 +876,7 @@ function renderApplications() {
               <tr data-id="${a.id}" class="app-row" style="cursor:pointer;transition:background 0.2s;">
                 <td class="bulk-col" style="display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" class="app-chk" data-id="${a.id}"/></td>
                 <td style="color:var(--text-faint);font-size:12px;">${i+1}</td>
-                <td><div style="font-weight:600;font-size:13px;color:var(--text);">${esc(a.company||'—')}</div>
-                    <div style="margin-top:3px;display:flex;gap:4px;">
-                      ${a.jd     ? `<span style="font-size:10px;background:var(--accent-light);color:var(--accent);border-radius:4px;padding:1px 5px;font-weight:600;">JD</span>` : ''}
-                      ${a.resume ? `<span style="font-size:10px;background:#ecfdf5;color:#059669;border-radius:4px;padding:1px 5px;font-weight:600;">Resume</span>` : ''}
-                    </div>
-                </td>
+                <td><div style="font-weight:600;font-size:13px;color:var(--text);">${esc(a.company||'—')}</div></td>
                 <td style="font-size:13px;color:var(--text2);">${esc(a.jobTitle||'—')}</td>
                 <td>${a.url?`<a href="${esc(a.url)}" target="_blank" class="url-link">Open ↗</a>`:'—'}</td>
                 <td>
@@ -890,7 +885,16 @@ function renderApplications() {
                   </select>
                 </td>
                 <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${esc(a.dateKey||a.date||'—')}</td>
-                <td style="font-size:12px;color:var(--text-muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(a.notes||'—')}</td>
+                <td>
+                  <button class="auth-link add-resume-btn" data-id="${a.id}" style="font-size:12px;font-weight:600;color:${a.resume?'#059669':'var(--accent)'};">
+                    ${a.resume ? '📝 Update' : '➕ Add Content'}
+                  </button>
+                </td>
+                <td>
+                  <button class="btn-new dl-resume-btn" data-id="${a.id}" style="padding:4px 10px;font-size:11px;${!a.resume ? 'opacity:0.4;pointer-events:none;' : ''}">
+                    📥 Download
+                  </button>
+                </td>
                 <td style="white-space:nowrap;">
                   <button class="auth-link del-btn" data-id="${a.id}" style="color:var(--danger);font-size:12px;">Delete</button>
                 </td>
@@ -922,6 +926,54 @@ function renderApplications() {
     sel.addEventListener('change', async () => {
       const app = apps.find(a => String(a.id) === String(sel.dataset.id));
       if (app) { app.status = sel.value; await updateApp(app); sel.style.background=(STATUS_BG[sel.value]||STATUS_BG.Applied).bg; sel.style.color=(STATUS_BG[sel.value]||STATUS_BG.Applied).color; showToast('Status updated'); }
+    });
+  });
+
+  document.querySelectorAll('.add-resume-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const app = apps.find(a => String(a.id) === String(id));
+      if (!app) return;
+      try {
+        const text = await navigator.clipboard.readText();
+        if (!text || text.trim().length < 10) {
+          showToast('Clipboard is empty or too short. Copy the tailored resume first!', true);
+          return;
+        }
+        app.resume = text.trim();
+        const ok = await updateApp(app);
+        if (ok) {
+          showToast('Resume content saved ✓');
+          renderApplications();
+        } else {
+          showToast('Failed to save content', true);
+        }
+      } catch (err) {
+        showToast('Clipboard access denied. Please click the button to allow.', true);
+      }
+    });
+  });
+
+  document.querySelectorAll('.dl-resume-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const app = apps.find(a => String(a.id) === String(id));
+      if (app && app.resume) {
+        btn.disabled = true;
+        btn.textContent = '⏳ Preparing...';
+        try {
+          await generateIntegratedResume(app);
+          showToast('Resume downloaded ✓');
+        } catch (err) {
+          console.error(err);
+          showToast('Download failed: ' + err.message, true);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '📥 Download';
+        }
+      }
     });
   });
 
@@ -1118,7 +1170,7 @@ function renderSettings() {
   document.getElementById('page-content').innerHTML = `
     <div class="settings-layout">
       <div class="settings-nav-card">
-        ${[['apikey','🔑','API Key'],['account','👤','Account'],['shortcuts','⌨️','Shortcuts'],['privacy-s','🛡️','Privacy'],['about','ℹ️','About']].map(([id,icon,label]) =>
+        ${[['apikey','🔑','API Key'],['resumeprofile','📄','Resume Profile'],['account','👤','Account'],['shortcuts','⌨️','Shortcuts'],['privacy-s','🛡️','Privacy'],['about','ℹ️','About']].map(([id,icon,label]) =>
           `<div class="settings-nav-item ${settingsSection===id?'active':''}" data-sec="${id}">${icon} ${label}</div>`
         ).join('')}
       </div>
@@ -1182,6 +1234,54 @@ function renderSettingsSection(sec) {
         document.getElementById('settings-msg').innerHTML='<div class="auth-msg success">Key saved ' + (saved ? '& synced ✓' : '(locally) ✓') + '</div>';
         setTimeout(() => { const el=document.getElementById('settings-msg'); if(el) el.innerHTML=''; }, 3000);
       });
+    });
+
+  } else if (sec === 'resumeprofile') {
+    const p = JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}');
+    panel.innerHTML = `
+      <div class="settings-section-title">Resume Personal Profile</div>
+      <div class="settings-section-sub">These details are used to auto-fill your generated resumes.</div>
+      <div id="resume-settings-msg"></div>
+      
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+        <div class="settings-field"><label>Full Name</label><input type="text" class="settings-input" id="res-name" value="${esc(p.name)}" placeholder="Venkata Vinay Vamsi"/></div>
+        <div class="settings-field"><label>Professional Title</label><input type="text" class="settings-input" id="res-title" value="${esc(p.title)}" placeholder="Senior Data Engineer"/></div>
+        <div class="settings-field"><label>Email Address</label><input type="email" class="settings-input" id="res-email" value="${esc(p.email)}" placeholder="you@email.com"/></div>
+        <div class="settings-field"><label>Phone Number</label><input type="text" class="settings-input" id="res-phone" value="${esc(p.phone)}" placeholder="+1 (414) 895-2296"/></div>
+        <div class="settings-field"><label>Location</label><input type="text" class="settings-input" id="res-location" value="${esc(p.location)}" placeholder="United States"/></div>
+        <div class="settings-field"><label>LinkedIn URL</label><input type="text" class="settings-input" id="res-linkedin" value="${esc(p.linkedin)}" placeholder="linkedin.com/in/yourname"/></div>
+      </div>
+
+      <div class="settings-field">
+        <label>🎓 Education <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(Degree | Years | Institution | Country)</span></label>
+        <textarea class="settings-input" id="res-education" rows="3" placeholder="Master of Science | 2023-2025 | University | USA">${esc(p.education)}</textarea>
+      </div>
+
+      <div class="settings-field">
+        <label>📜 Certifications <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(one per line)</span></label>
+        <textarea class="settings-input" id="res-certs" rows="2" placeholder="AWS Certified Developer">${esc(p.certs)}</textarea>
+      </div>
+
+      <div style="margin-top:20px;">
+        <button class="settings-btn" id="save-resume-profile-btn" style="padding:12px 32px;font-size:14px;">Save Personal Profile</button>
+      </div>`;
+
+    document.getElementById('save-resume-profile-btn').addEventListener('click', () => {
+      const profile = {
+        name: document.getElementById('res-name').value.trim(),
+        title: document.getElementById('res-title').value.trim(),
+        email: document.getElementById('res-email').value.trim(),
+        phone: document.getElementById('res-phone').value.trim(),
+        location: document.getElementById('res-location').value.trim(),
+        linkedin: document.getElementById('res-linkedin').value.trim(),
+        education: document.getElementById('res-education').value.trim(),
+        certs: document.getElementById('res-certs').value.trim()
+      };
+      localStorage.setItem('rjd_resume_profile', JSON.stringify(profile));
+      const msg = document.getElementById('resume-settings-msg');
+      msg.innerHTML = '<div class="auth-msg success">Profile saved successfully ✓</div>';
+      showToast('Profile saved');
+      setTimeout(() => { if (msg) msg.innerHTML = ''; }, 3000);
     });
 
   } else if (sec === 'account') {
@@ -1583,6 +1683,199 @@ document.getElementById('modal-save').addEventListener('click', async () => {
     showToast('Application saved');
   } else { showToast('Save failed — check connection', true); }
 });
+
+// ── INTEGRATED RESUME ENGINE ──
+function parseContent(text) {
+  const sections = { summary: '', skills: '', experience: '' };
+  if (!text) return sections;
+  const sMatch = text.match(/\[SUMMARY\]([\s\S]*?)(?=\[|$)/i);
+  const kMatch = text.match(/\[SKILLS\]([\s\S]*?)(?=\[|$)/i);
+  const xMatch = text.match(/\[EXPERIENCE\]([\s\S]*?)(?=\[|$)/i);
+  if (sMatch) sections.summary = sMatch[1].trim();
+  if (kMatch) sections.skills = kMatch[1].trim();
+  if (xMatch) sections.experience = xMatch[1].trim();
+  return sections;
+}
+
+function parseSkills(text) {
+  if (!text) return [];
+  return text.split('\n').map(s => s.replace(/^[•\-\*]\s*/, '').trim()).filter(s => s.length > 0);
+}
+
+function parseExperience(text) {
+  if (!text) return [];
+  const roles = [];
+  const blocks = text.split(/(?=\n[•\-\*]\s*)/);
+  let currentRole = null;
+  blocks.forEach(block => {
+    const trimmed = block.trim();
+    if (!trimmed) return;
+    if (!trimmed.startsWith('•') && !trimmed.startsWith('-') && !trimmed.startsWith('*')) {
+      if (currentRole) roles.push(currentRole);
+      currentRole = { title: trimmed, bullets: [] };
+    } else if (currentRole) {
+      currentRole.bullets.push(trimmed.replace(/^[•\-\*]\s*/, '').trim());
+    }
+  });
+  if (currentRole) roles.push(currentRole);
+  return roles;
+}
+
+async function generateIntegratedResume(app) {
+  const p = JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}');
+  if (!p.name) {
+    showToast('Please fill out your Resume Profile in Settings first!', true);
+    navigateTo('settings');
+    settingsSection = 'resumeprofile';
+    renderSettings();
+    return;
+  }
+
+  const { summary, skills, experience } = parseContent(app.resume);
+  const skillList = parseSkills(skills);
+  const expList = parseExperience(experience);
+
+  const { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel, BorderStyle, Table, TableRow, TableCell, WidthType, HeightRule, VerticalAlign, ExternalHyperlink } = docx;
+
+  const FONT = "Calibri";
+  const PRIMARY_COLOR = "000000";
+
+  const createHeader = () => {
+    return new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE }, insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE } },
+      rows: [
+        new TableRow({
+          children: [
+            new TableCell({
+              width: { size: 65, type: WidthType.PERCENTAGE },
+              children: [
+                new Paragraph({
+                  children: [new TextRun({ text: p.name || "YOUR NAME", bold: true, size: 44, font: FONT, color: PRIMARY_COLOR })],
+                  spacing: { after: 40 }
+                }),
+                new Paragraph({
+                  children: [new TextRun({ text: p.title || "Professional Title", bold: true, size: 24, font: FONT, color: "444444" })]
+                })
+              ]
+            }),
+            new TableCell({
+              width: { size: 35, type: WidthType.PERCENTAGE },
+              verticalAlign: VerticalAlign.BOTTOM,
+              children: [
+                new Paragraph({
+                  alignment: AlignmentType.RIGHT,
+                  children: [new TextRun({ text: p.location || "", size: 19, font: FONT })],
+                  spacing: { after: 20 }
+                }),
+                new Paragraph({
+                  alignment: AlignmentType.RIGHT,
+                  children: [
+                    new TextRun({ text: "📧 ", size: 18 }),
+                    new TextRun({ text: p.email || "", size: 19, font: FONT, color: "0000EE" })
+                  ],
+                  spacing: { after: 20 }
+                }),
+                new Paragraph({
+                  alignment: AlignmentType.RIGHT,
+                  children: [
+                    new TextRun({ text: "📱 ", size: 18 }),
+                    new TextRun({ text: p.phone || "", size: 19, font: FONT })
+                  ],
+                  spacing: { after: 20 }
+                }),
+                new Paragraph({
+                  alignment: AlignmentType.RIGHT,
+                  children: [
+                    new TextRun({ text: "🔗 ", size: 18 }),
+                    new TextRun({ text: p.linkedin || "", size: 19, font: FONT, color: "0000EE" })
+                  ]
+                })
+              ]
+            })
+          ]
+        })
+      ]
+    });
+  };
+
+  const createSectionHeading = (text) => {
+    return new Paragraph({
+      heading: HeadingLevel.HEADING_2,
+      spacing: { before: 240, after: 120 },
+      border: { bottom: { color: "666666", space: 1, style: BorderStyle.SINGLE, size: 6 } },
+      children: [new TextRun({ text: text.toUpperCase(), bold: true, size: 20, font: FONT, color: PRIMARY_COLOR, characterSpacing: 20 })]
+    });
+  };
+
+  const docChildren = [
+    createHeader(),
+    createSectionHeading("Professional Summary"),
+    new Paragraph({
+      alignment: AlignmentType.JUSTIFY,
+      spacing: { line: 320, after: 120 },
+      children: [new TextRun({ text: summary || "Professional summary content...", size: 20, font: FONT })]
+    })
+  ];
+
+  if (skillList.length > 0) {
+    docChildren.push(createSectionHeading("Technical Skills & Core Competencies"));
+    docChildren.push(new Paragraph({
+      spacing: { after: 120, line: 360 },
+      children: [new TextRun({ text: skillList.join("  •  "), size: 20, font: FONT, bold: true })]
+    }));
+  }
+
+  docChildren.push(createSectionHeading("Professional Experience"));
+  expList.forEach(exp => {
+    docChildren.push(new Paragraph({
+      spacing: { before: 120, after: 40 },
+      children: [new TextRun({ text: exp.title, bold: true, size: 20, font: FONT })]
+    }));
+    exp.bullets.forEach(bullet => {
+      docChildren.push(new Paragraph({
+        bullet: { level: 0 },
+        spacing: { before: 40, after: 40, line: 300 },
+        alignment: AlignmentType.JUSTIFY,
+        children: [new TextRun({ text: bullet, size: 20, font: FONT })]
+      }));
+    });
+  });
+
+  if (p.education) {
+    docChildren.push(createSectionHeading("Education"));
+    p.education.split('\n').filter(Boolean).forEach(line => {
+      docChildren.push(new Paragraph({
+        spacing: { after: 60 },
+        children: [new TextRun({ text: line, size: 20, font: FONT, bold: line.includes('|') })]
+      }));
+    });
+  }
+
+  if (p.certs) {
+    docChildren.push(createSectionHeading("Certifications"));
+    p.certs.split('\n').filter(Boolean).forEach(cert => {
+      docChildren.push(new Paragraph({
+        bullet: { level: 0 },
+        spacing: { after: 40 },
+        children: [new TextRun({ text: cert, size: 20, font: FONT })]
+      }));
+    });
+  }
+
+  const doc = new Document({
+    sections: [{
+      properties: {
+        page: { margin: { top: 792, bottom: 792, left: 936, right: 936 } }
+      },
+      children: docChildren
+    }]
+  });
+
+  const blob = await Packer.toBlob(doc);
+  const safeName = (app.company || "Resume").replace(/[^a-z0-9]/gi, '_');
+  saveAs(blob, `${p.name || "Resume"}_${safeName}.docx`);
+}
 
 // ── INIT ──
 setupAuth();
