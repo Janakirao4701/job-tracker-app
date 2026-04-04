@@ -2,7 +2,7 @@
   if (document.getElementById('rjd-sidebar')) return;
 
   // ── CONFIG ──
-  let GEMINI_KEY = ''; // loaded from storage
+  let GEMINI_KEY = ''; 
   const SUPABASE_URL  = CONFIG.SUPABASE_URL;
   const SUPABASE_KEY  = CONFIG.SUPABASE_KEY;
 
@@ -260,160 +260,354 @@
   async function runExtract() {
     const st = document.getElementById('rjd-extract-status');
     const eb = document.getElementById('rjd-extract-btn');
-    if (st) st.textContent = '⏳ Extracting...';
+    if (!eb) return;
+    eb.textContent = '⏳ ...'; eb.disabled = true;
     try {
       const clipText = await navigator.clipboard.readText();
       const res = await extractWithGemini(clipText, window.location.href);
       const co = document.getElementById('rjd-new-company');
       const ti = document.getElementById('rjd-new-title');
+      const ur = document.getElementById('rjd-new-url');
+      const jd = document.getElementById('rjd-new-jd');
       if (co) co.value = res.company_name || '';
       if (ti) ti.value = res.job_title || '';
-      if (st) st.textContent = '✓ Extracted';
-    } catch(err) { if (st) st.textContent = '✕ failed'; }
+      if (ur) ur.value = window.location.href;
+      if (jd) jd.value = clipText || '';
+      if (st) { st.style.color = '#10b981'; st.textContent = '✓ Extracted'; }
+    } catch(err) { if (st) { st.style.color = '#ef4444'; st.textContent = '✕ failed'; } }
+    finally { eb.textContent = '✦ Extract & Save'; eb.disabled = false; }
   }
 
-  // ── UI SCREENS ──
-  function renderSettingsScreen(returnTo) {
+  // ── SETTINGS ──
+  function renderSettingsScreen() {
     const main = document.getElementById('rjd-sidebar-content');
     if (!main) return;
-    main.innerHTML = `<div style="padding:20px;"><button id="rjd-settings-back-btn">← Back</button><h3>Settings</h3><label>Gemini Key</label><input type="password" id="rjd-sk-input"/><button id="rjd-sk-save">Save</button></div>`;
-    document.getElementById('rjd-settings-back-btn').addEventListener('click', () => renderTrackerScreen());
-    document.getElementById('rjd-sk-save').addEventListener('click', () => {
-      const k = document.getElementById('rjd-sk-input').value;
-      saveGeminiKey(k, () => { GEMINI_KEY = k; showToast('Saved'); });
-    });
-    loadGeminiKey(k => { document.getElementById('rjd-sk-input').value = k; });
-  }
-
-  function renderTrackerScreen() {
-    const main = document.getElementById('rjd-sidebar-content');
-    if (!main || !currentUser) return;
-    main.innerHTML = window.rjdTemplates.trackerScreen({
-      initials: getInitials(currentUser.name), name: currentUser.name,
-      todayISO: todayISO(), filterDate, STATUSES
-    });
-    renderTable();
-    bindTrackerEvents();
-  }
-
-  function bindTrackerEvents() {
-    const _setBtn = document.getElementById('rjd-settings-btn');
-    if (_setBtn) _setBtn.addEventListener('click', () => renderSettingsScreen('tracker'));
-    const _refBtn = document.getElementById('rjd-refresh-btn');
-    if (_refBtn) _refBtn.addEventListener('click', async () => {
-      try { applications = await dbLoadApps(); renderTable(); showToast('Refreshed ✓'); } catch(e) {}
-    });
-    const _newBtn = document.getElementById('rjd-new-app-btn');
-    if (_newBtn) _newBtn.addEventListener('click', () => showNewAppPanel());
-    
-    // Hardened null checks for all remaining tracker UI
-    ['rjd-new-back','rjd-detail-back','rjd-resume-back'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener('click', () => {
-        if (id === 'rjd-new-back') hideNewAppPanel();
-        if (id === 'rjd-detail-back') hideAppDetail();
-        if (id === 'rjd-resume-back') hideResumeDetail();
+    let activeSection = 'apikey';
+    function renderSettings() {
+      main.innerHTML = `
+        <div style="display:flex;flex-direction:column;height:100%;background:var(--bg-secondary,#f8fafc);">
+          <div style="padding:16px;background:white;border-bottom:1px solid var(--border-color,#e2e8f0);display:flex;align-items:center;gap:12px;">
+            <button id="rjd-settings-back" style="background:none;border:none;cursor:pointer;padding:8px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background 0.2s;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            </button>
+            <h3 style="margin:0;font-size:18px;font-weight:800;color:var(--text-primary,#1e293b);">Settings</h3>
+          </div>
+          <div style="display:flex;flex:1;overflow:hidden;">
+            <div style="width:140px;background:white;border-right:1px solid var(--border-color,#e2e8f0);padding:12px 8px;display:flex;flex-direction:column;gap:4px;">
+              ${[
+                ['apikey','API Key','🔑'], ['resume','Template','📄'], ['shortcuts','Hotkeys','⌨'], ['privacy','Privacy','🔒'], ['about','About','ℹ']
+              ].map(([id, label, icon]) => 
+                `<button class="rjd-set-tab ${activeSection===id?'active':''}" data-id="${id}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:none;background:none;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;color:${activeSection===id?'#4f46e5':'#64748b'};text-align:left;transition:all 0.2s;">
+                  <span style="font-size:14px;">${icon}</span><span>${label}</span>
+                </button>`
+              ).join('')}
+              <div style="margin-top:auto;padding-top:12px;border-top:1px solid #f1f5f9;">
+                <button id="rjd-logout-btn" style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 12px;border:none;background:none;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;color:#ef4444;text-align:left;">
+                  <span style="font-size:14px;">🚪</span><span>Logout</span>
+                </button>
+              </div>
+            </div>
+            <div id="rjd-settings-panel" style="flex:1;padding:20px;overflow-y:auto;background:white;"></div>
+          </div>
+        </div>`;
+      
+      document.getElementById('rjd-settings-back').onclick = () => renderTrackerScreen();
+      document.getElementById('rjd-logout-btn').onclick = () => logoutUser();
+      main.querySelectorAll('.rjd-set-tab').forEach(btn => {
+        btn.onclick = () => { activeSection = btn.dataset.id; renderSettings(); };
       });
-    });
+      renderSection(activeSection);
+    }
+    function renderSection(sec) {
+      const panel = document.getElementById('rjd-settings-panel');
+      if (!panel) return;
+      if (sec === 'apikey') {
+        panel.innerHTML = `
+          <div style="font-size:15px;font-weight:700;margin-bottom:4px;">Gemini API Key</div>
+          <div style="font-size:12px;color:#94a3b8;margin-bottom:14px;">Powers AI extraction. Free from Google.</div>
+          <input type="password" id="rjd-sk-input" style="width:100%;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;margin-bottom:10px;"/>
+          <button id="rjd-sk-save" class="rjd-primary-btn" style="width:100%;padding:10px;">Save Key</button>`;
+        loadGeminiKey(k => { if (k) document.getElementById('rjd-sk-input').value = k; });
+        document.getElementById('rjd-sk-save').onclick = () => {
+          const k = document.getElementById('rjd-sk-input').value.trim();
+          saveGeminiKey(k, () => { GEMINI_KEY = k; showToast('Key saved ✓'); });
+        };
+      } else if (sec === 'resume') {
+        chromeStore().get('resume_builder_profile', r => {
+          const profile = r.resume_builder_profile || {};
+          panel.innerHTML = `<div style="font-size:14px;font-weight:700;margin-bottom:10px;">Template Selection</div>
+            <select id="rjd-tpl-select" style="width:100%;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;">
+              <option value="standard" ${profile.template==='standard'?'selected':''}>Professional Standard</option>
+              <option value="p2p_vinay" ${profile.template==='p2p_vinay'?'selected':''}>Pin-to-Pin LaTeX</option>
+            </select>`;
+          document.getElementById('rjd-tpl-select').onchange = (e) => {
+            profile.template = e.target.value;
+            chromeStore().set({ resume_builder_profile: profile }, () => showToast('Template updated ✓'));
+          };
+        });
+      } else if (sec === 'shortcuts') {
+         panel.innerHTML = `<div style="font-size:14px;font-weight:700;margin-bottom:10px;">Shortcuts</div>
+           <div style="font-size:12px;color:#64748b;">Alt + Shift + T: Toggle Sidebar<br>Alt + Shift + E: Extract & Save</div>`;
+      }
+    }
+    renderSettings();
+  }
 
-    const _qExBtn = document.getElementById('rjd-quick-extract-btn');
-    if (_qExBtn) _qExBtn.addEventListener('click', async () => {
-      _qExBtn.disabled = true; _qExBtn.textContent = '...';
-      try {
-        const clipText = await navigator.clipboard.readText();
-        const res = await extractWithGemini(clipText, window.location.href);
-        if (res.company_name && res.job_title) {
-          const app = { id:crypto.randomUUID(), company:res.company_name, jobTitle:res.job_title, url:window.location.href, jd:clipText, status:'Applied', date:today(), dateRaw:new Date().toISOString(), dateKey:todayKey() };
-          if (await dbSaveApp(app)) { applications.push(app); renderTable(); showToast('Saved'); }
-        } else { showNewAppPanel(); const co = document.getElementById('rjd-new-company'); if (co) co.value = res.company_name||''; }
-      } catch(e) {}
-      _qExBtn.disabled = false; _qExBtn.textContent = '✦ Extract & Save';
-    });
+  // ── STATS ──
+  function renderStats() {
+    const el = document.getElementById('rjd-stats');
+    if (!el) return;
+    const todayCount = applications.filter(a => a.dateKey === todayKey()).length;
+    const weekCount = applications.filter(a => (new Date() - new Date(a.dateRaw)) <= 7*86400000).length;
+    const offers = applications.filter(a => a.status === 'Offer').length;
+    el.innerHTML = `
+      <div class="rjd-stat-box"><div class="rjd-stat-num">${todayCount}</div><div class="rjd-stat-lbl">Today</div></div>
+      <div class="rjd-stat-box"><div class="rjd-stat-num">${weekCount}</div><div class="rjd-stat-lbl">Week</div></div>
+      <div class="rjd-stat-box"><div class="rjd-stat-num" style="color:#059669;">${offers}</div><div class="rjd-stat-lbl">Offers</div></div>`;
+  }
+
+  function getSessionTarget() { return parseInt(localStorage.getItem('rjd_session_target') || '30', 10); }
+  function updateSessionProgress() {
+    const tg = getSessionTarget(); const done = applications.filter(a => a.dateKey === todayKey()).length;
+    const pct = Math.min(100, Math.round((done/tg)*100));
+    const bar = document.getElementById('rjd-progress-bar'); if (bar) bar.style.width = pct + '%';
+    const txt = document.getElementById('rjd-session-progress'); if (txt) txt.textContent = done + '/' + tg;
+  }
+
+  function updateTrackBadge() {
+    const badge = document.getElementById('rjd-toggle-badge');
+    if (!badge) return;
+    const count = applications.filter(a => a.dateKey === todayKey()).length;
+    badge.style.display = count > 0 ? 'flex' : 'none';
+    badge.textContent = count;
   }
 
   function renderTable() {
+    renderStats(); updateTrackBadge(); updateSessionProgress();
+    const filtered = applications.filter(a => {
+      if (filterStatus !== 'all' && a.status !== filterStatus) return false;
+      if (filterDate && a.dateKey !== filterDate) return false;
+      if (filterSearch) {
+        const q = filterSearch.toLowerCase();
+        return (a.company||'').toLowerCase().includes(q) || (a.jobTitle||'').toLowerCase().includes(q);
+      }
+      return true;
+    });
     const tbody = document.getElementById('rjd-tbody');
     if (!tbody) return;
-    tbody.innerHTML = applications.map((app, idx) => `
-      <tr class="rjd-row" data-id="${app.id}">
-        <td>${idx+1}</td>
-        <td>${escHtml(app.company)}</td>
-        <td>${escHtml(app.jobTitle)}</td>
-        <td><button class="rjd-dl-resume-btn" data-id="${app.id}">⬇</button></td>
-        <td>${app.status}</td>
-      </tr>
-    `).join('');
-    tbody.querySelectorAll('.rjd-dl-resume-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8" class="rjd-empty-row">No applications found.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = filtered.map((app, idx) => {
+      const sc = STATUS_COLORS[app.status] || STATUS_COLORS['Applied'];
+      return `<tr class="rjd-row" data-id="${app.id}">
+        <td class="rjd-td">${idx+1}</td>
+        <td class="rjd-td"><b>${escHtml(app.company)}</b></td>
+        <td class="rjd-td">${escHtml(app.jobTitle)}</td>
+        <td class="rjd-td" style="text-align:center;">${app.url ? '<a href="'+app.url+'" target="_blank" class="rjd-url-link">Open</a>' : '—'}</td>
+        <td class="rjd-td" style="text-align:center;">
+          <button class="rjd-add-resume-btn" data-id="${app.id}">${app.resume ? '✓' : '+'}</button>
+        </td>
+        <td class="rjd-td" style="text-align:center;">
+          ${app.resume ? '<button class="rjd-dl-resume-btn" data-id="'+app.id+'">⬇</button>' : '—'}
+        </td>
+        <td class="rjd-td">${escHtml(app.date.replace(/, \d{4}$/,''))}</td>
+        <td class="rjd-td"><button class="rjd-status-chip-btn" data-id="${app.id}" style="background:${sc.bg};color:${sc.color};border-radius:12px;padding:2px 8px;border:1px solid ${sc.color};font-size:10px;cursor:pointer;">${app.status} ▾</button></td>
+      </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('.rjd-status-chip-btn').forEach(btn => {
+      btn.onclick = async (e) => {
         e.stopPropagation();
         const app = applications.find(a => a.id === btn.dataset.id);
-        downloadAppResume(app);
-      });
+        const next = STATUSES[(STATUSES.indexOf(app.status)+1)%STATUSES.length];
+        app.status = next; await dbUpdateApp(app); renderTable();
+      };
+    });
+    tbody.querySelectorAll('.rjd-add-resume-btn').forEach(btn => {
+      btn.onclick = async (e) => {
+        e.stopPropagation();
+        const app = applications.find(a => a.id === btn.dataset.id);
+        try {
+          const t = await navigator.clipboard.readText();
+          if (t.trim()) { app.resume = t.trim(); await dbUpdateApp(app); renderTable(); showToast('Resume added ✓'); }
+        } catch(e) { showToast('Clipboard fail', true); }
+      };
+    });
+    tbody.querySelectorAll('.rjd-dl-resume-btn').forEach(btn => {
+      btn.onclick = (e) => { e.stopPropagation(); downloadAppResume(applications.find(a=>a.id===btn.dataset.id)); };
+    });
+    tbody.querySelectorAll('.rjd-row').forEach(row => {
+      row.onclick = (e) => { if(!e.target.closest('button, a')) showAppDetail(applications.find(a=>a.id===row.dataset.id)); };
     });
   }
 
+  // ── PANELS ──
   function showNewAppPanel() {
     const p = document.getElementById('rjd-new-app-panel');
     const m = document.getElementById('rjd-main');
-    if (p && m) { m.style.display = 'none'; p.style.display = 'flex'; }
+    if (p && m) { 
+      m.style.display = 'none'; p.style.display = 'flex';
+      ['rjd-new-company','rjd-new-title','rjd-new-url','rjd-new-jd'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+      });
+      const st = document.getElementById('rjd-extract-status'); if (st) st.textContent = '';
+    }
   }
-  function hideNewAppPanel() {
-    const p = document.getElementById('rjd-new-app-panel');
-    const m = document.getElementById('rjd-main');
-    if (p && m) { p.style.display = 'none'; m.style.display = 'flex'; }
+  function hideNewAppPanel() { document.getElementById('rjd-new-app-panel').style.display = 'none'; document.getElementById('rjd-main').style.display = 'flex'; }
+
+  function showAppDetail(app) {
+    currentDetailId = app.id;
+    const p = document.getElementById('rjd-detail-panel');
+    if (!p) return;
+    document.getElementById('rjd-main').style.display = 'none'; p.style.display = 'flex';
+    document.getElementById('rjd-detail-company').textContent = app.company || '—';
+    document.getElementById('rjd-detail-title').textContent = app.jobTitle || '—';
+    document.getElementById('rjd-detail-jd').textContent = app.jd || 'No JD';
+    document.getElementById('rjd-detail-notes').value = app.notes || '';
+    const resSec = document.getElementById('rjd-detail-resume-section');
+    if (resSec) resSec.innerHTML = app.resume ? `<button id="rjd-view-resume-btn" class="rjd-primary-btn">View Resume</button>` : `<button id="rjd-add-resume-detail" class="rjd-primary-btn">+ Add Resume</button>`;
+    if (document.getElementById('rjd-view-resume-btn')) document.getElementById('rjd-view-resume-btn').onclick = () => showResumeDetail(app);
+    if (document.getElementById('rjd-add-resume-detail')) document.getElementById('rjd-add-resume-detail').onclick = () => {
+      navigator.clipboard.readText().then(t => { if(t.trim()){ app.resume=t.trim(); dbUpdateApp(app); renderTable(); showAppDetail(app); } });
+    };
   }
-  function hideAppDetail() { document.getElementById('rjd-detail-panel').style.display = 'none'; document.getElementById('rjd-main').style.display = 'flex'; }
-  function hideResumeDetail() { document.getElementById('rjd-resume-panel').style.display = 'none'; document.getElementById('rjd-main').style.display = 'flex'; }
+  function hideAppDetail() { document.getElementById('rjd-detail-panel').style.display = 'none'; document.getElementById('rjd-main').style.display = 'flex'; currentDetailId = null; }
+
+  function showResumeDetail(app) {
+    const p = document.getElementById('rjd-resume-panel');
+    if (!p) return;
+    document.getElementById('rjd-detail-panel').style.display = 'none'; p.style.display = 'flex';
+    document.getElementById('rjd-resume-body').textContent = app.resume || '';
+  }
+  function hideResumeDetail() { document.getElementById('rjd-resume-panel').style.display = 'none'; document.getElementById('rjd-detail-panel').style.display = 'flex'; }
+
+  // ── LOGOUT ──
+  async function logoutUser() {
+    await sbSignOut(); clearSession();
+    const s = document.getElementById('rjd-sidebar'); if (s) s.classList.remove('open');
+    currentUser = null; applications = []; updateTrackBadge();
+  }
+
+  // ── TRACKER SCREEN ──
+  function renderTrackerScreen() {
+    const mc = document.getElementById('rjd-sidebar-content');
+    if (!mc || !currentUser) return;
+    mc.innerHTML = window.rjdTemplates.trackerScreen({
+      initials: getInitials(currentUser.name), name: currentUser.name, todayISO: todayISO(), filterDate, STATUSES
+    });
+    renderTable(); bindTrackerEvents();
+  }
+
+  function bindTrackerEvents() {
+    const bBack = document.getElementById('rjd-new-back'); if (bBack) bBack.onclick = hideNewAppPanel;
+    const dBack = document.getElementById('rjd-detail-back'); if (dBack) dBack.onclick = hideAppDetail;
+    const rBack = document.getElementById('rjd-resume-back'); if (rBack) rBack.onclick = hideResumeDetail;
+    const nBtn = document.getElementById('rjd-new-app-btn'); if (nBtn) nBtn.onclick = showNewAppPanel;
+    const sBtn = document.getElementById('rjd-settings-btn'); if (sBtn) sBtn.onclick = renderSettingsScreen;
+    
+    const exBtn = document.getElementById('rjd-extract-btn'); if (exBtn) exBtn.onclick = runExtract;
+    const qExBtn = document.getElementById('rjd-quick-extract-btn'); if (qExBtn) qExBtn.onclick = runExtract;
+
+    const sIn = document.getElementById('rjd-search-input'); if (sIn) sIn.oninput = (e) => { filterSearch = e.target.value; renderTable(); };
+    const sFi = document.getElementById('rjd-status-filter'); if (sFi) sFi.onchange = (e) => { filterStatus = e.target.value; renderTable(); };
+    
+    // Save Notes
+    const snBtn = document.getElementById('rjd-save-notes-btn');
+    if (snBtn) snBtn.onclick = async () => {
+      const app = applications.find(a => a.id === currentDetailId);
+      if (app) { app.notes = document.getElementById('rjd-detail-notes').value; await dbUpdateApp(app); showToast('Saved'); }
+    };
+    
+    // Save New App
+    const saBtn = document.getElementById('rjd-save-app-btn');
+    if (saBtn) saBtn.onclick = async () => {
+      const company = document.getElementById('rjd-new-company').value.trim();
+      const jobTitle = document.getElementById('rjd-new-title').value.trim();
+      if (!company) { showToast('Company required', true); return; }
+      const app = { 
+        id: crypto.randomUUID(), company, jobTitle, url: document.getElementById('rjd-new-url').value, 
+        jd: document.getElementById('rjd-new-jd').value, status: 'Applied', 
+        date: today(), dateRaw: new Date().toISOString(), dateKey: todayKey() 
+      };
+      if (await dbSaveApp(app)) { applications.push(app); renderTable(); hideNewAppPanel(); showToast('Saved!'); }
+    };
+
+    // XLSX Export
+    const csvBtn = document.getElementById('rjd-export-csv-btn');
+    if (csvBtn) csvBtn.onclick = async () => {
+      if (typeof window.buildXLSX !== 'function') {
+        const s = document.createElement('script'); s.src = chrome.runtime.getURL('lib/xlsxbuilder.js');
+        await new Promise(r => { s.onload = r; document.head.appendChild(s); });
+      }
+      const bytes = await window.buildXLSX([{ name: 'Apps', rows: applications.map(a => [a.company, a.jobTitle, a.status, a.date]) }]);
+      const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'Applications.xlsx'; a.click();
+    };
+  }
 
   // ── RESUME DOWNLOAD ──
-  function downloadAppResume(app) {
+  async function downloadAppResume(app) {
     if (!app || !app.resume) { showToast('No resume', true); return; }
+    
+    // Dynamic load docxbuilder if missing
+    if (typeof window.downloadResumeDocx !== 'function') {
+      const s = document.createElement('script');
+      s.src = chrome.runtime.getURL('lib/docxbuilder.js');
+      try {
+        await new Promise((resolve, reject) => {
+          s.onload = resolve; s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      } catch(e) { showToast('Failed to load builder', true); return; }
+    }
+
     const profile = cachedProfile || {};
     const templateId = profile.template || 'standard';
     const filename = (app.company || 'Resume').replace(/[^a-z0-9]/gi, '_') + '_Resume';
+    
     if (typeof window.downloadResumeDocx === 'function') {
       window.downloadResumeDocx(profile, app.resume, filename, templateId);
       showToast('Downloaded ✓');
     } else {
-      showToast('Library non loaded', true);
+      showToast('Builder not found', true);
     }
   }
 
-  // ── SIDEBAR ──
+  // ── MAIN INIT ──
   function buildSidebar() {
-    const sidebar = document.createElement('div');
-    sidebar.id = 'rjd-sidebar';
-    sidebar.innerHTML = `<div id="rjd-header"><h2>Tracker</h2><button id="rjd-close">✕</button></div><div id="rjd-sidebar-content"></div>`;
+    const sidebar = document.createElement('div'); sidebar.id = 'rjd-sidebar';
+    sidebar.innerHTML = `<div id="rjd-header"><h2>Job Tracker</h2><button id="rjd-close">✕</button></div><div id="rjd-sidebar-content"></div>`;
     document.body.appendChild(sidebar);
-    const toggle = document.createElement('div');
-    toggle.id = 'rjd-toggle'; toggle.innerHTML = `<div id="rjd-toggle-icon">🚀</div>`;
+    
+    const toggle = document.createElement('div'); toggle.id = 'rjd-toggle';
+    toggle.innerHTML = `<div id="rjd-toggle-icon">🚀</div><div id="rjd-toggle-badge" style="display:none;">0</div>`;
     toggle.onclick = () => {
       sidebar.classList.toggle('open');
-      if (sidebar.classList.contains('open')) renderTrackerScreen();
+      if (sidebar.classList.contains('open')) {
+        if (applications.length) renderTrackerScreen();
+        else dbLoadApps().then(apps => { applications = apps; renderTrackerScreen(); });
+      }
     };
     document.body.appendChild(toggle);
     document.getElementById('rjd-close').onclick = () => sidebar.classList.remove('open');
-    const toast = document.createElement('div'); toast.id = 'rjd-toast'; document.body.appendChild(toast);
+    const t = document.createElement('div'); t.id = 'rjd-toast'; document.body.appendChild(t);
   }
 
-  function updateSessionProgress() {} // Noop for now
-
-  // ── INIT ──
   function applySession(sess) {
     if (sess && sess.token && sess.user) {
       sessionToken = sess.token; sessionRefreshToken = sess.refreshToken; currentUser = sess.user;
       loadGeminiKey(k => { GEMINI_KEY = k; });
       dbLoadApps().then(apps => { applications = apps; updateTrackBadge(); }).catch(() => {});
-    } else {
-      currentUser = null; applications = [];
-    }
+    } else { currentUser = null; applications = []; updateTrackBadge(); }
   }
-  function updateTrackBadge() {}
 
   buildSidebar();
-  const s = chromeStore();
-  if (s) {
-    s.get(['rjd_session', 'resume_builder_profile'], r => {
+  const cs = chromeStore();
+  if (cs) {
+    cs.get(['rjd_session', 'resume_builder_profile'], r => {
       if (r.resume_builder_profile) cachedProfile = r.resume_builder_profile;
       applySession(r.rjd_session);
     });
@@ -422,11 +616,9 @@
     });
   }
 
-  // Bridge dashboard profile to extension
   window.addEventListener('storage', (e) => {
     if (e.key === 'resume_builder_profile' && e.newValue) {
-      const p = JSON.parse(e.newValue);
-      chrome.storage.local.set({ resume_builder_profile: p });
+      try { chromeStore().set({ resume_builder_profile: JSON.parse(e.newValue) }); } catch(e){}
     }
   });
 
