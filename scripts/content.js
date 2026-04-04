@@ -2031,7 +2031,6 @@ ${context}`;
     }, 3000);
   }
 
-}
   // -- INTEGRATED RESUME ENGINE --
   async function generateIntegratedResume(app) {
     const p = JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}');
