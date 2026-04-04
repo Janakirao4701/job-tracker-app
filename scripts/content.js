@@ -1307,7 +1307,7 @@ ${context}`;
     document.getElementById('rjd-detail-panel').style.display = 'none';
     document.getElementById('rjd-main').style.display = 'none';
     document.getElementById('rjd-resume-title').textContent = 'Resume — ' + (app.company||'Application');
-    document.getElementById('rjd-resume-body').textContent  = app.resume || '';
+    document.getElementById('rjd-resume-body').value = app.resume || '';
   }
 
   function hideResumeDetail() {
@@ -1530,9 +1530,12 @@ ${context}`;
             <button class="rjd-back-btn" id="rjd-resume-back">← Back</button>
             <span class="rjd-panel-title" id="rjd-resume-title">Resume</span>
           </div>
-          <div id="rjd-resume-body" class="rjd-resume-body"></div>
-          <div style="padding:10px 12px;border-top:1px solid #e2e8f0;flex-shrink:0;">
-            <button id="rjd-resume-copy-btn" class="rjd-primary-btn">Copy Resume Text</button>
+          <div style="flex:1;overflow:hidden;background:#fff;padding:12px;">
+            <textarea id="rjd-resume-body" class="rjd-resume-body" style="width:100%;height:100%;border:1px solid #e2e8f0;border-radius:8px;padding:12px;font-size:12px;font-family:'SF Mono',monospace;line-height:1.6;color:#1e293b;resize:none;background:#f8fafc;"></textarea>
+          </div>
+          <div style="padding:10px 12px;border-top:1px solid #e2e8f0;flex-shrink:0;display:flex;gap:8px;">
+            <button id="rjd-resume-save-btn" class="rjd-primary-btn" style="flex:1;">Save Changes</button>
+            <button id="rjd-resume-copy-btn" class="rjd-action-btn rjd-secondary-btn" style="flex:0 0 auto;width:40px;" title="Copy to clipboard">📋</button>
           </div>
         </div>
       </div>`;
@@ -1599,6 +1602,43 @@ ${context}`;
     const _tSel = document.getElementById('rjd-target-select');
     if (_tSel) _tSel.value = String(getSessionTarget());
     updateSessionProgress();
+
+    // ── RESUME MODAL ACTIONS ──
+    document.getElementById('rjd-resume-copy-btn').addEventListener('click', () => {
+      const text = document.getElementById('rjd-resume-body').value;
+      navigator.clipboard.writeText(text).then(() => showToast('Resume copied')).catch(() => showToast('Copy failed', true));
+    });
+
+    document.getElementById('rjd-resume-save-btn').addEventListener('click', async () => {
+      const appId = currentDetailId || applications.find(a => a.company === document.getElementById('rjd-resume-title').textContent.replace('Resume — ', ''))?.id;
+      if (!appId) {
+        // Fallback for when currentDetailId is lost
+        const activeApp = applications.find(a => (a.company || 'Application') === document.getElementById('rjd-resume-title').textContent.replace('Resume — ', ''));
+        if (activeApp) saveResumeText(activeApp);
+        else showToast('Could not identify application', true);
+        return;
+      }
+      const app = applications.find(a => a.id === appId);
+      if (app) saveResumeText(app);
+    });
+
+    async function saveResumeText(app) {
+      const btn = document.getElementById('rjd-resume-save-btn');
+      const text = document.getElementById('rjd-resume-body').value.trim();
+      if (!text) { showToast('Content cannot be empty', true); return; }
+      const old = btn.textContent;
+      btn.textContent = 'Saving...'; btn.disabled = true;
+      try {
+        app.resume = text;
+        await dbUpdateApp(app);
+        showToast('Resume saved ✓');
+        renderTable();
+      } catch (err) {
+        showToast('Save failed', true);
+      } finally {
+        btn.textContent = old; btn.disabled = false;
+      }
+    }
 
     // Quick extract & save
     let _extracting = false;

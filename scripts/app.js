@@ -1081,13 +1081,15 @@ function openDetailModal(app) {
 
   // JD tab
   const jdEl = document.getElementById('detail-jd-text');
-  jdEl.textContent = app.jd || 'No job description saved for this application.';
+  jdEl.value = app.jd || '';
   jdEl.style.color = app.jd ? 'var(--text)' : 'var(--text-muted)';
+  if (!app.jd) jdEl.placeholder = 'No job description saved.';
 
   // Resume tab
   const resumeEl = document.getElementById('detail-resume-text');
-  resumeEl.textContent = app.resume || 'No resume saved for this application.';
+  resumeEl.value = app.resume || '';
   resumeEl.style.color = app.resume ? 'var(--text)' : 'var(--text-muted)';
+  if (!app.resume) resumeEl.placeholder = 'No tailored resume saved.';
 
   // Notes tab
   document.getElementById('detail-notes-input').value    = app.notes || '';
@@ -1136,6 +1138,9 @@ function openDetailModal(app) {
     app.followUpDate = document.getElementById('detail-followup-input').value;
     app.status       = document.getElementById('detail-status-sel').value;
     app.url          = (document.getElementById('detail-url-input')?.value || '').trim();
+    app.jd           = document.getElementById('detail-jd-text').value.trim();
+    app.resume       = document.getElementById('detail-resume-text').value.trim();
+    
     // Save session date if changed
     const newSessionDate = document.getElementById('detail-session-date-input')?.value;
     if (newSessionDate) {
