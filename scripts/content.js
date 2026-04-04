@@ -23,6 +23,7 @@
   let filterStatus = 'all';
   let filterSearch = '';
   let filterDate   = '';
+  let cachedProfile = {}; // Store profile synchronously for download gesture
   let currentDetailId = null;
 
   // ── OFFLINE QUEUE ──
@@ -1290,36 +1291,25 @@ ${context}`;
   // ── DOWNLOAD RESUME AS .DOCX ──
   function downloadAppResume(app) {
     if (!app || !app.resume) { showToast('No resume to download', true); return; }
-    // Read resume profile from chrome.storage (set in dashboard settings)
-    const s = chromeStore();
-    if (s) {
-      s.get('resume_builder_profile', (r) => {
-        const profile = r.resume_builder_profile || {};
-        console.log('[RJD DEBUG] resume_builder_profile from chrome.storage:', JSON.stringify(profile));
-        // If no profile is set, use current user info as fallback
-        if (!profile.name && currentUser) profile.name = currentUser.name || '';
-        if (!profile.email && currentUser) profile.email = currentUser.email || '';
-        
-        const templateId = profile.template || 'standard';
-        const filename = (app.company || 'Resume').replace(/[^a-z0-9]/gi, '_') + '_Resume';
-        
-        try {
-          window.downloadResumeDocx(profile, app.resume, filename, templateId);
-          showToast('Downloaded as: ' + templateId);
-        } catch(err) {
-          showToast('Download failed: ' + (err.message || 'unknown error'), true);
-        }
-      });
-    } else {
-      // No chrome.storage — use basic profile
-      const profile = { name: currentUser?.name || '', email: currentUser?.email || '' };
-      const filename = (app.company || 'Resume').replace(/[^a-z0-9]/gi, '_') + '_Resume';
-      try {
-        window.downloadResumeDocx(profile, app.resume, filename);
-        showToast('Resume downloaded ✓');
-      } catch(err) {
-        showToast('Download failed: ' + (err.message || 'unknown error'), true);
+    
+    // Use cachedProfile directly (synchronous) to preserve user-gesture/click context
+    const profile = cachedProfile || {};
+    if (!profile.name && currentUser) profile.name = currentUser.name || '';
+    if (!profile.email && currentUser) profile.email = currentUser.email || '';
+    
+    const templateId = profile.template || 'standard';
+    const filename = (app.company || 'Resume').replace(/[^a-z0-9]/gi, '_') + '_Resume';
+    
+    try {
+      if (typeof window.downloadResumeDocx === 'function') {
+        window.downloadResumeDocx(profile, app.resume, filename, templateId);
+        showToast('Downloaded as ' + templateId + ' style ✓');
+      } else {
+        throw new Error('Builder library not loaded');
       }
+    } catch(err) {
+      console.error('[RJD ERROR] Download failed:', err);
+      showToast('Download error: ' + (err.message || 'unknown'), true);
     }
   }
 
@@ -1840,15 +1830,22 @@ ${context}`;
   const hasChromeStorage = typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
   const hasChromeRuntime = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage;
 
-  // On page load — load working date AND session together so workingDate is set before any save
+  // On page load — load working date, session, and resume profile together
   if (hasChromeStorage) {
-    chrome.storage.local.get(['rjd_session', 'rjd_working_date'], r => {
+    chrome.storage.local.get(['rjd_session', 'rjd_working_date', 'resume_builder_profile'], r => {
       if (chrome.runtime.lastError) return;
       // Set workingDate FIRST before applySession renders the sidebar
-      if (r.rjd_working_date) {
-        workingDate = r.rjd_working_date;
-      }
+      if (r.rjd_working_date) workingDate = r.rjd_working_date;
+      if (r.resume_builder_profile) cachedProfile = r.resume_builder_profile;
+
       applySession(r.rjd_session || null);
+    });
+
+    // Listen for profile changes to keep cachedProfile in sync
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName === 'local' && changes.resume_builder_profile) {
+        cachedProfile = changes.resume_builder_profile.newValue || {};
+      }
     });
   }
 

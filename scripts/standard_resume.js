@@ -53,7 +53,17 @@ function render() {
 }
 
 document.getElementById('dl-btn').onclick = function() {
-  alert('Downloading using Standard template...');
+  const profile = {
+    name: inputs.name.value,
+    email: inputs.email.value,
+    resume: inputs.resume.value
+  };
+  const filename = (profile.name || 'Resume').replace(/\s+/g, '_') + '_Standard';
+  if (typeof window.downloadResumeDocx === 'function') {
+    window.downloadResumeDocx(profile, profile.resume, filename, 'standard');
+  } else {
+    alert('Builder library not loaded');
+  }
 };
 
 loadAndInit();
