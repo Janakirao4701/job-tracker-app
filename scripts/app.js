@@ -720,9 +720,19 @@ function renderDashboard() {
 // ── APPLICATIONS TABLE ──
 function renderApplications() {
   let filtered = [...apps];
-  if (filterStatus !== 'all') filtered = filtered.filter(a => a.status === filterStatus);
-  if (filterDate)   filtered = filtered.filter(a => a.dateRaw && getWorkDayISO(a.dateRaw) === filterDate);
-  if (filterSearch) { const q = filterSearch.toLowerCase(); filtered = filtered.filter(a => (a.company+a.jobTitle+a.url).toLowerCase().includes(q)); }
+  if (filterStatus !== 'all') {
+    filtered = filtered.filter(a => a.status === filterStatus);
+  }
+  if (filterDate && filterDate !== '') {
+    filtered = filtered.filter(a => {
+      const workDay = a.dateKey || (a.dateRaw ? getWorkDayISO(a.dateRaw) : null);
+      return workDay === filterDate;
+    });
+  }
+  if (filterSearch) {
+    const q = filterSearch.toLowerCase();
+    filtered = filtered.filter(a => (esc(a.company) + esc(a.jobTitle) + esc(a.url)).toLowerCase().includes(q));
+  }
 
   document.getElementById('page-content').innerHTML = window.rjdTemplates.dashboardApplications({
     isBulkMode, todayISO: todayISO(), filterSearch, filterStatus, STATUSES, filtered, esc
@@ -768,6 +778,11 @@ function renderApplications() {
   document.getElementById('app-search').oninput = (e) => { filterSearch = e.target.value; renderApplications(); };
   document.getElementById('app-status-filter').onchange = (e) => { filterStatus = e.target.value; renderApplications(); };
   document.getElementById('app-date-filter').onchange = (e) => { filterDate = e.target.value; renderApplications(); };
+
+  const clearDateBtn = document.getElementById('clear-date-btn');
+  if (clearDateBtn) {
+    clearDateBtn.onclick = () => { filterDate = ''; renderApplications(); };
+  }
 
   const toggleBulkBtn = document.getElementById('toggle-bulk-mode-btn');
   if (toggleBulkBtn) {

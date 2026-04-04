@@ -144,7 +144,10 @@ window.rjdTemplates = {
           <option value="all" ${filterStatus==='all'?'selected':''}>All Statuses</option>
           ${STATUSES.map(s => `<option value="${s}" ${filterStatus===s?'selected':''}>${s}</option>`).join('')}
         </select>
-        <input type="date" id="app-date-filter" class="filter-input" style="width:150px;height:40px;" value="${filterDate}"/>
+        <div style="display:flex;gap:4px;align-items:center;">
+          <input type="date" id="app-date-filter" class="filter-input" style="width:145px;height:40px;" value="${filterDate||''}"/>
+          <button id="clear-date-btn" class="bulk-toggle-btn" style="height:40px;width:40px;padding:0;font-size:16px;" title="Clear Filters">✕</button>
+        </div>
         <button id="toggle-bulk-mode-btn" class="bulk-toggle-btn ${isBulkMode?'active':''}" style="height:40px;padding:0 18px;font-size:13px;font-weight:700;">
           ${isBulkMode ? 'Done' : 'Bulk Actions'}
         </button>
