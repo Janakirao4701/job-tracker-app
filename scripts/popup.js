@@ -91,11 +91,7 @@ function renderLoggedIn(user, apps) {
         <div class="recent-item">
           <div>
             <div class="recent-company">${esc(a.company||'—')}</div>
-            <div class="recent-job" style="display:flex;gap:6px;align-items:center;">
-              <span style="color:#94a3b8;font-size:9.5px">${esc(a.date ? a.date.slice(0,6) : '')}</span>
-              ${a.date ? '<span style="color:#cbd5e1">•</span>' : ''}
-              <span>${esc(a.job_title||'—')}</span>
-            </div>
+            <div class="recent-job">${esc(a.job_title||'—')}</div>
           </div>
           <span class="badge ${STATUS_BADGE[a.status]||'b-applied'}">${esc(a.status||'Applied')}</span>
         </div>`).join('') : '<div class="no-recent">No applications yet</div>'}
@@ -116,7 +112,7 @@ function renderLoggedIn(user, apps) {
       if (tabs[0]) {
         chrome.scripting.executeScript({
           target: { tabId: tabs[0].id },
-          func: () => { window.dispatchEvent(new CustomEvent('rjd-command', { detail: { action: 'toggle_sidebar' } })); }
+          func: () => { const t = document.getElementById('rjd-toggle'); if (t) t.dispatchEvent(new Event('rjd-external-open')); }
         }).catch(() => {});
       }
       window.close();
@@ -145,11 +141,9 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
-    let currentRenderSig = '';
     // Optimistic instant render from cache
     if (res.rjd_apps_cache) {
       renderLoggedIn(session.user, res.rjd_apps_cache);
-      currentRenderSig = JSON.stringify(res.rjd_apps_cache);
     } else {
       // Modern spinner instead of "Loading..." text
       document.getElementById('root').innerHTML = `
@@ -200,10 +194,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // Update cache
       chrome.storage.local.set({ rjd_apps_cache: validApps });
       
-      // Update UI with fresh data if it changed
-      if (JSON.stringify(validApps) !== currentRenderSig) {
-        renderLoggedIn(session.user, validApps);
-      }
+      // Update UI with fresh data
+      renderLoggedIn(session.user, validApps);
     } catch(e) {
       if (!res.rjd_apps_cache) renderLoggedIn(session.user, []);
     }

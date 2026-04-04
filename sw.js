@@ -1,14 +1,11 @@
 // sw.js - Basic Service Worker to satisfy PWA requirements
-const CACHE_NAME = 'job-tracker-v3';
+const CACHE_NAME = 'job-tracker-v2';
 const ASSETS = [
   '/',
   '/index.html',
   '/lib/config.js',
   '/lib/xlsxbuilder.js',
   '/scripts/app.js',
-  '/scripts/templates.js',
-  '/styles/sidebar.css',
-  '/pwa-manifest.json',
   '/icons/icon48.png',
   '/icons/icon128.png',
   '/icons/icon192.png',
