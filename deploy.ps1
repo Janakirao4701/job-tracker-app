@@ -14,8 +14,8 @@ Write-Host "Sync Complete! Deploying to GitHub..." -ForegroundColor Cyan
 # 3. Add all file changes to Git
 git add .
 
-# 4. Commit them with a generic auto-update message
-git commit -m "chore: auto-deploy updates to live site"
+# 4. Commit them with a descriptive message
+git commit -m "chore: security audit and premium glassmorphism sidebar deployment"
 
 # 5. Push to GitHub (This automatically triggers Vercel and GitHub pages)
 git push

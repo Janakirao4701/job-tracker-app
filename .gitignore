@@ -3,3 +3,34 @@ package-lock.json
 convert-icons.js
 fix-refs.js
 update.js
+.code-review-graph/
+.mcp.json
+.opencode.json
+.cursorrules
+.windsurfrules
+AGENTS.md
+GEMINI.md
+CLAUDE.md
+.claude/
+
+# Security - Environment & Credentials
+.env*
+*.pem
+*.key
+*.jks
+*.p12
+*.crt
+*.cer
+*.pub
+*.config.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# System Files
+.DS_Store
+Thumbs.db
