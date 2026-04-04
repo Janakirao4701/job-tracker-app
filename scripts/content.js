@@ -169,6 +169,56 @@
     };
   }
 
+  // ── RESUME PROFILE DB SYNC ──
+  async function saveResumeProfileDB(profile) {
+    if (!currentUser) return false;
+    try {
+      const res = await sbFetch(`${SUPABASE_URL}/rest/v1/user_settings`, {
+        method: 'POST',
+        headers: { 
+          'apikey': SUPABASE_KEY, 
+          'Authorization': 'Bearer ' + sessionToken,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates,return=representation'
+        },
+        body: JSON.stringify({ username: currentUser, resume_profile: profile })
+      });
+      if (res && res.ok) {
+        localStorage.setItem('rjd_resume_profile', JSON.stringify(profile));
+        const s = chromeStore();
+        if (s) s.set({ rjd_resume_profile: profile });
+        return true;
+      }
+    } catch(e) { console.warn('Save profile failed', e); }
+    return false;
+  }
+
+  async function loadResumeProfileDB() {
+    if (!currentUser) return {};
+    try {
+      const res = await sbFetch(
+        `${SUPABASE_URL}/rest/v1/user_settings?username=eq.${currentUser}&select=resume_profile`,
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + sessionToken } }
+      );
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data && data[0] && data[0].resume_profile) {
+          const p = data[0].resume_profile;
+          localStorage.setItem('rjd_resume_profile', JSON.stringify(p));
+          const s = chromeStore();
+          if (s) s.set({ rjd_resume_profile: p });
+          return p;
+        }
+      }
+    } catch(e) { console.warn('Load profile failed', e); }
+    // Fallback to local
+    const s2 = chromeStore();
+    return new Promise(resolve => {
+      if (s2) s2.get('rjd_resume_profile', r => resolve(r.rjd_resume_profile || JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}')));
+      else resolve(JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}'));
+    });
+  }
+
   async function sbSignOut() {
     await fetch(SUPABASE_URL + '/auth/v1/logout', {
       method: 'POST',
@@ -874,65 +924,116 @@ ${context}`;
 
 
       } else if (sec === 'resumeprofile') {
-        // Load profile from chrome.storage.local (shared across all sites)
-        const s = chromeStore();
-        const renderProfileForm = (p) => {
-          panel.innerHTML = `
-            <div style="font-size:15px;font-weight:700;color:var(--text-primary,#1e293b);margin-bottom:4px;">Resume Personal Profile</div>
-            <div style="font-size:12px;color:var(--text-muted,#94a3b8);margin-bottom:14px;">These details are used to auto-fill your generated resumes.</div>
-            <div id="rjd-rp-msg"></div>
-            
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-              <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Full Name</label><input type="text" id="rp-name" class="rjd-sidebar-input" value="${escHtml(p.name||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
-              <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Title</label><input type="text" id="rp-title" class="rjd-sidebar-input" value="${escHtml(p.title||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
-              <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Email</label><input type="email" id="rp-email" class="rjd-sidebar-input" value="${escHtml(p.email||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
-              <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Phone</label><input type="text" id="rp-phone" class="rjd-sidebar-input" value="${escHtml(p.phone||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
-              <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Location</label><input type="text" id="rp-location" class="rjd-sidebar-input" value="${escHtml(p.location||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
-              <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">LinkedIn</label><input type="text" id="rp-linkedin" class="rjd-sidebar-input" value="${escHtml(p.linkedin||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
-            </div>
-
-            <div style="margin-bottom:12px;">
-              <label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">🎓 Education (Degree | Year | Uni | Country)</label>
-              <textarea id="rp-education" class="rjd-sidebar-input" rows="2" style="width:100%;padding:6px;font-size:11px;resize:none;">${escHtml(p.education||'')}</textarea>
-            </div>
-
-            <div style="margin-bottom:12px;">
-              <label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">📜 Certifications (one per line)</label>
-              <textarea id="rp-certs" class="rjd-sidebar-input" rows="2" style="width:100%;padding:6px;font-size:11px;resize:none;">${escHtml(p.certs||'')}</textarea>
-            </div>
-
-            <button id="rjd-rp-save" class="rjd-primary-btn" style="width:100%;padding:10px;font-weight:700;">Save Personal Profile</button>
-          `;
-
-          document.getElementById('rjd-rp-save').addEventListener('click', () => {
-            const profile = {
-              name: document.getElementById('rp-name').value.trim(),
-              title: document.getElementById('rp-title').value.trim(),
-              email: document.getElementById('rp-email').value.trim(),
-              phone: document.getElementById('rp-phone').value.trim(),
-              location: document.getElementById('rp-location').value.trim(),
-              linkedin: document.getElementById('rp-linkedin').value.trim(),
-              education: document.getElementById('rp-education').value.trim(),
-              certs: document.getElementById('rp-certs').value.trim()
+        panel.innerHTML = `<div style="display:flex;justify-content:center;padding:40px;"><div class="rjd-loader"></div></div>`;
+        
+        loadResumeProfileDB().then(p => {
+          const customSections = p.custom_sections || [];
+          
+          const renderProfileForm = () => {
+            const renderSectionsSidebarHTML = () => {
+              return customSections.map((s, idx) => `
+                <div class="rjd-custom-sec-item" data-idx="${idx}" style="background:var(--bg-secondary,#f8fafc);padding:10px;border-radius:8px;margin-bottom:12px;border:1px solid var(--border-color,#e2e8f0);">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <input type="text" class="rp-custom-title" value="${escHtml(s.title)}" placeholder="Section Title" style="font-weight:700;border:none;background:transparent;padding:0;font-size:11px;color:var(--text-primary);width:70%;"/>
+                    <button class="rjd-remove-sec-btn" data-idx="${idx}" style="background:none;border:none;color:#e53e3e;font-size:10px;cursor:pointer;padding:0;">Remove</button>
+                  </div>
+                  <textarea class="rp-custom-content" rows="2" placeholder="Content..." style="width:100%;padding:4px;font-size:10px;background:var(--bg-primary);border:1px solid var(--border-color);border-radius:4px;resize:none;">${escHtml(s.content)}</textarea>
+                </div>
+              `).join('');
             };
-            // Save to chrome.storage.local (persists across all sites)
-            const s2 = chromeStore();
-            if (s2) s2.set({ rjd_resume_profile: profile });
-            // Also save to localStorage as fallback for dashboard
-            localStorage.setItem('rjd_resume_profile', JSON.stringify(profile));
-            const msg = document.getElementById('rjd-rp-msg');
-            msg.innerHTML = `<div style="padding:7px;background:#f0fff4;color:#276749;border:1px solid #c6f6d5;border-radius:6px;font-size:11px;margin-bottom:10px;text-align:center;">Profile saved ✓</div>`;
-            setTimeout(() => { if (msg) msg.innerHTML = ''; }, 3000);
-          });
-        };
-        // Load from chrome.storage.local first, fallback to localStorage
-        if (s) {
-          s.get('rjd_resume_profile', r => {
-            renderProfileForm(r.rjd_resume_profile || JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}'));
-          });
-        } else {
-          renderProfileForm(JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}'));
-        }
+
+            panel.innerHTML = `
+              <div style="font-size:15px;font-weight:700;color:var(--text-primary,#1e293b);margin-bottom:4px;">Resume Personal Profile</div>
+              <div style="font-size:12px;color:var(--text-muted,#94a3b8);margin-bottom:14px;">These details are cloud-synced across devices. ✓</div>
+              <div id="rjd-rp-msg"></div>
+              
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+                <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Full Name</label><input type="text" id="rp-name" class="rjd-sidebar-input" value="${escHtml(p.name||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+                <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Title</label><input type="text" id="rp-title" class="rjd-sidebar-input" value="${escHtml(p.title||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+                <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Email</label><input type="email" id="rp-email" class="rjd-sidebar-input" value="${escHtml(p.email||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+                <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Phone</label><input type="text" id="rp-phone" class="rjd-sidebar-input" value="${escHtml(p.phone||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+                <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Location</label><input type="text" id="rp-location" class="rjd-sidebar-input" value="${escHtml(p.location||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+                <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">LinkedIn</label><input type="text" id="rp-linkedin" class="rjd-sidebar-input" value="${escHtml(p.linkedin||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+              </div>
+
+              <div style="margin-bottom:12px;">
+                <label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">🎓 Education (Degree | Year | Uni | Country)</label>
+                <textarea id="rp-education" class="rjd-sidebar-input" rows="2" style="width:100%;padding:6px;font-size:11px;resize:none;">${escHtml(p.education||'')}</textarea>
+              </div>
+
+              <div style="margin-bottom:12px;">
+                <label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">📜 Certifications (one per line)</label>
+                <textarea id="rp-certs" class="rjd-sidebar-input" rows="2" style="width:100%;padding:6px;font-size:11px;resize:none;">${escHtml(p.certs||'')}</textarea>
+              </div>
+
+              <div id="rp-custom-sections-container">
+                ${renderSectionsSidebarHTML()}
+              </div>
+
+              <div style="margin-bottom:16px;">
+                <button id="rp-add-section-btn" style="width:100%;padding:8px;border:1px dashed var(--border-color);background:none;color:var(--text-muted);font-size:11px;border-radius:8px;cursor:pointer;">+ Add Section (e.g. Projects)</button>
+              </div>
+
+              <button id="rjd-rp-save" class="rjd-primary-btn" style="width:100%;padding:10px;font-weight:700;">Save Personal Profile</button>
+            `;
+
+            // Add Section logic
+            document.getElementById('rp-add-section-btn').addEventListener('click', () => {
+              customSections.push({ title: '', content: '' });
+              document.getElementById('rp-custom-sections-container').innerHTML = renderSectionsSidebarHTML();
+              attachSidebarSecListeners();
+            });
+
+            const attachSidebarSecListeners = () => {
+              document.querySelectorAll('.rjd-remove-sec-btn').forEach(btn => {
+                btn.onclick = () => {
+                  customSections.splice(parseInt(btn.dataset.idx), 1);
+                  document.getElementById('rp-custom-sections-container').innerHTML = renderSectionsSidebarHTML();
+                  attachSidebarSecListeners();
+                };
+              });
+            };
+            attachSidebarSecListeners();
+
+            document.getElementById('rjd-rp-save').addEventListener('click', async () => {
+              const btn = document.getElementById('rjd-rp-save');
+              btn.disabled = true; btn.textContent = 'Saving...';
+
+              // Capture custom sections
+              const updatedCustom = [];
+              document.querySelectorAll('.rjd-custom-sec-item').forEach(item => {
+                const t = item.querySelector('.rp-custom-title').value.trim();
+                const c = item.querySelector('.rp-custom-content').value.trim();
+                if (t) updatedCustom.push({ title: t, content: c });
+              });
+
+              const profile = {
+                name: document.getElementById('rp-name').value.trim(),
+                title: document.getElementById('rp-title').value.trim(),
+                email: document.getElementById('rp-email').value.trim(),
+                phone: document.getElementById('rp-phone').value.trim(),
+                location: document.getElementById('rp-location').value.trim(),
+                linkedin: document.getElementById('rp-linkedin').value.trim(),
+                education: document.getElementById('rp-education').value.trim(),
+                certs: document.getElementById('rp-certs').value.trim(),
+                custom_sections: updatedCustom
+              };
+
+              const ok = await saveResumeProfileDB(profile);
+              btn.disabled = false; btn.textContent = 'Save Personal Profile';
+              
+              const msg = document.getElementById('rjd-rp-msg');
+              if (ok) {
+                msg.innerHTML = `<div style="padding:7px;background:#f0fff4;color:#276749;border:1px solid #c6f6d5;border-radius:6px;font-size:11px;margin-bottom:10px;text-align:center;">Profile saved and synced ✓</div>`;
+              } else {
+                msg.innerHTML = `<div style="padding:7px;background:#fff5f5;color:#c53030;border:1px solid #feb2b2;border-radius:6px;font-size:11px;margin-bottom:10px;text-align:center;">Save failed (Cloud)</div>`;
+              }
+              setTimeout(() => { if (msg) msg.innerHTML = ''; }, 3000);
+            });
+          };
+
+          renderProfileForm();
+        });
 
       } else if (sec === 'shortcuts') {
         panel.innerHTML = `

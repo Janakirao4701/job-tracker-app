@@ -279,7 +279,7 @@ async function loadGeminiKeyDB() {
   // Load from Supabase
   try {
     const res = await fetch(
-      SUPABASE_URL + '/rest/v1/user_settings?username=eq.' + currentUser.id + '&select=gemini_key',
+      `${SUPABASE_URL}/rest/v1/user_settings?username=eq.${currentUser.id}&select=gemini_key`,
       { headers: headers() }
     );
     if (res.ok) {
@@ -292,6 +292,56 @@ async function loadGeminiKeyDB() {
     }
   } catch(e) {}
   return '';
+}
+
+// ── RESUME PROFILE DB SYNC ──
+async function saveResumeProfileDB(profile) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/user_settings`, {
+      method: 'POST',
+      headers: headers({'Prefer': 'resolution=merge-duplicates,return=representation'}),
+      body: JSON.stringify({
+        username: currentUser.id,
+        resume_profile: profile 
+      })
+    });
+    if (res.ok) {
+      localStorage.setItem('rjd_resume_profile', JSON.stringify(profile));
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        chrome.storage.local.set({ rjd_resume_profile: profile });
+      }
+      return true;
+    }
+  } catch(e) {}
+  // Fallback to local
+  localStorage.setItem('rjd_resume_profile', JSON.stringify(profile));
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    chrome.storage.local.set({ rjd_resume_profile: profile });
+  }
+  return false;
+}
+
+async function loadResumeProfileDB() {
+  // Load from Supabase
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_settings?username=eq.${currentUser.id}&select=resume_profile`,
+      { headers: headers() }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data[0] && data[0].resume_profile) {
+        const p = data[0].resume_profile;
+        localStorage.setItem('rjd_resume_profile', JSON.stringify(p));
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+          chrome.storage.local.set({ rjd_resume_profile: p });
+        }
+        return p;
+      }
+    }
+  } catch(e) {}
+  // Fallback to local
+  try { return JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}'); } catch(e) { return {}; }
 }
 
 function saveSession(data) {
@@ -1242,53 +1292,111 @@ function renderSettingsSection(sec) {
     });
 
   } else if (sec === 'resumeprofile') {
-    const p = JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}');
-    panel.innerHTML = `
-      <div class="settings-section-title">Resume Personal Profile</div>
-      <div class="settings-section-sub">These details are used to auto-fill your generated resumes.</div>
-      <div id="resume-settings-msg"></div>
+    panel.innerHTML = `<div style="display:flex;justify-content:center;padding:40px;"><div class="loading-spinner"></div></div>`;
+    
+    loadResumeProfileDB().then(p => {
+      const customSections = p.custom_sections || [];
       
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-        <div class="settings-field"><label>Full Name</label><input type="text" class="settings-input" id="res-name" value="${esc(p.name)}" placeholder="Venkata Vinay Vamsi"/></div>
-        <div class="settings-field"><label>Professional Title</label><input type="text" class="settings-input" id="res-title" value="${esc(p.title)}" placeholder="Senior Data Engineer"/></div>
-        <div class="settings-field"><label>Email Address</label><input type="email" class="settings-input" id="res-email" value="${esc(p.email)}" placeholder="you@email.com"/></div>
-        <div class="settings-field"><label>Phone Number</label><input type="text" class="settings-input" id="res-phone" value="${esc(p.phone)}" placeholder="+1 (414) 895-2296"/></div>
-        <div class="settings-field"><label>Location</label><input type="text" class="settings-input" id="res-location" value="${esc(p.location)}" placeholder="United States"/></div>
-        <div class="settings-field"><label>LinkedIn URL</label><input type="text" class="settings-input" id="res-linkedin" value="${esc(p.linkedin)}" placeholder="linkedin.com/in/yourname"/></div>
-      </div>
-
-      <div class="settings-field">
-        <label>🎓 Education <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(Degree | Years | Institution | Country)</span></label>
-        <textarea class="settings-input" id="res-education" rows="3" placeholder="Master of Science | 2023-2025 | University | USA">${esc(p.education)}</textarea>
-      </div>
-
-      <div class="settings-field">
-        <label>📜 Certifications <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(one per line)</span></label>
-        <textarea class="settings-input" id="res-certs" rows="2" placeholder="AWS Certified Developer">${esc(p.certs)}</textarea>
-      </div>
-
-      <div style="margin-top:20px;">
-        <button class="settings-btn" id="save-resume-profile-btn" style="padding:12px 32px;font-size:14px;">Save Personal Profile</button>
-      </div>`;
-
-    document.getElementById('save-resume-profile-btn').addEventListener('click', () => {
-      const profile = {
-        name: document.getElementById('res-name').value.trim(),
-        title: document.getElementById('res-title').value.trim(),
-        email: document.getElementById('res-email').value.trim(),
-        phone: document.getElementById('res-phone').value.trim(),
-        location: document.getElementById('res-location').value.trim(),
-        linkedin: document.getElementById('res-linkedin').value.trim(),
-        education: document.getElementById('res-education').value.trim(),
-        certs: document.getElementById('res-certs').value.trim()
+      const renderSectionsHTML = () => {
+        return customSections.map((s, idx) => `
+          <div class="settings-field custom-sec-item" data-idx="${idx}" style="background:var(--bg-inset);padding:14px;border-radius:10px;margin-bottom:16px;border:1px solid var(--border);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <input type="text" class="settings-input custom-sec-title" value="${esc(s.title)}" placeholder="Section Title (e.g. Projects)" style="font-weight:700;border:none;background:transparent;padding:0;font-size:14px;color:var(--text);"/>
+              <button class="btn-new btn-danger remove-sec-btn" data-idx="${idx}" style="padding:4px 8px;font-size:11px;">Remove</button>
+            </div>
+            <textarea class="settings-input custom-sec-content" rows="3" placeholder="Section Details..." style="font-size:13px;">${esc(s.content)}</textarea>
+          </div>
+        `).join('');
       };
-      localStorage.setItem('rjd_resume_profile', JSON.stringify(profile));
-      const msg = document.getElementById('resume-settings-msg');
-      msg.innerHTML = '<div class="auth-msg success">Profile saved successfully ✓</div>';
-      showToast('Profile saved');
-      setTimeout(() => { if (msg) msg.innerHTML = ''; }, 3000);
-    });
 
+      panel.innerHTML = `
+        <div class="settings-section-title">Resume Personal Profile</div>
+        <div class="settings-section-sub">These details are used to auto-fill your generated resumes. (Cloud Synced ✓)</div>
+        <div id="resume-settings-msg"></div>
+        
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+          <div class="settings-field"><label>Full Name</label><input type="text" class="settings-input" id="res-name" value="${esc(p.name)}" placeholder="Venkata Vinay Vamsi"/></div>
+          <div class="settings-field"><label>Professional Title</label><input type="text" class="settings-input" id="res-title" value="${esc(p.title)}" placeholder="Senior Data Engineer"/></div>
+          <div class="settings-field"><label>Email Address</label><input type="email" class="settings-input" id="res-email" value="${esc(p.email)}" placeholder="you@email.com"/></div>
+          <div class="settings-field"><label>Phone Number</label><input type="text" class="settings-input" id="res-phone" value="${esc(p.phone)}" placeholder="+1 (414) 895-2296"/></div>
+          <div class="settings-field"><label>Location</label><input type="text" class="settings-input" id="res-location" value="${esc(p.location)}" placeholder="United States"/></div>
+          <div class="settings-field"><label>LinkedIn URL</label><input type="text" class="settings-input" id="res-linkedin" value="${esc(p.linkedin)}" placeholder="linkedin.com/in/yourname"/></div>
+        </div>
+
+        <div class="settings-field">
+          <label>🎓 Education <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(Degree | Years | Institution | Country)</span></label>
+          <textarea class="settings-input" id="res-education" rows="3" placeholder="Master of Science | 2023-2025 | University | USA">${esc(p.education)}</textarea>
+        </div>
+
+        <div class="settings-field">
+          <label>📜 Certifications <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(one per line)</span></label>
+          <textarea class="settings-input" id="res-certs" rows="2" placeholder="AWS Certified Developer">${esc(p.certs)}</textarea>
+        </div>
+
+        <div id="custom-sections-container">
+          ${renderSectionsHTML()}
+        </div>
+
+        <div style="margin-bottom:24px;">
+          <button class="btn-new" id="add-section-btn" style="background:var(--bg-inset);border:1px dashed var(--border);color:var(--text-muted);width:100%;padding:12px;font-size:13px;">+ Add Custom Section (e.g. Projects)</button>
+        </div>
+
+        <div style="margin-top:20px;display:flex;gap:12px;align-items:center;">
+          <button class="settings-btn" id="save-resume-profile-btn" style="padding:12px 32px;font-size:14px;">Save Personal Profile</button>
+          <span id="save-status" style="font-size:12px;color:var(--text-muted);"></span>
+        </div>`;
+
+      // Add Section logic
+      document.getElementById('add-section-btn').addEventListener('click', () => {
+        customSections.push({ title: '', content: '' });
+        document.getElementById('custom-sections-container').innerHTML = renderSectionsHTML();
+        attachSecListeners();
+      });
+
+      const attachSecListeners = () => {
+        document.querySelectorAll('.remove-sec-btn').forEach(btn => {
+          btn.onclick = () => {
+            customSections.splice(parseInt(btn.dataset.idx), 1);
+            document.getElementById('custom-sections-container').innerHTML = renderSectionsHTML();
+            attachSecListeners();
+          };
+        });
+      };
+      attachSecListeners();
+
+      document.getElementById('save-resume-profile-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('save-resume-profile-btn');
+        const status = document.getElementById('save-status');
+        btn.disabled = true;
+        status.textContent = 'Saving...';
+
+        // Capture custom sections
+        const updatedCustom = [];
+        document.querySelectorAll('.custom-sec-item').forEach(item => {
+          const t = item.querySelector('.custom-sec-title').value.trim();
+          const c = item.querySelector('.custom-sec-content').value.trim();
+          if (t) updatedCustom.push({ title: t, content: c });
+        });
+
+        const profile = {
+          name: document.getElementById('res-name').value.trim(),
+          title: document.getElementById('res-title').value.trim(),
+          email: document.getElementById('res-email').value.trim(),
+          phone: document.getElementById('res-phone').value.trim(),
+          location: document.getElementById('res-location').value.trim(),
+          linkedin: document.getElementById('res-linkedin').value.trim(),
+          education: document.getElementById('res-education').value.trim(),
+          certs: document.getElementById('res-certs').value.trim(),
+          custom_sections: updatedCustom
+        };
+
+        const ok = await saveResumeProfileDB(profile);
+        btn.disabled = false;
+        status.textContent = ok ? 'Saved ✓' : 'Save failed';
+        showToast(ok ? 'Profile saved' : 'Save failed', !ok);
+        setTimeout(() => { if (status) status.textContent = ''; }, 3000);
+      });
+    });
   } else if (sec === 'account') {
     panel.innerHTML = `
       <div class="settings-section-title">Account</div>
