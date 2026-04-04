@@ -1685,42 +1685,6 @@ document.getElementById('modal-save').addEventListener('click', async () => {
 });
 
 // ── INTEGRATED RESUME ENGINE ──
-function parseContent(text) {
-  const sections = { summary: '', skills: '', experience: '' };
-  if (!text) return sections;
-  const sMatch = text.match(/\[SUMMARY\]([\s\S]*?)(?=\[|$)/i);
-  const kMatch = text.match(/\[SKILLS\]([\s\S]*?)(?=\[|$)/i);
-  const xMatch = text.match(/\[EXPERIENCE\]([\s\S]*?)(?=\[|$)/i);
-  if (sMatch) sections.summary = sMatch[1].trim();
-  if (kMatch) sections.skills = kMatch[1].trim();
-  if (xMatch) sections.experience = xMatch[1].trim();
-  return sections;
-}
-
-function parseSkills(text) {
-  if (!text) return [];
-  return text.split('\n').map(s => s.replace(/^[•\-\*]\s*/, '').trim()).filter(s => s.length > 0);
-}
-
-function parseExperience(text) {
-  if (!text) return [];
-  const roles = [];
-  const blocks = text.split(/(?=\n[•\-\*]\s*)/);
-  let currentRole = null;
-  blocks.forEach(block => {
-    const trimmed = block.trim();
-    if (!trimmed) return;
-    if (!trimmed.startsWith('•') && !trimmed.startsWith('-') && !trimmed.startsWith('*')) {
-      if (currentRole) roles.push(currentRole);
-      currentRole = { title: trimmed, bullets: [] };
-    } else if (currentRole) {
-      currentRole.bullets.push(trimmed.replace(/^[•\-\*]\s*/, '').trim());
-    }
-  });
-  if (currentRole) roles.push(currentRole);
-  return roles;
-}
-
 async function generateIntegratedResume(app) {
   const p = JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}');
   if (!p.name) {
@@ -1730,151 +1694,16 @@ async function generateIntegratedResume(app) {
     renderSettings();
     return;
   }
-
-  const { summary, skills, experience } = parseContent(app.resume);
-  const skillList = parseSkills(skills);
-  const expList = parseExperience(experience);
-
-  const { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel, BorderStyle, Table, TableRow, TableCell, WidthType, HeightRule, VerticalAlign, ExternalHyperlink } = docx;
-
-  const FONT = "Calibri";
-  const PRIMARY_COLOR = "000000";
-
-  const createHeader = () => {
-    return new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE }, insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE } },
-      rows: [
-        new TableRow({
-          children: [
-            new TableCell({
-              width: { size: 65, type: WidthType.PERCENTAGE },
-              children: [
-                new Paragraph({
-                  children: [new TextRun({ text: p.name || "YOUR NAME", bold: true, size: 44, font: FONT, color: PRIMARY_COLOR })],
-                  spacing: { after: 40 }
-                }),
-                new Paragraph({
-                  children: [new TextRun({ text: p.title || "Professional Title", bold: true, size: 24, font: FONT, color: "444444" })]
-                })
-              ]
-            }),
-            new TableCell({
-              width: { size: 35, type: WidthType.PERCENTAGE },
-              verticalAlign: VerticalAlign.BOTTOM,
-              children: [
-                new Paragraph({
-                  alignment: AlignmentType.RIGHT,
-                  children: [new TextRun({ text: p.location || "", size: 19, font: FONT })],
-                  spacing: { after: 20 }
-                }),
-                new Paragraph({
-                  alignment: AlignmentType.RIGHT,
-                  children: [
-                    new TextRun({ text: "📧 ", size: 18 }),
-                    new TextRun({ text: p.email || "", size: 19, font: FONT, color: "0000EE" })
-                  ],
-                  spacing: { after: 20 }
-                }),
-                new Paragraph({
-                  alignment: AlignmentType.RIGHT,
-                  children: [
-                    new TextRun({ text: "📱 ", size: 18 }),
-                    new TextRun({ text: p.phone || "", size: 19, font: FONT })
-                  ],
-                  spacing: { after: 20 }
-                }),
-                new Paragraph({
-                  alignment: AlignmentType.RIGHT,
-                  children: [
-                    new TextRun({ text: "🔗 ", size: 18 }),
-                    new TextRun({ text: p.linkedin || "", size: 19, font: FONT, color: "0000EE" })
-                  ]
-                })
-              ]
-            })
-          ]
-        })
-      ]
-    });
-  };
-
-  const createSectionHeading = (text) => {
-    return new Paragraph({
-      heading: HeadingLevel.HEADING_2,
-      spacing: { before: 240, after: 120 },
-      border: { bottom: { color: "666666", space: 1, style: BorderStyle.SINGLE, size: 6 } },
-      children: [new TextRun({ text: text.toUpperCase(), bold: true, size: 20, font: FONT, color: PRIMARY_COLOR, characterSpacing: 20 })]
-    });
-  };
-
-  const docChildren = [
-    createHeader(),
-    createSectionHeading("Professional Summary"),
-    new Paragraph({
-      alignment: AlignmentType.JUSTIFY,
-      spacing: { line: 320, after: 120 },
-      children: [new TextRun({ text: summary || "Professional summary content...", size: 20, font: FONT })]
-    })
-  ];
-
-  if (skillList.length > 0) {
-    docChildren.push(createSectionHeading("Technical Skills & Core Competencies"));
-    docChildren.push(new Paragraph({
-      spacing: { after: 120, line: 360 },
-      children: [new TextRun({ text: skillList.join("  •  "), size: 20, font: FONT, bold: true })]
-    }));
+  try {
+    if (window.ResumeEngine) {
+      await window.ResumeEngine.generate(app, p);
+    } else {
+      showToast('Resume engine not loaded. Please refresh.', true);
+    }
+  } catch (err) {
+    console.error(err);
+    showToast('Download failed: ' + err.message, true);
   }
-
-  docChildren.push(createSectionHeading("Professional Experience"));
-  expList.forEach(exp => {
-    docChildren.push(new Paragraph({
-      spacing: { before: 120, after: 40 },
-      children: [new TextRun({ text: exp.title, bold: true, size: 20, font: FONT })]
-    }));
-    exp.bullets.forEach(bullet => {
-      docChildren.push(new Paragraph({
-        bullet: { level: 0 },
-        spacing: { before: 40, after: 40, line: 300 },
-        alignment: AlignmentType.JUSTIFY,
-        children: [new TextRun({ text: bullet, size: 20, font: FONT })]
-      }));
-    });
-  });
-
-  if (p.education) {
-    docChildren.push(createSectionHeading("Education"));
-    p.education.split('\n').filter(Boolean).forEach(line => {
-      docChildren.push(new Paragraph({
-        spacing: { after: 60 },
-        children: [new TextRun({ text: line, size: 20, font: FONT, bold: line.includes('|') })]
-      }));
-    });
-  }
-
-  if (p.certs) {
-    docChildren.push(createSectionHeading("Certifications"));
-    p.certs.split('\n').filter(Boolean).forEach(cert => {
-      docChildren.push(new Paragraph({
-        bullet: { level: 0 },
-        spacing: { after: 40 },
-        children: [new TextRun({ text: cert, size: 20, font: FONT })]
-      }));
-    });
-  }
-
-  const doc = new Document({
-    sections: [{
-      properties: {
-        page: { margin: { top: 792, bottom: 792, left: 936, right: 936 } }
-      },
-      children: docChildren
-    }]
-  });
-
-  const blob = await Packer.toBlob(doc);
-  const safeName = (app.company || "Resume").replace(/[^a-z0-9]/gi, '_');
-  saveAs(blob, `${p.name || "Resume"}_${safeName}.docx`);
 }
 
 // ── INIT ──

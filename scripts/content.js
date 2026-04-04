@@ -771,6 +771,7 @@ ${context}`;
             <div style="width:140px;background:var(--bg-secondary,#f8fafc);border-right:1px solid var(--border-color,#e2e8f0);flex-shrink:0;overflow-y:auto;padding:8px 0;">
               <div style="font-size:9px;font-weight:700;color:var(--text-muted,#94a3b8);text-transform:uppercase;letter-spacing:0.8px;padding:8px 14px 4px;">General</div>
               <div class="rjd-settings-nav-item ${activeSection==='apikey'?'rjd-snav-active':''}" data-sec="apikey">🔑 API Key</div>
+              <div class="rjd-settings-nav-item ${activeSection==='resumeprofile'?'rjd-snav-active':''}" data-sec="resumeprofile">📄 Resume Profile</div>
               <div style="font-size:9px;font-weight:700;color:var(--text-muted,#94a3b8);text-transform:uppercase;letter-spacing:0.8px;padding:12px 14px 4px;">Info</div>
               <div class="rjd-settings-nav-item ${activeSection==='shortcuts'?'rjd-snav-active':''}" data-sec="shortcuts">⌨️ Shortcuts</div>
               <div class="rjd-settings-nav-item ${activeSection==='privacy'?'rjd-snav-active':''}" data-sec="privacy">🛡️ Privacy</div>
@@ -846,6 +847,52 @@ ${context}`;
           });
         });
 
+
+      } else if (sec === 'resumeprofile') {
+        const p = JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}');
+        panel.innerHTML = `
+          <div style="font-size:15px;font-weight:700;color:var(--text-primary,#1e293b);margin-bottom:4px;">Resume Personal Profile</div>
+          <div style="font-size:12px;color:var(--text-muted,#94a3b8);margin-bottom:14px;">These details are used to auto-fill your generated resumes.</div>
+          <div id="rjd-rp-msg"></div>
+          
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+            <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Full Name</label><input type="text" id="rp-name" class="rjd-sidebar-input" value="${escHtml(p.name||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+            <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Title</label><input type="text" id="rp-title" class="rjd-sidebar-input" value="${escHtml(p.title||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+            <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Email</label><input type="email" id="rp-email" class="rjd-sidebar-input" value="${escHtml(p.email||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+            <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Phone</label><input type="text" id="rp-phone" class="rjd-sidebar-input" value="${escHtml(p.phone||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+            <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Location</label><input type="text" id="rp-location" class="rjd-sidebar-input" value="${escHtml(p.location||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+            <div><label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">LinkedIn</label><input type="text" id="rp-linkedin" class="rjd-sidebar-input" value="${escHtml(p.linkedin||'')}" style="width:100%;padding:6px;font-size:11px;"/></div>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">🎓 Education (Degree | Year | Uni | Country)</label>
+            <textarea id="rp-education" class="rjd-sidebar-input" rows="2" style="width:100%;padding:6px;font-size:11px;resize:none;">${escHtml(p.education||'')}</textarea>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">📜 Certifications (one per line)</label>
+            <textarea id="rp-certs" class="rjd-sidebar-input" rows="2" style="width:100%;padding:6px;font-size:11px;resize:none;">${escHtml(p.certs||'')}</textarea>
+          </div>
+
+          <button id="rjd-rp-save" class="rjd-primary-btn" style="width:100%;padding:10px;font-weight:700;">Save Personal Profile</button>
+        `;
+
+        document.getElementById('rjd-rp-save').addEventListener('click', () => {
+          const profile = {
+            name: document.getElementById('rp-name').value.trim(),
+            title: document.getElementById('rp-title').value.trim(),
+            email: document.getElementById('rp-email').value.trim(),
+            phone: document.getElementById('rp-phone').value.trim(),
+            location: document.getElementById('rp-location').value.trim(),
+            linkedin: document.getElementById('rp-linkedin').value.trim(),
+            education: document.getElementById('rp-education').value.trim(),
+            certs: document.getElementById('rp-certs').value.trim()
+          };
+          localStorage.setItem('rjd_resume_profile', JSON.stringify(profile));
+          const msg = document.getElementById('rjd-rp-msg');
+          msg.innerHTML = `<div style="padding:7px;background:#f0fff4;color:#276749;border:1px solid #c6f6d5;border-radius:6px;font-size:11px;margin-bottom:10px;text-align:center;">Profile saved ✓</div>`;
+          setTimeout(() => { if (msg) msg.innerHTML = ''; }, 3000);
+        });
 
       } else if (sec === 'shortcuts') {
         panel.innerHTML = `
@@ -1025,7 +1072,8 @@ ${context}`;
     tbody.innerHTML = filtered.map((app, idx) => {
       const sc = STATUS_COLORS[app.status] || STATUS_COLORS['Applied'];
       const safeUrl = app.url && /^https?:\/\//i.test(app.url) ? app.url : null;
-      const resumeBtn = app.resume ? `<button class="rjd-view-resume-btn" data-id="${app.id}">View</button>` : `<span class="rjd-no-resume">—</span>`;
+      const addBtn    = `<button class="rjd-add-resume-btn" data-id="${app.id}" title="Paste resume from clipboard" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-color,#e2e8f0);background:var(--bg-secondary,#f8fafc);color:${app.resume?'#059669':'var(--accent-primary,#4f46e5)'};cursor:pointer;font-size:10px;font-weight:600;font-family:inherit;">${app.resume?'✓ Update':'+ Add'}</button>`;
+      const dlBtn     = `<button class="rjd-dl-resume-btn" data-id="${app.id}" title="Download tailored resume" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-color,#e2e8f0);background:var(--bg-secondary,#f8fafc);color:var(--text-primary,#1e293b);cursor:pointer;font-size:11px;font-family:inherit;${!app.resume?'opacity:0.4;pointer-events:none;':''}">📥</button>`;
       const urlBtn    = safeUrl    ? `<a href="${escHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" class="rjd-url-link">Open</a>` : `<span class="rjd-no-resume">—</span>`;
       const isOverdue = app.followUpDate && app.followUpDate < todayKey().slice(0,10) && app.status !== 'Offer' && app.status !== 'Rejected';
       const followUpBadge = app.followUpDate ? `<div style="font-size:9px;color:${isOverdue?'#dc2626':'#94a3b8'};margin-top:1px;">${isOverdue?'⚠ ':'📅 '}${app.followUpDate}</div>` : '';
@@ -1037,13 +1085,14 @@ ${context}`;
         <td class="rjd-td rjd-td-company"><div>${escHtml(app.company||'—')}</div>${followUpBadge}</td>
         <td class="rjd-td rjd-td-title">${escHtml(app.jobTitle||'—')}</td>
         <td class="rjd-td rjd-td-url">${urlBtn}</td>
-        <td class="rjd-td rjd-td-resume">${resumeBtn}</td>
+        <td class="rjd-td rjd-td-add">${addBtn}</td>
+        <td class="rjd-td rjd-td-dl">${dlBtn}</td>
         <td class="rjd-td rjd-td-date">${escHtml(app.date||'—')}</td>
         <td class="rjd-td rjd-td-status">${statusChip}</td>
       </tr>`;
     }).join('');
 
-    // Status chip cycling — tap to go to next status
+    // Event Listeners
     tbody.querySelectorAll('.rjd-status-chip-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -1058,13 +1107,33 @@ ${context}`;
       });
     });
 
-    tbody.querySelectorAll('.rjd-view-resume-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => { e.stopPropagation(); const app = applications.find(a=>a.id===btn.dataset.id); if(app) showResumeDetail(app); });
+    tbody.querySelectorAll('.rjd-add-resume-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); saveResumeFromClipboard(btn.dataset.id); });
+    });
+
+    tbody.querySelectorAll('.rjd-dl-resume-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const app = applications.find(a=>a.id===btn.dataset.id);
+        if (app && app.resume) {
+          const old = btn.textContent;
+          btn.textContent = '⏳'; btn.disabled = true;
+          try {
+            await generateIntegratedResume(app);
+            showToast('Resume downloaded ✓');
+          } catch (err) {
+            console.error(err);
+            showToast('Download failed: ' + err.message, true);
+          } finally {
+            btn.textContent = old; btn.disabled = false;
+          }
+        }
+      });
     });
 
     tbody.querySelectorAll('.rjd-row').forEach(row => {
       row.addEventListener('click', (e) => {
-        if (['rjd-status-chip-btn','rjd-view-resume-btn','rjd-url-link'].some(c=>e.target.classList.contains(c))) return;
+        if (['rjd-status-chip-btn','rjd-add-resume-btn','rjd-dl-resume-btn','rjd-url-link'].some(c=>e.target.classList.contains(c))) return;
         const app = applications.find(a=>a.id===row.dataset.id);
         if (app) showAppDetail(app);
       });
@@ -1297,11 +1366,12 @@ ${context}`;
             <table id="rjd-table">
               <thead>
                 <tr>
-                  <th class="rjd-th">#</th>
+                  <th class="rjd-th" style="width:24px;">#</th>
                   <th class="rjd-th">Company</th>
                   <th class="rjd-th">Job Title</th>
                   <th class="rjd-th">URL</th>
-                  <th class="rjd-th">Resume</th>
+                  <th class="rjd-th" title="Add Resume from Clipboard">Add</th>
+                  <th class="rjd-th" title="Download Tailored Resume">DL</th>
                   <th class="rjd-th">Date</th>
                   <th class="rjd-th">Status</th>
                 </tr>
@@ -1959,6 +2029,27 @@ ${context}`;
         });
       } catch(e) { clearInterval(_poll); }
     }, 3000);
+  }
+
+}
+  // -- INTEGRATED RESUME ENGINE --
+  async function generateIntegratedResume(app) {
+    const p = JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}');
+    if (!p.name) {
+      showToast('Please fill out your Resume Profile in Settings first!', true);
+      renderSettingsScreen('tracker');
+      return;
+    }
+    try {
+      if (window.ResumeEngine) {
+        await window.ResumeEngine.generate(app, p);
+      } else {
+        showToast('Resume engine not loaded. Please refresh.', true);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Download failed: ' + err.message, true);
+    }
   }
 
 })();

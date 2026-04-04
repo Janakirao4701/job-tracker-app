@@ -70,6 +70,9 @@
       ],
       "js": [
         "lib/config.js",
+        "lib/docx-bundle.js",
+        "lib/FileSaver.min.js",
+        "lib/resume-engine.js",
         "scripts/content.js"
       ],
       "css": [
@@ -80,6 +83,9 @@
   "web_accessible_resources": [
     {
       "resources": [
+        "lib/docx-bundle.js",
+        "lib/FileSaver.min.js",
+        "lib/resume-engine.js",
         "lib/xlsxbuilder.js",
         "pages/privacy.html",
         "icons/icon16.png",
