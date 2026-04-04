@@ -70,6 +70,7 @@
       ],
       "js": [
         "lib/config.js",
+        "lib/docxbuilder.js",
         "scripts/content.js"
       ],
       "css": [
@@ -81,6 +82,7 @@
     {
       "resources": [
         "lib/xlsxbuilder.js",
+        "lib/docxbuilder.js",
         "pages/privacy.html",
         "icons/icon16.png",
         "icons/icon32.png",

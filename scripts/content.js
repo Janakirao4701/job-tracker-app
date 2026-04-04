@@ -1019,13 +1019,14 @@ ${context}`;
     const tbody = document.getElementById('rjd-tbody');
     if (!tbody) return;
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" class="rjd-empty-row">No applications yet. Click "✦ Extract & Save" to start.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="rjd-empty-row">No applications yet. Click "✦ Extract & Save" to start.</td></tr>`;
       return;
     }
     tbody.innerHTML = filtered.map((app, idx) => {
       const sc = STATUS_COLORS[app.status] || STATUS_COLORS['Applied'];
       const safeUrl = app.url && /^https?:\/\//i.test(app.url) ? app.url : null;
-      const resumeBtn = app.resume ? `<button class="rjd-view-resume-btn" data-id="${app.id}">View</button>` : `<span class="rjd-no-resume">—</span>`;
+      const resumeBtn = app.resume ? `<button class="rjd-add-resume-btn" data-id="${app.id}" style="background:#ecfdf5;color:#059669;border:1px solid #a7f3d0;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.15s;" title="Update resume from clipboard">✓ Update</button>` : `<button class="rjd-add-resume-btn" data-id="${app.id}" style="background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s;" title="Add resume from clipboard">+ Add</button>`;
+      const dlBtn = app.resume ? `<button class="rjd-dl-resume-btn" data-id="${app.id}" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;padding:3px 7px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit;transition:all 0.15s;" title="Download .docx">⬇</button>` : `<span class="rjd-no-resume">—</span>`;
       const urlBtn    = safeUrl    ? `<a href="${escHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" class="rjd-url-link">Open</a>` : `<span class="rjd-no-resume">—</span>`;
       const isOverdue = app.followUpDate && app.followUpDate < todayKey().slice(0,10) && app.status !== 'Offer' && app.status !== 'Rejected';
       const followUpBadge = app.followUpDate ? `<div style="font-size:9px;color:${isOverdue?'#dc2626':'#94a3b8'};margin-top:1px;">${isOverdue?'⚠ ':'📅 '}${app.followUpDate}</div>` : '';
@@ -1038,6 +1039,7 @@ ${context}`;
         <td class="rjd-td rjd-td-title">${escHtml(app.jobTitle||'—')}</td>
         <td class="rjd-td rjd-td-url">${urlBtn}</td>
         <td class="rjd-td rjd-td-resume">${resumeBtn}</td>
+        <td class="rjd-td rjd-td-dl">${dlBtn}</td>
         <td class="rjd-td rjd-td-date">${escHtml(app.date||'—')}</td>
         <td class="rjd-td rjd-td-status">${statusChip}</td>
       </tr>`;
@@ -1058,13 +1060,36 @@ ${context}`;
       });
     });
 
-    tbody.querySelectorAll('.rjd-view-resume-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => { e.stopPropagation(); const app = applications.find(a=>a.id===btn.dataset.id); if(app) showResumeDetail(app); });
+    // Add/Update resume from clipboard
+    tbody.querySelectorAll('.rjd-add-resume-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const app = applications.find(a => a.id === btn.dataset.id);
+        if (!app) return;
+        try {
+          const text = await navigator.clipboard.readText();
+          if (!text.trim()) { showToast('Clipboard is empty — copy resume first', true); return; }
+          app.resume = text.trim();
+          await dbUpdateApp(app);
+          showToast('Resume ' + (btn.textContent.includes('Update') ? 'updated' : 'added') + ' ✓');
+          renderTable();
+        } catch(err) { showToast('Could not read clipboard', true); }
+      });
+    });
+
+    // Download resume as .docx
+    tbody.querySelectorAll('.rjd-dl-resume-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const app = applications.find(a => a.id === btn.dataset.id);
+        if (!app || !app.resume) { showToast('No resume to download', true); return; }
+        downloadAppResume(app);
+      });
     });
 
     tbody.querySelectorAll('.rjd-row').forEach(row => {
       row.addEventListener('click', (e) => {
-        if (['rjd-status-chip-btn','rjd-view-resume-btn','rjd-url-link'].some(c=>e.target.classList.contains(c))) return;
+        if (['rjd-status-chip-btn','rjd-add-resume-btn','rjd-dl-resume-btn','rjd-url-link'].some(c=>e.target.classList.contains(c))) return;
         const app = applications.find(a=>a.id===row.dataset.id);
         if (app) showAppDetail(app);
       });
@@ -1227,6 +1252,38 @@ ${context}`;
     } catch { showToast('Could not read clipboard', true); }
   }
 
+  // ── DOWNLOAD RESUME AS .DOCX ──
+  function downloadAppResume(app) {
+    if (!app || !app.resume) { showToast('No resume to download', true); return; }
+    // Read resume profile from chrome.storage (set in dashboard settings)
+    const s = chromeStore();
+    if (s) {
+      s.get('resume_builder_profile', (r) => {
+        const profile = r.resume_builder_profile || {};
+        // If no profile is set, use current user info as fallback
+        if (!profile.name && currentUser) profile.name = currentUser.name || '';
+        if (!profile.email && currentUser) profile.email = currentUser.email || '';
+        const filename = (app.company || 'Resume').replace(/[^a-z0-9]/gi, '_') + '_Resume';
+        try {
+          window.downloadResumeDocx(profile, app.resume, filename);
+          showToast('Resume downloaded ✓');
+        } catch(err) {
+          showToast('Download failed: ' + (err.message || 'unknown error'), true);
+        }
+      });
+    } else {
+      // No chrome.storage — use basic profile
+      const profile = { name: currentUser?.name || '', email: currentUser?.email || '' };
+      const filename = (app.company || 'Resume').replace(/[^a-z0-9]/gi, '_') + '_Resume';
+      try {
+        window.downloadResumeDocx(profile, app.resume, filename);
+        showToast('Resume downloaded ✓');
+      } catch(err) {
+        showToast('Download failed: ' + (err.message || 'unknown error'), true);
+      }
+    }
+  }
+
   // ── LOGOUT ──
   async function logoutUser() {
     await sbSignOut();
@@ -1302,6 +1359,7 @@ ${context}`;
                   <th class="rjd-th">Job Title</th>
                   <th class="rjd-th">URL</th>
                   <th class="rjd-th">Resume</th>
+                  <th class="rjd-th">DL</th>
                   <th class="rjd-th">Date</th>
                   <th class="rjd-th">Status</th>
                 </tr>

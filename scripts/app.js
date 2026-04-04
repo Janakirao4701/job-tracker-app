@@ -1037,6 +1037,44 @@ function openDetailModal(app) {
   resumeEl.textContent = app.resume || 'No resume saved for this application.';
   resumeEl.style.color = app.resume ? 'var(--text)' : 'var(--text-muted)';
 
+  // Resume tab buttons
+  const dlBtn = document.getElementById('detail-resume-dl-btn');
+  const addBtn = document.getElementById('detail-resume-add-btn');
+  if (dlBtn) {
+    dlBtn.style.opacity = app.resume ? '1' : '0.5';
+    dlBtn.style.pointerEvents = app.resume ? 'auto' : 'none';
+    dlBtn.onclick = () => {
+      if (!app.resume) { showToast('No resume to download', true); return; }
+      let rp = {};
+      try { rp = JSON.parse(localStorage.getItem('resume_builder_profile') || '{}'); } catch(e) {}
+      if (!rp.name && currentUser) rp.name = currentUser.name || '';
+      if (!rp.email && currentUser) rp.email = currentUser.email || '';
+      const filename = (app.company || 'Resume').replace(/[^a-z0-9]/gi, '_') + '_Resume';
+      try {
+        window.downloadResumeDocx(rp, app.resume, filename);
+        showToast('Resume downloaded ✓');
+      } catch(err) { showToast('Download failed', true); }
+    };
+  }
+  if (addBtn) {
+    addBtn.textContent = app.resume ? '📋 Update from Clipboard' : '📋 Add from Clipboard';
+    addBtn.onclick = async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (!text.trim()) { showToast('Clipboard is empty', true); return; }
+        app.resume = text.trim();
+        await updateApp(app);
+        resumeEl.textContent = app.resume;
+        resumeEl.style.color = 'var(--text)';
+        dlBtn.style.opacity = '1';
+        dlBtn.style.pointerEvents = 'auto';
+        addBtn.textContent = '📋 Update from Clipboard';
+        showToast('Resume ' + (app.resume ? 'updated' : 'added') + ' ✓');
+        renderPage(currentPage);
+      } catch(err) { showToast('Could not read clipboard', true); }
+    };
+  }
+
   // Notes tab
   document.getElementById('detail-notes-input').value    = app.notes || '';
   document.getElementById('detail-followup-input').value = app.followUpDate || '';
@@ -1118,7 +1156,7 @@ function renderSettings() {
   document.getElementById('page-content').innerHTML = `
     <div class="settings-layout">
       <div class="settings-nav-card">
-        ${[['apikey','🔑','API Key'],['account','👤','Account'],['shortcuts','⌨️','Shortcuts'],['privacy-s','🛡️','Privacy'],['about','ℹ️','About']].map(([id,icon,label]) =>
+        ${[['apikey','🔑','API Key'],['resume','📝','Resume Profile'],['account','👤','Account'],['shortcuts','⌨️','Shortcuts'],['privacy-s','🛡️','Privacy'],['about','ℹ️','About']].map(([id,icon,label]) =>
           `<div class="settings-nav-item ${settingsSection===id?'active':''}" data-sec="${id}">${icon} ${label}</div>`
         ).join('')}
       </div>
@@ -1309,6 +1347,62 @@ function renderSettingsSection(sec) {
       <div style="margin-top:20px;background:#f8fafc;border-radius:8px;padding:14px;font-size:13px;color:#718096;text-align:center;">
         Built for job seekers who mean business · <strong style="color:#1F4E79;">Free forever</strong>
       </div>`;
+
+  } else if (sec === 'resume') {
+    // Load existing profile from localStorage
+    const profileKey = 'resume_builder_profile';
+    let rp = {};
+    try { rp = JSON.parse(localStorage.getItem(profileKey) || '{}'); } catch(e) {}
+    panel.innerHTML = `
+      <div class="settings-section-title">Resume Profile</div>
+      <div class="settings-section-sub">Your personal details for generating Word document resumes. Auto-saves as you type.</div>
+      <div class="settings-info-box">This profile is used when you click the <strong>⬇ Download</strong> button in the sidebar table. It populates the header of your resume .docx file.</div>
+      <div id="rp-msg"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px;">
+        <div class="settings-field"><label>Full Name</label><input class="settings-input rp-input" id="rp-name" value="${esc(rp.name||'')}" placeholder="e.g. John Smith"/></div>
+        <div class="settings-field"><label>Professional Title</label><input class="settings-input rp-input" id="rp-title" value="${esc(rp.title||'')}" placeholder="e.g. Senior Data Engineer"/></div>
+        <div class="settings-field"><label>Email</label><input class="settings-input rp-input" id="rp-email" value="${esc(rp.email||'')}" placeholder="you@email.com"/></div>
+        <div class="settings-field"><label>Phone</label><input class="settings-input rp-input" id="rp-phone" value="${esc(rp.phone||'')}" placeholder="+1 234 567 8900"/></div>
+        <div class="settings-field"><label>Location</label><input class="settings-input rp-input" id="rp-location" value="${esc(rp.location||'')}" placeholder="City, State"/></div>
+        <div class="settings-field"><label>LinkedIn URL</label><input class="settings-input rp-input" id="rp-linkedin" value="${esc(rp.linkedin||'')}" placeholder="linkedin.com/in/..."/></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+        <div class="settings-field">
+          <label>Education</label>
+          <textarea class="settings-input rp-input" id="rp-education" rows="4" placeholder="Degree | University | Year&#10;e.g. B.Tech CS | MIT | 2022" style="resize:vertical;min-height:80px;font-size:13px;line-height:1.6;">${esc(rp.education||'')}</textarea>
+        </div>
+        <div class="settings-field">
+          <label>Certifications</label>
+          <textarea class="settings-input rp-input" id="rp-certs" rows="4" placeholder="One per line&#10;e.g. AWS Solutions Architect" style="resize:vertical;min-height:80px;font-size:13px;line-height:1.6;">${esc(rp.certs||'')}</textarea>
+        </div>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:10px;align-items:center;">
+        <div id="rp-status" style="font-size:12px;color:#059669;"></div>
+      </div>`;
+
+    // Auto-save on every input
+    function saveResumeProfile() {
+      const profile = {
+        name:      document.getElementById('rp-name')?.value.trim() || '',
+        title:     document.getElementById('rp-title')?.value.trim() || '',
+        email:     document.getElementById('rp-email')?.value.trim() || '',
+        phone:     document.getElementById('rp-phone')?.value.trim() || '',
+        location:  document.getElementById('rp-location')?.value.trim() || '',
+        linkedin:  document.getElementById('rp-linkedin')?.value.trim() || '',
+        education: document.getElementById('rp-education')?.value.trim() || '',
+        certs:     document.getElementById('rp-certs')?.value.trim() || '',
+      };
+      localStorage.setItem(profileKey, JSON.stringify(profile));
+      // Sync to chrome.storage for the extension sidebar
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ resume_builder_profile: profile });
+      }
+      const el = document.getElementById('rp-status');
+      if (el) { el.textContent = 'Auto-saved ✓'; setTimeout(() => { if (el) el.textContent = ''; }, 2000); }
+    }
+    document.querySelectorAll('.rp-input').forEach(input => {
+      input.addEventListener('input', saveResumeProfile);
+    });
   }
 }
 
