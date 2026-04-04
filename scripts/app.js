@@ -981,7 +981,8 @@ async function renderSettingsSection(sec) {
           title: document.getElementById('rp-title').value,
           email: document.getElementById('rp-email').value,
           phone: document.getElementById('rp-phone').value,
-          education: document.getElementById('rp-education').value
+          education: document.getElementById('rp-education').value,
+          certifications: document.getElementById('rp-certifications').value
         };
         localStorage.setItem('resume_builder_profile', JSON.stringify(profile));
         document.getElementById('rp-status').textContent = 'Auto-saved ✓';
