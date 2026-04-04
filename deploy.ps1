@@ -15,7 +15,7 @@ Write-Host "Sync Complete! Deploying to GitHub..." -ForegroundColor Cyan
 git add .
 
 # 4. Commit them with a descriptive message
-git commit -m "chore: refine light mode sidebar with premium frozen glass aesthetic"
+git commit -m "feat: integrate AI-Blaze assistant to dashboard"
 
 # 5. Push to GitHub (This automatically triggers Vercel and GitHub pages)
 git push

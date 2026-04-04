@@ -655,7 +655,7 @@ function navigateTo(page) {
   const fab = document.getElementById('mobile-fab');
   if (fab && page !== 'applications') fab.remove();
   document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.page === page));
-  const titles = { dashboard:'Overview', applications:'Applications', settings:'Settings', export:'Export', privacy:'Privacy Policy' };
+  const titles = { dashboard:'Overview', applications:'Applications', aiblaze:'Ai-Blaze', settings:'Settings', export:'Export', privacy:'Privacy Policy' };
   document.getElementById('page-title').textContent = titles[page] || page;
   const addBtn = document.getElementById('add-app-btn');
   if (addBtn) addBtn.classList.toggle('hidden', page !== 'applications');
@@ -668,6 +668,7 @@ function renderPage(page) {
   updateBadge();
   if (page === 'dashboard')    renderDashboard();
   else if (page === 'applications') renderApplications();
+  else if (page === 'aiblaze')  renderAiBlaze();
   else if (page === 'settings') renderSettings();
   else if (page === 'export')  renderExport();
   else if (page === 'privacy') renderPrivacy();
@@ -855,14 +856,12 @@ function renderDashboard() {
       ctx.beginPath();
       ctx.roundRect(x, y, barW, bH, 3);
       ctx.fill();
-      // value label on top
       if (val > 0) {
         ctx.fillStyle = '#4a5568';
         ctx.font = '10px -apple-system, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(val, x + barW / 2, y - 3);
       }
-      // x-axis label
       ctx.fillStyle = '#a0aec0';
       ctx.font = '9px -apple-system, sans-serif';
       ctx.textAlign = 'center';
@@ -870,11 +869,244 @@ function renderDashboard() {
     });
   }
   buildWeeklyChart();
-
   if (apps.length > 6) {
     const viewAllBtn = document.getElementById('view-all-btn');
     if (viewAllBtn) viewAllBtn.addEventListener('click', () => navigateTo('applications'));
   }
+}
+
+// ── AI BLAZE ──
+let blazeSelectedAppId = null;
+let blazeTemplates = [
+  { key: '-ans', label: 'Answer Question', prompt: 'Please answer the following application question based on my resume and personal details. Keep it professional, concise, and highlight my relevant skills.' },
+  { key: '-cover', label: 'Cover Letter', prompt: 'Write a cover letter for the role described in the job title and company, using my resume and personal details as context. Ensure it is tailored and persuasive.' },
+  { key: '-sum', label: 'Short Summary', prompt: 'Provide a 2-sentence summary of why I am a good fit for this role based on my resume.' }
+];
+
+async function renderAiBlaze() {
+  const content = document.getElementById('page-content');
+  if (!content) return;
+  content.innerHTML = '<div style="padding:60px;text-align:center"><div class="spinner"></div></div>';
+
+  const stored = localStorage.getItem('rjd_blaze_shortcuts');
+  if (stored) { try { blazeTemplates = JSON.parse(stored); } catch(e) {} }
+
+  if (!blazeSelectedAppId && apps.length > 0) blazeSelectedAppId = apps[apps.length-1].id;
+
+  const selectedApp = apps.find(a => String(a.id) === String(blazeSelectedAppId));
+  const personalProfile = await loadResumeProfileDB();
+
+  content.innerHTML = `
+    <div class="aiblaze-layout">
+      <!-- Sidebar Actions -->
+      <div class="aiblaze-sidebar">
+        <div class="aiblaze-card">
+          <div class="aiblaze-card-title">🎯 Context</div>
+          <div class="aiblaze-card-sub">Select which application's resume to use.</div>
+          <select class="settings-input" id="blaze-app-select" style="font-size:12px;">
+            <option value="">No specific app (Profile only)</option>
+            ${apps.slice().reverse().map(a => `
+              <option value="${a.id}" ${blazeSelectedAppId === a.id ? 'selected' : ''}>
+                ${esc(a.company || '—')} — ${esc(a.jobTitle || '—')}
+              </option>
+            `).join('')}
+          </select>
+        </div>
+
+        <div class="aiblaze-card">
+          <div class="aiblaze-card-title">⌨️ Shortcuts</div>
+          <div class="aiblaze-card-sub">Quickly fill your prompt with templates.</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;" id="blaze-shortcuts-wrap">
+            ${blazeTemplates.map(t => `<div class="shortcut-pill" data-key="${t.key}" title="${esc(t.prompt)}">${esc(t.label)}</div>`).join('')}
+          </div>
+          <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
+            <button class="auth-link" style="font-size:11px;" onclick="navigateTo('settings'); settingsSection='shortcuts'; renderSettings();">Manage Shortcuts ↗</button>
+          </div>
+        </div>
+
+        <div class="aiblaze-card">
+          <div class="aiblaze-card-title">⚙️ AI Model</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <span class="model-badge">Gemini 1.5 Flash</span>
+            <span style="font-size:10px;color:var(--text-muted);">Free Tier</span>
+          </div>
+          <button class="auth-link" style="font-size:11px;" onclick="navigateTo('settings'); settingsSection='apikey'; renderSettings();">API Key Settings ⚙️</button>
+        </div>
+      </div>
+
+      <!-- Main Blaze Area -->
+      <div class="aiblaze-main">
+        <div class="aiblaze-card" style="padding:24px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div>
+              <div style="font-size:18px;font-weight:800;color:var(--text);letter-spacing:-0.5px;">🔥 Blaze Generator</div>
+              <div style="font-size:12px;color:var(--text-muted);">Transform your resume into application answers instantly.</div>
+            </div>
+            <div id="blaze-status" style="font-size:12px;font-weight:600;color:var(--text-muted);">Ready</div>
+          </div>
+
+          <div class="chat-input-wrap">
+            <textarea class="aiblaze-input" id="blaze-query" placeholder="Paste the application question here... or use a shortcut."></textarea>
+          </div>
+
+          <div style="margin-top:16px;display:flex;gap:12px;">
+            <button class="blaze-btn" id="blaze-go-btn" style="flex:1;">
+               🔥 <span id="blaze-btn-text">Blaze it!</span>
+            </button>
+            <button class="btn-new" id="blaze-clear-btn" style="padding:12px 20px;">Clear</button>
+          </div>
+
+          <div class="chat-response hidden" id="blaze-result-wrap">
+            <div class="chat-response-header">
+              <div class="chat-response-title">✨ AI Response</div>
+              <button class="auth-link" id="blaze-copy-btn" style="font-size:11px;font-weight:700;">📋 Copy</button>
+            </div>
+            <div id="blaze-result-text"></div>
+          </div>
+        </div>
+
+        <div style="font-size:11px;color:var(--text-muted);text-align:center;padding:0 20px;">
+           AI-Blaze uses your local Gemini API key and provided context. Review all generated content for accuracy before submitting.
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Attach Listeners
+  document.getElementById('blaze-app-select').addEventListener('change', e => {
+    blazeSelectedAppId = e.target.value;
+    renderAiBlaze();
+  });
+
+  document.querySelectorAll('.shortcut-pill').forEach(pill => {
+    pill.onclick = () => {
+      const template = blazeTemplates.find(t => t.key === pill.dataset.key);
+      if (template) {
+        document.getElementById('blaze-query').value = template.prompt;
+        document.getElementById('blaze-query').focus();
+      }
+    };
+  });
+
+  document.getElementById('blaze-clear-btn').onclick = () => {
+    document.getElementById('blaze-query').value = '';
+    document.getElementById('blaze-result-wrap').classList.add('hidden');
+  };
+
+  document.getElementById('blaze-copy-btn').onclick = () => {
+    const text = document.getElementById('blaze-result-text').innerText;
+    navigator.clipboard.writeText(text);
+    showToast('Copied to clipboard ✓');
+  };
+
+  const goBtn = document.getElementById('blaze-go-btn');
+  goBtn.onclick = async () => {
+    const query = document.getElementById('blaze-query').value.trim();
+    if (!query) { showToast('Please enter a question or prompt', true); return; }
+
+    const key = localStorage.getItem('rjd_gemini_key_' + (currentUser?.id || '')) || '';
+    if (!key) {
+      showToast('API Key missing. Go to Settings > API Key', true);
+      return;
+    }
+
+    goBtn.disabled = true;
+    goBtn.classList.add('blaze-pulse');
+    const btnText = document.getElementById('blaze-btn-text');
+    const statusText = document.getElementById('blaze-status');
+    btnText.textContent = 'Blazing...';
+    statusText.textContent = 'AI is thinking...';
+    statusText.style.color = '#f97316';
+
+    const resultWrap = document.getElementById('blaze-result-wrap');
+    const resultText = document.getElementById('blaze-result-text');
+    resultWrap.classList.remove('hidden');
+    resultText.innerHTML = '<div style="color:var(--text-muted);font-style:italic;">Analyzing context and generating answer...</div>';
+
+    try {
+      const context = {
+        profile: personalProfile,
+        application: selectedApp
+      };
+      
+      const response = await callGeminiBlaze(query, context, key);
+      
+      // Typewriter effect
+      resultText.innerText = '';
+      let i = 0;
+      const speed = 15;
+      function typeWriter() {
+        if (i < response.length) {
+          resultText.innerText += response.charAt(i);
+          i++;
+          setTimeout(typeWriter, speed);
+          resultWrap.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        } else {
+          goBtn.disabled = false;
+          goBtn.classList.remove('blaze-pulse');
+          btnText.textContent = 'Blaze it!';
+          statusText.textContent = 'Ready';
+          statusText.style.color = 'var(--text-muted)';
+        }
+      }
+      typeWriter();
+
+    } catch (err) {
+      showToast('AI error: ' + err.message, true);
+      resultText.innerHTML = `<div style="color:var(--danger);">Error: ${err.message}</div>`;
+      goBtn.disabled = false;
+      goBtn.classList.remove('blaze-pulse');
+      btnText.textContent = 'Blaze it!';
+      statusText.textContent = 'Error';
+      statusText.style.color = 'var(--danger)';
+    }
+  };
+}
+
+async function callGeminiBlaze(query, context, key) {
+  const model = "gemini-1.5-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+
+  const p = context.profile || {};
+  const a = context.application || {};
+  
+  const systemPrompt = `You are "Ai-Blaze", a professional job application assistant. 
+Your goal is to help the user answer application questions or draft cover letters using their personal details and resume context.
+STRICT PRIVACY: Only use the information provided. If information is missing, do not hallucinate, but provide a professional placeholder or ask for detail.
+Keep answers professional, concise (unless a cover letter), and tailored to the job if job details are available.
+
+PERSONAL DETAILS:
+Name: ${p.name || 'N/A'}
+Title: ${p.title || 'N/A'}
+Experience/Education: ${p.education || 'N/A'}
+Certs: ${p.certs || 'N/A'}
+Custom Sections: ${JSON.stringify(p.custom_sections || [])}
+
+APPLICATION CONTEXT:
+Job: ${a.company || 'N/A'} - ${a.jobTitle || 'N/A'}
+Resume: ${a.resume || 'No resume content provided for this specific app.'}
+
+USER REQUEST:
+${query}
+
+Response:`;
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: systemPrompt }] }],
+      generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 1024 }
+    })
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json();
+    throw new Error(err.error?.message || 'Gemini API failure');
+  }
+
+  const data = await resp.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
 }
 
 // ── APPLICATIONS TABLE ──
@@ -1225,7 +1457,7 @@ function renderSettings() {
   document.getElementById('page-content').innerHTML = `
     <div class="settings-layout">
       <div class="settings-nav-card">
-        ${[['apikey','🔑','API Key'],['resumeprofile','📄','Resume Profile'],['account','👤','Account'],['shortcuts','⌨️','Shortcuts'],['privacy-s','🛡️','Privacy'],['about','ℹ️','About']].map(([id,icon,label]) =>
+        ${[['apikey','🔑','API Key'],['blaze_shortcuts','🔥','Blaze Shortcuts'],['resumeprofile','📄','Resume Profile'],['account','👤','Account'],['shortcuts','⌨️','Shortcuts'],['privacy-s','🛡️','Privacy'],['about','ℹ️','About']].map(([id,icon,label]) =>
           `<div class="settings-nav-item ${settingsSection===id?'active':''}" data-sec="${id}">${icon} ${label}</div>`
         ).join('')}
       </div>
@@ -1290,6 +1522,58 @@ function renderSettingsSection(sec) {
         setTimeout(() => { const el=document.getElementById('settings-msg'); if(el) el.innerHTML=''; }, 3000);
       });
     });
+
+  } else if (sec === 'blaze_shortcuts') {
+    panel.innerHTML = `
+      <div class="settings-section-title">AI-Blaze Shortcuts</div>
+      <div class="settings-section-sub">Personalize your AI prompts for common tasks.</div>
+      <div id="blaze-msg"></div>
+      <div id="blaze-shortcuts-list" style="margin-top:20px;"></div>
+      <button class="btn-new" id="add-shortcut-btn" style="margin-top:20px;">+ Add New Shortcut</button>
+    `;
+
+    const listEl = document.getElementById('blaze-shortcuts-list');
+    const updateList = () => {
+      listEl.innerHTML = blazeTemplates.map((t, idx) => `
+        <div class="settings-field" style="background:var(--bg-inset);padding:14px;border-radius:10px;margin-bottom:16px;border:1px solid var(--border);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+             <input type="text" class="settings-input shortcut-label" data-idx="${idx}" value="${esc(t.label)}" placeholder="Label" style="font-weight:700;border:none;background:transparent;padding:0;width:150px;"/>
+             <div>
+               <span style="font-size:10px;color:var(--text-muted);margin-right:10px;">Trigger: <strong>${esc(t.key)}</strong></span>
+               <button class="auth-link remove-shortcut-btn" data-idx="${idx}" style="color:var(--danger);font-size:11px;">Remove</button>
+             </div>
+          </div>
+          <textarea class="settings-input shortcut-prompt" data-idx="${idx}" rows="3" style="font-size:12px;">${esc(t.prompt)}</textarea>
+        </div>
+      `).join('');
+
+      document.querySelectorAll('.shortcut-label, .shortcut-prompt').forEach(el => {
+        el.onchange = () => {
+          const idx = el.dataset.idx;
+          if (el.classList.contains('shortcut-label')) blazeTemplates[idx].label = el.value.trim();
+          else blazeTemplates[idx].prompt = el.value.trim();
+          localStorage.setItem('rjd_blaze_shortcuts', JSON.stringify(blazeTemplates));
+          showToast('Updated ✓');
+        };
+      });
+
+      document.querySelectorAll('.remove-shortcut-btn').forEach(btn => {
+        btn.onclick = () => {
+          blazeTemplates.splice(btn.dataset.idx, 1);
+          localStorage.setItem('rjd_blaze_shortcuts', JSON.stringify(blazeTemplates));
+          updateList();
+        };
+      });
+    };
+
+    updateList();
+
+    document.getElementById('add-shortcut-btn').onclick = () => {
+      const key = '-' + Math.random().toString(36).substring(7);
+      blazeTemplates.push({ key, label: 'New Shortcut', prompt: 'Enter prompt here...' });
+      localStorage.setItem('rjd_blaze_shortcuts', JSON.stringify(blazeTemplates));
+      updateList();
+    };
 
   } else if (sec === 'resumeprofile') {
     panel.innerHTML = `<div style="display:flex;justify-content:center;padding:40px;"><div class="loading-spinner"></div></div>`;
