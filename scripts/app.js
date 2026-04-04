@@ -882,6 +882,7 @@ let blazeTemplates = [
   { key: '-cover', label: 'Cover Letter', prompt: 'Write a cover letter for the role described in the job title and company, using my resume and personal details as context. Ensure it is tailored and persuasive.' },
   { key: '-sum', label: 'Short Summary', prompt: 'Provide a 2-sentence summary of why I am a good fit for this role based on my resume.' }
 ];
+let blazeSelectedModel = 'gemini-1.5-flash';
 
 async function renderAiBlaze() {
   const content = document.getElementById('page-content');
@@ -926,9 +927,12 @@ async function renderAiBlaze() {
 
         <div class="aiblaze-card">
           <div class="aiblaze-card-title">⚙️ AI Model</div>
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-            <span class="model-badge">Gemini 1.5 Flash</span>
-            <span style="font-size:10px;color:var(--text-muted);">Free Tier</span>
+          <div style="margin-bottom:12px;">
+            <select class="settings-input" id="blaze-model-select" style="font-size:12px;">
+              <option value="gemini-1.5-flash" ${blazeSelectedModel === 'gemini-1.5-flash' ? 'selected' : ''}>Gemini 1.5 Flash (Stable)</option>
+              <option value="gemini-1.5-flash-8b" ${blazeSelectedModel === 'gemini-1.5-flash-8b' ? 'selected' : ''}>Gemini 1.5 Flash 8B (Fast)</option>
+              <option value="gemini-2.0-flash-exp" ${blazeSelectedModel === 'gemini-2.0-flash-exp' ? 'selected' : ''}>Gemini 2.0 Flash (Exp)</option>
+            </select>
           </div>
           <button class="auth-link" style="font-size:11px;" onclick="navigateTo('settings'); settingsSection='apikey'; renderSettings();">API Key Settings ⚙️</button>
         </div>
@@ -975,6 +979,11 @@ async function renderAiBlaze() {
   // Attach Listeners
   document.getElementById('blaze-app-select').addEventListener('change', e => {
     blazeSelectedAppId = e.target.value;
+    renderAiBlaze();
+  });
+
+  document.getElementById('blaze-model-select').addEventListener('change', e => {
+    blazeSelectedModel = e.target.value;
     renderAiBlaze();
   });
 
@@ -1029,7 +1038,7 @@ async function renderAiBlaze() {
         application: selectedApp
       };
       
-      const response = await callGeminiBlaze(query, context, key);
+      const response = await callGeminiBlaze(query, context, key, blazeSelectedModel);
       
       // Typewriter effect
       resultText.innerText = '';
@@ -1063,9 +1072,11 @@ async function renderAiBlaze() {
   };
 }
 
-async function callGeminiBlaze(query, context, key) {
-  const model = "gemini-1.5-flash";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+async function callGeminiBlaze(query, context, key, modelSelection) {
+  const model = modelSelection || "gemini-1.5-flash";
+  // Switch to stable v1 for standard models, fallback to v1beta if 2.0 experimental is used
+  const apiVersion = model.includes('2.0') ? 'v1beta' : 'v1';
+  const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${key}`;
 
   const p = context.profile || {};
   const a = context.application || {};
