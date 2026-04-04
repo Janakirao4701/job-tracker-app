@@ -7,7 +7,7 @@ Write-Host "Syncing app.html changes into index.html..." -ForegroundColor Cyan
 (Get-Content pages/app.html) -replace 'src="icons/icon', 'src="../icons/icon' | Set-Content pages/app.html
 
 # 2. Clone app.html into index.html but dynamically fix the relative paths!
-(Get-Content pages/app.html) -replace '\.\./lib/', 'lib/' -replace '\.\./scripts/', 'scripts/' -replace '\.\./icons/', 'icons/' -replace '\.\./pwa-manifest.json', 'pwa-manifest.json' | Set-Content index.html
+(Get-Content pages/app.html) -replace '\.\./lib/', 'lib/' -replace '\.\./scripts/', 'scripts/' -replace '\.\./icons/', 'icons/' -replace '\.\./pwa-manifest.json', 'pwa-manifest.json' -replace '\.\./styles/', 'styles/' | Set-Content index.html
 
 Write-Host "Sync Complete! Deploying to GitHub..." -ForegroundColor Cyan
 
