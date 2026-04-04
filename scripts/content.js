@@ -597,11 +597,17 @@
   }
 
   function applySession(sess) {
+    const tog = document.getElementById('rjd-toggle');
     if (sess && sess.token && sess.user) {
       sessionToken = sess.token; sessionRefreshToken = sess.refreshToken; currentUser = sess.user;
       loadGeminiKey(k => { GEMINI_KEY = k; });
+      if (tog) tog.classList.add('rjd-visible');
       dbLoadApps().then(apps => { applications = apps; updateTrackBadge(); }).catch(() => {});
-    } else { currentUser = null; applications = []; updateTrackBadge(); }
+    } else {
+      currentUser = null; applications = [];
+      if (tog) tog.classList.remove('rjd-visible');
+      updateTrackBadge();
+    }
   }
 
   buildSidebar();
