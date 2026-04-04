@@ -34,17 +34,16 @@ let authMode    = 'signin';
 
 // ── THEME LOGIC ──
 let isDarkMode = localStorage.getItem('rjd_theme') === 'dark';
-if (isDarkMode) document.documentElement.setAttribute('data-theme', 'dark');
+if (!localStorage.getItem('rjd_theme') && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  isDarkMode = true;
+}
+document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
 
 function toggleTheme() {
   isDarkMode = !isDarkMode;
-  if (isDarkMode) {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    localStorage.setItem('rjd_theme', 'dark');
-  } else {
-    document.documentElement.removeAttribute('data-theme');
-    localStorage.setItem('rjd_theme', 'light');
-  }
+  const theme = isDarkMode ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('rjd_theme', theme);
 }
 let filterStatus = 'all';
 let filterSearch = '';
