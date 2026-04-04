@@ -1,12 +1,11 @@
 importScripts('../lib/config.js');
-// ── FORWARD SESSION EVENTS TO ALL TABS ──
-chrome.runtime.onMessage.addListener((msg, sender) => {
+// ── FORWARD SESSION EVENTS & PROXY FETCHES ──
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'session_saved' || msg.action === 'session_cleared') {
     // Broadcast to all open tabs so content scripts update TRACK button immediately
     chrome.tabs.query({}, (tabs) => {
       tabs.forEach(tab => {
         chrome.tabs.sendMessage(tab.id, msg).catch(e => {
-          // Quality fix #3: only silence expected "no receiver" errors, log real ones
           if (!e.message.includes('Receiving end does not exist') &&
               !e.message.includes('Could not establish connection')) {
             console.warn('[RJD] sendMessage error on tab', tab.id, e.message);
@@ -14,6 +13,22 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
         });
       });
     });
+  } else if (msg.action === 'sb_proxy_fetch') {
+    // Quality Fix: background scripts ignore CSP, content scripts don't.
+    // Use this to proxy Supabase calls from strict sites (ChatGPT, LinkedIn)
+    const { url, opts } = msg.payload;
+    fetch(url, opts)
+      .then(async r => {
+        const ok = r.ok;
+        const status = r.status;
+        let data;
+        try { data = await r.json(); } catch(e) { data = null; }
+        sendResponse({ ok, status, data });
+      })
+      .catch(err => {
+        sendResponse({ ok: false, error: err.message });
+      });
+    return true; // Keep channel open for async sendResponse
   }
 });
 

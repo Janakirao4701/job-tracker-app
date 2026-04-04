@@ -101,13 +101,20 @@
     if (_refreshPromise) return _refreshPromise; // coalesce concurrent callers
     _refreshPromise = (async () => {
       try {
-        const res = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-          body: JSON.stringify({ refresh_token: sessionRefreshToken }),
+        const payload = {
+          url: SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token',
+          opts: {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+            body: JSON.stringify({ refresh_token: sessionRefreshToken }),
+          }
+        };
+        const response = await new Promise(resolve => {
+          chrome.runtime.sendMessage({ action: 'sb_proxy_fetch', payload }, resolve);
         });
-        const data = await res.json();
-        if (data.access_token) {
+        
+        if (response && response.ok && response.data && response.data.access_token) {
+          const data = response.data;
           sessionToken = data.access_token;
           if (data.refresh_token) sessionRefreshToken = data.refresh_token;
           saveSession(sessionToken, currentUser, sessionRefreshToken);
@@ -127,21 +134,39 @@
   }
 
   async function sbFetch(url, opts) {
-    if (!navigator.onLine) throw new Error('You are offline. Check your internet connection.');
-    let res = await fetch(url, opts);
-    if (res.status === 401 && sessionRefreshToken) {
+    if (!navigator.onLine) throw new Error('You are offline.');
+    
+    const callProxy = async (u, o) => {
+      return new Promise(resolve => {
+        chrome.runtime.sendMessage({ action: 'sb_proxy_fetch', payload: { url: u, opts: o } }, resolve);
+      });
+    };
+
+    let res = await callProxy(url, opts);
+    
+    if (res && res.status === 401 && sessionRefreshToken) {
       const ok = await refreshSession();
       if (ok) {
         if (opts.headers) opts.headers['Authorization'] = 'Bearer ' + sessionToken;
-        res = await fetch(url, opts);
+        res = await callProxy(url, opts);
       }
     }
-    if (res.status === 401) {
+    
+    if (res && res.status === 401) {
       sessionToken = null; currentUser = null; clearSession();
-      showToast('Session expired — please sign in again', true);
+      showToast('Session expired — sign in again', true);
       throw new Error('Session expired');
     }
-    return res;
+    
+    if (!res || !res.ok) {
+      throw new Error((res && res.data && res.data.message) || 'Request failed');
+    }
+    
+    return {
+      ok: res.ok,
+      status: res.status,
+      json: async () => res.data
+    };
   }
 
   async function sbSignOut() {
