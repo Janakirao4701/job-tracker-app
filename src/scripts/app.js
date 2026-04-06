@@ -154,12 +154,12 @@ async function loadApps() {
   let offset  = 0;
   // Fix #7: filter by current user so users never see each other's data
   // Fix #14: paginate to bypass Supabase's default 1000-row cap
+  let fetchSuccess = false;
   while (true) {
     let r = await fetch(
       `${SUPABASE_URL}/rest/v1/applications?select=*&username=eq.${currentUser.id}&order=created_at.asc&limit=${PAGE_SIZE}&offset=${offset}`,
       { headers: headers({ 'Range-Unit': 'items', 'Range': `${offset}-${offset + PAGE_SIZE - 1}` }) }
     );
-    // If 401 — try refresh token (only on first page attempt)
     if (r.status === 401 && session?.refresh_token && offset === 0) {
       const refreshed = await refreshToken();
       if (refreshed) {
@@ -175,6 +175,7 @@ async function loadApps() {
       }
     }
     if (!r.ok) break;
+    fetchSuccess = true;
     const data = await r.json();
     if (!Array.isArray(data) || data.length === 0) break;
     allRows = allRows.concat(data);
@@ -186,7 +187,11 @@ async function loadApps() {
     try {
       const cached = JSON.parse(localStorage.getItem(`rjd_apps_cache_${currentUser.id}`) || '[]');
       if (cached.length > 0) {
-        console.warn('AI Blaze: DB fetch failed or empty; using local cache.');
+        if (!fetchSuccess) {
+          console.warn('AI Blaze: DB fetch failed; using local cache.');
+        } else {
+          console.log('AI Blaze: DB empty; using local cache.');
+        }
         return cached;
       }
     } catch(e) {}
