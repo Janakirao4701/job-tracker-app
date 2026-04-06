@@ -1196,6 +1196,47 @@ Resume: ${a.resume || 'No resume content provided.'}
 USER REQUEST:
 ${query}`;
 
+  // Fix: If running on a web domain (Vercel), we must proxy through the extension
+  // to bypass CORS for localhost.
+  if (window.location.protocol !== 'chrome-extension:') {
+    return new Promise((resolve, reject) => {
+      const requestId = Math.random().toString(36).substring(7);
+      const timeout = setTimeout(() => {
+        window.removeEventListener('rjd-proxy-response', handleResponse);
+        reject(new Error('Extension proxy timeout. Is the AI Blaze extension installed and active?'));
+      }, 30000);
+
+      function handleResponse(e) {
+        if (e.detail && e.detail.id === requestId) {
+          clearTimeout(timeout);
+          window.removeEventListener('rjd-proxy-response', handleResponse);
+          if (e.detail.error) reject(new Error(e.detail.error));
+          else if (e.detail.response && e.detail.response.ok) {
+            resolve(e.detail.response.data?.response || 'No response generated.');
+          } else {
+            reject(new Error('Ollama proxy failed. Ensure Ollama is running and CORS is configured if not using the extension.'));
+          }
+        }
+      }
+
+      window.addEventListener('rjd-proxy-response', handleResponse);
+      window.dispatchEvent(new CustomEvent('rjd-proxy-request', {
+        detail: {
+          id: requestId,
+          url: `${url}/api/generate`,
+          opts: {
+            method: 'POST',
+            body: JSON.stringify({
+              model: model || 'llama3.2',
+              prompt: systemPrompt,
+              stream: false
+            })
+          }
+        }
+      }));
+    });
+  }
+
   const resp = await fetch(`${url}/api/generate`, {
     method: 'POST',
     body: JSON.stringify({

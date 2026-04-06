@@ -110,6 +110,24 @@
     return true;
   }
 
+  // --- WEB-TO-EXTENSION BRIDGE ---
+  // Listen for proxy requests from the web dashboard (Vercel)
+  window.addEventListener('rjd-proxy-request', async (e) => {
+    const { id, url, opts } = e.detail || {};
+    if (!id || !url) return;
+
+    try {
+      const response = await safeSendMessage({ action: 'sb_proxy_fetch', payload: { url, opts } });
+      window.dispatchEvent(new CustomEvent('rjd-proxy-response', { 
+        detail: { id, response } 
+      }));
+    } catch (err) {
+      window.dispatchEvent(new CustomEvent('rjd-proxy-response', { 
+        detail: { id, error: err.message } 
+      }));
+    }
+  });
+
   // Safe chrome API helpers — detect extension reloads
   function isContextValid() {
     return typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
