@@ -1906,9 +1906,9 @@ ${context}`;
 
         <div class="rjd-chat-input-wrap">
           <div class="rjd-chat-input-container">
-            <textarea id="rjd-chat-input" placeholder="Message AI Blaze..." rows="1"></textarea>
+            <textarea id="rjd-chat-input" placeholder="How can I help you today?" rows="1"></textarea>
             <button id="rjd-chat-send" title="Send Message">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              <span style="font-size:18px;">→</span>
             </button>
           </div>
         </div>

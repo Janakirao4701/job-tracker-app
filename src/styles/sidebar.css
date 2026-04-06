@@ -735,6 +735,14 @@
 #rjd-sidebar *::-webkit-scrollbar-track { background: transparent; }
 
 /* ── Follow-up badge ── */
+.blaze-premium-container {
+  height: calc(100vh - 100px);
+  padding: 10px;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  background: #09090b !important;
+}
 .rjd-followup-badge {
   font-size: 9px;
   margin-top: 2px;
@@ -793,7 +801,7 @@
   display: flex;
   flex-direction: column;
   flex: 1;
-  background: #09090b !important; /* Always dark for premium feel */
+  background: #09090b !important;
   overflow: hidden;
   color: #f1f5f9;
 }
@@ -888,6 +896,17 @@
 #rjd-sidebar[data-theme="dark"] .rjd-chat-input-wrap {
   background: #09090b !important;
   border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+.blaze-glass-layout {
+  width: 100%;
+  max-width: 1300px;
+  display: flex;
+  background: #09090b !important;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.6);
+  overflow: hidden;
 }
 
 .rjd-chat-input-container {

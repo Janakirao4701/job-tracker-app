@@ -1039,20 +1039,10 @@ async function renderAiBlaze() {
         <!-- Main Generation Area -->
         <main class="blaze-glass-main">
           <div class="blaze-chat-container">
-            <div class="blaze-welcome">
-              <h2 style="margin-bottom:12px;">Welcome to AI-Blaze Premium</h2>
-              <p style="margin-bottom:24px; color:var(--text-muted); font-size:13px;">Your intelligent assistant for job applications. Use your resume and company context to generate perfect responses.</p>
-              
-              <div style="background:var(--bg-inset); padding:20px; border-radius:16px; border:1px solid var(--border); text-align:left; margin-bottom:32px;">
-                <div style="font-weight:700; color:var(--text); margin-bottom:12px; font-size:14px;">🚀 How it works:</div>
-                <div style="display:flex; flex-direction:column; gap:12px; font-size:12px; color:var(--text2);">
-                  <div style="display:flex; gap:10px;"><span style="color:var(--accent);">1.</span> <strong>Context:</strong> Pick a "Target Application" on the left to include that JD and your tailored resume in the prompt.</div>
-                  <div style="display:flex; gap:10px;"><span style="color:var(--accent);">2.</span> <strong>Provider:</strong> Make sure you've set your Gemini or OpenAI API key in <a href="#" onclick="navigateTo('settings'); settingsSection='apikey'; renderSettings(); return false;" style="color:var(--accent); text-decoration:none; font-weight:700;">Settings</a>.</div>
-                  <div style="display:flex; gap:10px;"><span style="color:var(--accent);">3.</span> <strong>Shortcuts:</strong> Click "Quick Actions" for one-tap results, or simply type your request in the chat.</div>
-                  <button class="settings-btn" onclick="navigateTo('settings'); settingsSection='apikey'; renderSettings();" style="margin-top:8px; width:100%; height:40px; font-size:12px;">Configure AI Keys Now →</button>
-                </div>
-              </div>
+            <div class="rjd-chat-greeting" style="margin: 40px 0 20px;">
+              <h1>How can I help you today?</h1>
             </div>
+
 
             <div id="blaze-history"></div>
 
@@ -1067,9 +1057,8 @@ async function renderAiBlaze() {
 
           <div class="blaze-input-footer">
             <div class="blaze-input-container">
-              <textarea class="blaze-textarea" id="blaze-query" placeholder="Paste application question here..."></textarea>
-              <button class="blaze-submit-btn" id="blaze-go-btn">
-                <span id="blaze-btn-text">Blaze</span>
+              <textarea class="blaze-textarea" id="blaze-query" placeholder="How can I help you today?"></textarea>
+              <button class="blaze-submit-btn" id="blaze-go-btn" title="Send Message">
                 <span class="blaze-btn-arrow">→</span>
               </button>
             </div>
