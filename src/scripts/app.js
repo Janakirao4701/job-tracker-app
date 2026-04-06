@@ -916,16 +916,19 @@ let blazeTemplates = [
   { key: '-sum', label: 'Short Summary', icon: '✨', prompt: 'Provide a 2-sentence summary of why I am a good fit for this role based on my resume.' }
 ];
 let blazeSelectedProvider = localStorage.getItem('rjd_blaze_provider') || 'google';
-let blazeSelectedModel    = localStorage.getItem('rjd_blaze_model')    || 'gemini-1.5-flash';
+let blazeSelectedModel    = localStorage.getItem('rjd_blaze_model')    || 'gemini-2.5-flash';
+let blazeOllamaUrl        = localStorage.getItem('rjd_ollama_url')     || 'http://localhost:11434';
+let blazeOllamaModel      = localStorage.getItem('rjd_ollama_model')   || 'llama3.2';
 
 const BLAZE_PROVIDERS = {
   google: { 
     label: 'Google Gemini', 
     icon: '💎',
     models: [
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
       { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (Stable)' },
-      { id: 'gemini-1.5-flash-8b', label: 'Gemini 1.5 Flash 8B (Fast)' },
-      { id: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash (Exp)' }
+      { id: 'gemini-1.5-flash-8b', label: 'Gemini 1.5 Flash 8B (Fast)' }
     ]
   },
   openai: {
@@ -933,8 +936,14 @@ const BLAZE_PROVIDERS = {
     icon: '🤖',
     models: [
       { id: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-      { id: 'gpt-4o', label: 'GPT-4o' },
-      { id: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' }
+      { id: 'gpt-4o', label: 'GPT-4o' }
+    ]
+  },
+  ollama: {
+    label: 'Ollama (Local)',
+    icon: '🦙',
+    models: [
+      { id: 'custom', label: 'Custom Local Model' }
     ]
   }
 };
@@ -1152,7 +1161,42 @@ async function renderAiBlaze() {
 
 async function callAIBlaze(query, context, key, provider, model) {
   if (provider === 'openai') return callOpenAI(query, context, key, model);
+  if (provider === 'ollama') return callOllama(query, context, blazeOllamaUrl, blazeOllamaModel);
   return callGeminiBlaze(query, context, key, model);
+}
+
+async function callOllama(query, context, url, model) {
+  const p = context.profile || {};
+  const a = context.application || {};
+  
+  const systemPrompt = `You are "Ai-Blaze", a professional job application assistant. 
+Use the provided personal details and resume context to answer user requests.
+
+PERSONAL DETAILS:
+Name: ${p.name || 'N/A'}
+Title: ${p.title || 'N/A'}
+Experience/Education: ${p.education || 'N/A'}
+Certs: ${p.certs || 'N/A'}
+
+APPLICATION CONTEXT:
+Job: ${a.company || 'N/A'} - ${a.jobTitle || 'N/A'}
+Resume: ${a.resume || 'No resume content provided.'}
+
+USER REQUEST:
+${query}`;
+
+  const resp = await fetch(`${url}/api/generate`, {
+    method: 'POST',
+    body: JSON.stringify({
+      model: model || 'llama3.2',
+      prompt: systemPrompt,
+      stream: false
+    })
+  });
+
+  if (!resp.ok) throw new Error('Ollama connection failed. Ensure Ollama is running.');
+  const data = await resp.json();
+  return data.response || 'No response generated.';
 }
 
 async function callOpenAI(query, context, key, model) {
@@ -1186,7 +1230,7 @@ async function callOpenAI(query, context, key, model) {
 
 async function callGeminiBlaze(query, context, key, modelSelection) {
   // Use v1 for more stability if v1beta is giving 'not found' errors for standard model names
-  const model = modelSelection || "gemini-1.5-flash"; 
+  const model = modelSelection || "gemini-2.5-flash-lite"; 
   const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${key}`;
 
   const p = context.profile || {};
@@ -1651,9 +1695,25 @@ function renderSettingsSection(sec) {
             </div>
             <a href="https://platform.openai.com/api-keys" target="_blank" style="margin-left:auto; font-size:11px; color:var(--accent); font-weight:700;">Get Key ↗</a>
           </div>
-          <div style="display:flex; gap:8px;">
-            <input type="password" class="settings-input" id="openai-key-input" value="${esc(openaiKey)}" placeholder="sk-..." style="flex:1;"/>
-            <button class="btn-new" data-toggle-password="openai-key-input" style="width:70px;">Show</button>
+        <!-- Ollama Configuration -->
+        <div class="settings-field" style="background:var(--bg-inset); padding:16px; border-radius:12px; margin-bottom:20px; border:1px solid var(--border);">
+          <div style="display:flex; align-items:center; margin-bottom:12px;">
+            <div style="width:36px; height:36px; background:rgba(0,0,0,0.05); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px; margin-right:12px;">🦙</div>
+            <div>
+              <div style="font-weight:700; color:var(--text); font-size:14px;">Ollama (Local AI)</div>
+              <div style="font-size:11px; color:var(--text-muted);">Use private, local models via Ollama.</div>
+            </div>
+            <a href="https://ollama.com" target="_blank" style="margin-left:auto; font-size:11px; color:var(--accent); font-weight:700;">Get Ollama ↗</a>
+          </div>
+          <div style="display:flex; gap:8px; margin-bottom:10px;">
+            <div style="flex:2;">
+              <label style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; display:block; margin-bottom:4px;">Endpoint URL</label>
+              <input type="text" class="settings-input" id="ollama-url-input" value="${esc(blazeOllamaUrl)}" placeholder="http://localhost:11434"/>
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; display:block; margin-bottom:4px;">Model Name</label>
+              <input type="text" class="settings-input" id="ollama-model-input" value="${esc(blazeOllamaModel)}" placeholder="llama3.2"/>
+            </div>
           </div>
         </div>
 
@@ -1665,7 +1725,8 @@ function renderSettingsSection(sec) {
 
       document.getElementById('save-all-keys-btn').onclick = async () => {
         const gKey = document.getElementById('google-key-input').value.trim();
-        const oKey = document.getElementById('openai-key-input').value.trim();
+        const oUrl = document.getElementById('ollama-url-input').value.trim();
+        const oModel = document.getElementById('ollama-model-input').value.trim();
         const btn = document.getElementById('save-all-keys-btn');
         btn.textContent = 'Saving...'; btn.disabled = true;
 
@@ -1673,6 +1734,12 @@ function renderSettingsSection(sec) {
           saveAIKeyDB('google', gKey),
           saveAIKeyDB('openai', oKey)
         ]);
+
+        // Save Ollama settings locally
+        localStorage.setItem('rjd_ollama_url', oUrl);
+        localStorage.setItem('rjd_ollama_model', oModel);
+        blazeOllamaUrl = oUrl;
+        blazeOllamaModel = oModel;
 
         btn.textContent = 'Configuration Saved ✓';
         btn.style.background = '#10b981';

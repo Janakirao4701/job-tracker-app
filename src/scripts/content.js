@@ -702,8 +702,14 @@ Capitalize company_name properly if it appears in all-lowercase.
 CONTEXT:
 ${context}`;
 
+    // Priority check for extraction engine (Gemini vs Ollama)
+    const extractionEngine = localStorage.getItem('rjd_extraction_engine') || 'gemini';
+    if (extractionEngine === 'ollama') {
+      return extractWithOllama(jdText, pageUrl);
+    }
+
     const res = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + GEMINI_KEY,
+      'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-lite:generateContent?key=' + GEMINI_KEY,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -774,6 +780,48 @@ ${context}`;
         .trim();
     }
 
+    parsed.url = pageUrl;
+    return parsed;
+  }
+
+  async function extractWithOllama(jdText, pageUrl) {
+    const ollamaUrl = localStorage.getItem('rjd_ollama_url') || 'http://localhost:11434';
+    const ollamaModel = localStorage.getItem('rjd_ollama_model') || 'llama3.2';
+    const context = buildExtractionContext(jdText, pageUrl);
+
+    const prompt = `You are a precise job-posting parser. Extract the company name and job title from the context below.
+
+RULES:
+- Return ONLY valid JSON: {"company_name":"...","job_title":"..."}
+- No markdown, no explanation.
+- company_name: the actual HIRING COMPANY.
+- job_title: the exact role title.
+- If unknown, use "". 
+
+CONTEXT:
+${context}`;
+
+    const res = await fetch(`${ollamaUrl}/api/generate`, {
+      method: 'POST',
+      body: JSON.stringify({
+        model: ollamaModel,
+        prompt: prompt,
+        stream: false,
+        format: 'json'
+      })
+    });
+
+    if (!res.ok) throw new Error('Ollama connection failed. Ensure local Ollama is running.');
+    const data = await res.json();
+    let parsed = { company_name: '', job_title: '' };
+    try {
+      parsed = JSON.parse(data.response);
+    } catch (e) {
+      // Fallback regex extraction if JSON fails
+      const raw = data.response;
+      parsed.company_name = raw.match(/"company_name"\s*:\s*"([^"]*)"/)?.[1] || '';
+      parsed.job_title = raw.match(/"job_title"\s*:\s*"([^"]*)"/)?.[1] || '';
+    }
     parsed.url = pageUrl;
     return parsed;
   }
@@ -895,8 +943,19 @@ ${context}`;
             <button id="rjd-sk-show" style="padding:8px 14px;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;font-size:11px;cursor:pointer;background:var(--bg-secondary,#f8fafc);color:var(--text-muted,#94a3b8);font-family:inherit;transition:all 0.2s;">Show</button>
             <button id="rjd-sk-save" class="rjd-primary-btn" style="flex:1;padding:8px;">Save Key</button>
           </div>
+          <div style="border-top:1px solid var(--border-light,#f1f5f9); padding-top:14px; margin-bottom:16px;">
+            <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px;">Extraction Engine</div>
+            <div style="display:flex; gap:8px; margin-bottom:10px;">
+              <button id="extract-engine-gemini" style="flex:1; padding:8px; border-radius:8px; border:2px solid var(--accent); background:var(--accent-light); color:var(--accent-primary); font-size:11px; font-weight:600; cursor:pointer;">✦ Gemini 2.5</button>
+              <button id="extract-engine-ollama" style="flex:1; padding:8px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-muted); font-size:11px; font-weight:600; cursor:pointer;">🦙 Ollama Local</button>
+            </div>
+            <div style="font-size:10px; color:var(--text-muted); line-height:1.4;">
+              Ollama uses your <b>llama3.2</b> model locally at <b>http://localhost:11434</b>.
+            </div>
+          </div>
+
           <div style="border-top:1px solid var(--border-light,#f1f5f9);padding-top:14px;">
-            <div style="font-size:12px;font-weight:600;color:var(--text-primary,#1e293b);margin-bottom:8px;">How to get a free key:</div>
+            <div style="font-size:12px;font-weight:600;color:var(--text-primary,#1e293b);margin-bottom:8px;">How to get a free Gemini key:</div>
             <div style="font-size:12px;color:var(--text-secondary,#475569);line-height:1.8;">
               1. Go to <strong>aistudio.google.com</strong><br>
               2. Click <strong>Get API Key → Create API key</strong><br>
@@ -905,6 +964,26 @@ ${context}`;
           </div>`;
 
         loadGeminiKey(k => { if (k) document.getElementById('rjd-sk-input').value = k; });
+
+        // Engine Toggle Logic
+        const engine = localStorage.getItem('rjd_extraction_engine') || 'gemini';
+        const updateEngineUI = (newEngine) => {
+          const gBtn = document.getElementById('extract-engine-gemini');
+          const oBtn = document.getElementById('extract-engine-ollama');
+          if (newEngine === 'gemini') {
+            gBtn.style.border = '2px solid var(--accent)'; gBtn.style.background = 'var(--accent-light)'; gBtn.style.color = 'var(--accent-primary)';
+            oBtn.style.border = '1px solid var(--border-color)'; oBtn.style.background = 'var(--bg-secondary)'; oBtn.style.color = 'var(--text-muted)';
+          } else {
+            oBtn.style.border = '2px solid var(--accent)'; oBtn.style.background = 'var(--accent-light)'; oBtn.style.color = 'var(--accent-primary)';
+            gBtn.style.border = '1px solid var(--border-color)'; gBtn.style.background = 'var(--bg-secondary)'; gBtn.style.color = 'var(--text-muted)';
+          }
+          localStorage.setItem('rjd_extraction_engine', newEngine);
+        };
+        setTimeout(() => {
+          updateEngineUI(engine);
+          document.getElementById('extract-engine-gemini').onclick = () => updateEngineUI('gemini');
+          document.getElementById('extract-engine-ollama').onclick = () => updateEngineUI('ollama');
+        }, 0);
 
         let shown = false;
         document.getElementById('rjd-sk-show').addEventListener('click', () => {
@@ -1098,7 +1177,7 @@ ${context}`;
               <span style="color:#718096;">Version</span><span style="font-weight:600;color:#1a202c;">4.2.0</span>
             </div>
             <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12px;">
-              <span style="color:#718096;">AI Model</span><span style="font-weight:600;color:#1a202c;">Gemini 1.5 Flash</span>
+              <span style="color:#718096;">AI Model</span><span style="font-weight:600;color:#1a202c;">Gemini 2.5 + Ollama</span>
             </div>
             <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12px;">
               <span style="color:#718096;">Database</span><span style="font-weight:600;color:#1a202c;">Supabase</span>
@@ -2012,7 +2091,7 @@ ${context}`;
     toggle.id = 'rjd-toggle';
     toggle.innerHTML = `
       <div id="rjd-toggle-icon" style="width:52px;height:52px;background:linear-gradient(135deg,#4f46e5,#7c3aed);border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(79,70,229,0.4);cursor:pointer;transition:all 0.2s;position:relative;">
-        <img src="${(typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime.getURL('public/icons/icon128.png') : ''}" style="width:26px; height:26px; object-fit:contain; border-radius:6px; pointer-events:none;"/>
+        <img src="${(typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime.getURL('/public/icons/icon128.png') : ''}" style="width:26px; height:26px; object-fit:contain; border-radius:6px; pointer-events:none;"/>
         <div id="rjd-toggle-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#dc2626;color:#fff;border-radius:50%;width:20px;height:20px;font-size:10px;font-weight:800;align-items:center;justify-content:center;border:2px solid #fff;">0</div>
       </div>
       <div id="rjd-queue-badge" style="display:none;position:absolute;bottom:-4px;right:-4px;background:#f59e0b;color:#fff;border-radius:50%;width:18px;height:18px;font-size:9px;font-weight:800;align-items:center;justify-content:center;border:2px solid #fff;">0</div>

@@ -3,7 +3,6 @@ package-lock.json
 convert-icons.js
 fix-refs.js
 update.js
-.code-review-graph/
 .mcp.json
 .opencode.json
 .cursorrules
