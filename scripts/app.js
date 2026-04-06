@@ -1167,8 +1167,7 @@ async function callOpenAI(query, context, key, model) {
 
 async function callGeminiBlaze(query, context, key, modelSelection) {
   const model = modelSelection || "gemini-1.5-flash";
-  const apiVersion = model.includes('2.0') ? 'v1beta' : 'v1';
-  const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${key}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
   const p = context.profile || {};
   const a = context.application || {};
