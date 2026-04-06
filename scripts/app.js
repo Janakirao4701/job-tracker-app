@@ -246,53 +246,62 @@ async function deleteApp(id) {
 }
 
 // ── SESSION ──
-// ── GEMINI KEY — stored in Supabase per user ──
-async function saveGeminiKeyDB(key) {
-  // Save to Supabase
+// ── AI KEY — multi-provider (Gemini/OpenAI) ──
+async function saveAIKeyDB(provider, key) {
+  const column = provider === 'openai' ? 'openai_key' : 'gemini_key';
+  const storageSuffix = provider === 'google' ? 'gemini' : provider;
+  const payload = { username: currentUser.id };
+  payload[column] = key;
+
   try {
     const res = await fetch(SUPABASE_URL + '/rest/v1/user_settings', {
       method: 'POST',
       headers: headers({'Prefer': 'resolution=merge-duplicates,return=representation'}),
-      body: JSON.stringify({ username: currentUser.id, gemini_key: key })
+      body: JSON.stringify(payload)
     });
     if (res.ok) {
-      localStorage.setItem('rjd_gemini_key_' + currentUser.id, key);
-      // Critical fix #5: also sync to chrome.storage so the extension sidebar can read it
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-        chrome.storage.local.set({ rjd_gemini_key: key });
+      localStorage.setItem(`rjd_${storageSuffix}_key_` + currentUser.id, key);
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        const syncObj = {}; syncObj[`rjd_${storageSuffix}_key`] = key;
+        chrome.storage.local.set(syncObj);
       }
       return true;
     }
   } catch(e) {}
-  // Fallback to local storage only
-  localStorage.setItem('rjd_gemini_key_' + currentUser.id, key);
-  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    chrome.storage.local.set({ rjd_gemini_key: key });
-  }
+  
+  localStorage.setItem(`rjd_${storageSuffix}_key_` + currentUser.id, key);
   return false;
 }
 
-async function loadGeminiKeyDB() {
-  // Try localStorage first (fast)
-  const localKey = localStorage.getItem('rjd_gemini_key_' + currentUser.id);
+async function loadAIKeyDB(provider) {
+  const storageSuffix = provider === 'google' ? 'gemini' : provider;
+  const localKey = localStorage.getItem(`rjd_${storageSuffix}_key_` + currentUser.id);
+  // Also check legacy shared key for extension without user ID
+  const globalKey = localStorage.getItem(`rjd_${storageSuffix}_key`);
   if (localKey) return localKey;
-  // Load from Supabase
+  if (globalKey) return globalKey;
+  
+  const column = provider === 'openai' ? 'openai_key' : 'gemini_key';
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_settings?username=eq.${currentUser.id}&select=gemini_key`,
+      `${SUPABASE_URL}/rest/v1/user_settings?username=eq.${currentUser.id}&select=${column}`,
       { headers: headers() }
     );
     if (res.ok) {
       const data = await res.json();
-      if (data && data[0] && data[0].gemini_key) {
-        const key = data[0].gemini_key;
-        localStorage.setItem('rjd_gemini_key_' + currentUser.id, key);
+      if (data && data[0] && data[0][column]) {
+        const key = data[0][column];
+        localStorage.setItem(`rjd_${storageSuffix}_key_` + currentUser.id, key);
         return key;
       }
     }
   } catch(e) {}
   return '';
 }
+
+// Backward compatibility or internal aliases
+async function saveGeminiKeyDB(key) { return saveAIKeyDB('google', key); }
+async function loadGeminiKeyDB() { return loadAIKeyDB('google'); }
 
 // ── RESUME PROFILE DB SYNC ──
 async function saveResumeProfileDB(profile) {
@@ -878,11 +887,33 @@ function renderDashboard() {
 // ── AI BLAZE ──
 let blazeSelectedAppId = null;
 let blazeTemplates = [
-  { key: '-ans', label: 'Answer Question', prompt: 'Please answer the following application question based on my resume and personal details. Keep it professional, concise, and highlight my relevant skills.' },
-  { key: '-cover', label: 'Cover Letter', prompt: 'Write a cover letter for the role described in the job title and company, using my resume and personal details as context. Ensure it is tailored and persuasive.' },
-  { key: '-sum', label: 'Short Summary', prompt: 'Provide a 2-sentence summary of why I am a good fit for this role based on my resume.' }
+  { key: '-ans', label: 'Answer Question', icon: '📝', prompt: 'Please answer the following application question based on my resume and personal details. Keep it professional, concise, and highlight my relevant skills.' },
+  { key: '-cover', label: 'Cover Letter', icon: '✉️', prompt: 'Write a cover letter for the role described in the job title and company, using my resume and personal details as context. Ensure it is tailored and persuasive.' },
+  { key: '-sum', label: 'Short Summary', icon: '✨', prompt: 'Provide a 2-sentence summary of why I am a good fit for this role based on my resume.' }
 ];
-let blazeSelectedModel = 'gemini-1.5-flash';
+let blazeSelectedProvider = localStorage.getItem('rjd_blaze_provider') || 'google';
+let blazeSelectedModel    = localStorage.getItem('rjd_blaze_model')    || 'gemini-1.5-flash';
+
+const BLAZE_PROVIDERS = {
+  google: { 
+    label: 'Google Gemini', 
+    icon: '💎',
+    models: [
+      { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (Stable)' },
+      { id: 'gemini-1.5-flash-8b', label: 'Gemini 1.5 Flash 8B (Fast)' },
+      { id: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash (Exp)' }
+    ]
+  },
+  openai: {
+    label: 'OpenAI GPT',
+    icon: '🤖',
+    models: [
+      { id: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+      { id: 'gpt-4o', label: 'GPT-4o' },
+      { id: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' }
+    ]
+  }
+};
 
 async function renderAiBlaze() {
   const content = document.getElementById('page-content');
@@ -897,102 +928,141 @@ async function renderAiBlaze() {
   const selectedApp = apps.find(a => String(a.id) === String(blazeSelectedAppId));
   const personalProfile = await loadResumeProfileDB();
 
+  const provider = BLAZE_PROVIDERS[blazeSelectedProvider] || BLAZE_PROVIDERS.google;
+
   content.innerHTML = `
-    <div class="aiblaze-layout">
-      <!-- Sidebar Actions -->
-      <div class="aiblaze-sidebar">
-        <div class="aiblaze-card">
-          <div class="aiblaze-card-title">🎯 Context</div>
-          <div class="aiblaze-card-sub">Select which application's resume to use.</div>
-          <select class="settings-input" id="blaze-app-select" style="font-size:12px;">
-            <option value="">No specific app (Profile only)</option>
-            ${apps.slice().reverse().map(a => `
-              <option value="${a.id}" ${blazeSelectedAppId === a.id ? 'selected' : ''}>
-                ${esc(a.company || '—')} — ${esc(a.jobTitle || '—')}
-              </option>
-            `).join('')}
-          </select>
-        </div>
-
-        <div class="aiblaze-card">
-          <div class="aiblaze-card-title">⌨️ Shortcuts</div>
-          <div class="aiblaze-card-sub">Quickly fill your prompt with templates.</div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;" id="blaze-shortcuts-wrap">
-            ${blazeTemplates.map(t => `<div class="shortcut-pill" data-key="${t.key}" title="${esc(t.prompt)}">${esc(t.label)}</div>`).join('')}
-          </div>
-          <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
-            <button class="auth-link" style="font-size:11px;" onclick="navigateTo('settings'); settingsSection='shortcuts'; renderSettings();">Manage Shortcuts ↗</button>
-          </div>
-        </div>
-
-        <div class="aiblaze-card">
-          <div class="aiblaze-card-title">⚙️ AI Model</div>
-          <div style="margin-bottom:12px;">
-            <select class="settings-input" id="blaze-model-select" style="font-size:12px;">
-              <option value="gemini-1.5-flash" ${blazeSelectedModel === 'gemini-1.5-flash' ? 'selected' : ''}>Gemini 1.5 Flash (Stable)</option>
-              <option value="gemini-1.5-flash-8b" ${blazeSelectedModel === 'gemini-1.5-flash-8b' ? 'selected' : ''}>Gemini 1.5 Flash 8B (Fast)</option>
-              <option value="gemini-2.0-flash-exp" ${blazeSelectedModel === 'gemini-2.0-flash-exp' ? 'selected' : ''}>Gemini 2.0 Flash (Exp)</option>
-            </select>
-          </div>
-          <button class="auth-link" style="font-size:11px;" onclick="navigateTo('settings'); settingsSection='apikey'; renderSettings();">API Key Settings ⚙️</button>
-        </div>
-      </div>
-
-      <!-- Main Blaze Area -->
-      <div class="aiblaze-main">
-        <div class="aiblaze-card" style="padding:24px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <div class="blaze-premium-container">
+      <div class="blaze-glass-layout">
+        
+        <!-- Dashboard Sidebar: Context & Actions -->
+        <aside class="blaze-glass-sidebar">
+          <div class="blaze-sidebar-header">
+            <span class="blaze-fire-icon">🔥</span>
             <div>
-              <div style="font-size:18px;font-weight:800;color:var(--text);letter-spacing:-0.5px;">🔥 Blaze Generator</div>
-              <div style="font-size:12px;color:var(--text-muted);">Transform your resume into application answers instantly.</div>
+              <div class="blaze-brand">AI-Blaze</div>
+              <div class="blaze-status-pill" id="blaze-status">Ready</div>
             </div>
-            <div id="blaze-status" style="font-size:12px;font-weight:600;color:var(--text-muted);">Ready</div>
           </div>
 
-          <div class="chat-input-wrap">
-            <textarea class="aiblaze-input" id="blaze-query" placeholder="Paste the application question here... or use a shortcut."></textarea>
-          </div>
-
-          <div style="margin-top:16px;display:flex;gap:12px;">
-            <button class="blaze-btn" id="blaze-go-btn" style="flex:1;">
-               🔥 <span id="blaze-btn-text">Blaze it!</span>
-            </button>
-            <button class="btn-new" id="blaze-clear-btn" style="padding:12px 20px;">Clear</button>
-          </div>
-
-          <div class="chat-response hidden" id="blaze-result-wrap">
-            <div class="chat-response-header">
-              <div class="chat-response-title">✨ AI Response</div>
-              <button class="auth-link" id="blaze-copy-btn" style="font-size:11px;font-weight:700;">📋 Copy</button>
+          <div class="blaze-group">
+            <label class="blaze-label">TARGET APPLICATION</label>
+            <div class="blaze-select-wrap">
+              <select class="blaze-select" id="blaze-app-select">
+                <option value="">No specific app (Profile only)</option>
+                ${apps.slice().reverse().map(a => `
+                  <option value="${a.id}" ${blazeSelectedAppId === a.id ? 'selected' : ''}>
+                    ${esc(a.company || '—')}
+                  </option>
+                `).join('')}
+              </select>
             </div>
-            <div id="blaze-result-text"></div>
+            ${selectedApp ? `
+              <div class="blaze-context-card">
+                <div class="blaze-context-title">${esc(selectedApp.jobTitle || 'Role')}</div>
+                <div class="blaze-context-tags">
+                  <span class="blaze-tag ${selectedApp.jd ? 'active' : ''}">${selectedApp.jd ? '✓ JD' : 'No JD'}</span>
+                  <span class="blaze-tag ${selectedApp.resume ? 'active' : ''}">${selectedApp.resume ? '✓ Resume' : 'No Resume'}</span>
+                </div>
+              </div>
+            ` : ''}
           </div>
-        </div>
 
-        <div style="font-size:11px;color:var(--text-muted);text-align:center;padding:0 20px;">
-           AI-Blaze uses your local Gemini API key and provided context. Review all generated content for accuracy before submitting.
-        </div>
+          <div class="blaze-group">
+            <label class="blaze-label">QUICK ACTIONS</label>
+            <div class="blaze-shortcuts-grid">
+              ${blazeTemplates.map(t => `
+                <div class="blaze-shortcut-card" data-key="${t.key}">
+                  <span class="blaze-shortcut-icon">${t.icon || '⚡'}</span>
+                  <span class="blaze-shortcut-label">${esc(t.label)}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <div class="blaze-group">
+            <label class="blaze-label">ENGINE & MODEL</label>
+            <div class="blaze-config-row">
+              <select class="blaze-select mini" id="blaze-provider-select">
+                ${Object.keys(BLAZE_PROVIDERS).map(k => `
+                  <option value="${k}" ${blazeSelectedProvider === k ? 'selected' : ''}>${BLAZE_PROVIDERS[k].icon} ${BLAZE_PROVIDERS[k].label}</option>
+                `).join('')}
+              </select>
+              <select class="blaze-select mini" id="blaze-model-select">
+                ${provider.models.map(m => `
+                  <option value="${m.id}" ${blazeSelectedModel === m.id ? 'selected' : ''}>${m.label}</option>
+                `).join('')}
+              </select>
+            </div>
+            <button class="blaze-manage-btn" onclick="navigateTo('settings'); settingsSection='apikey'; renderSettings();">Manage Keys ⚙️</button>
+          </div>
+        </aside>
+
+        <!-- Main Generation Area -->
+        <main class="blaze-glass-main">
+          <div class="blaze-chat-container">
+            <div class="blaze-welcome">
+              <h2>What are we blazing today?</h2>
+              <p>Type your question or click a shortcut to generate tailored application content.</p>
+            </div>
+
+            <div id="blaze-history"></div>
+
+            <div class="blaze-response-area hidden" id="blaze-result-wrap">
+              <div class="blaze-response-header">
+                <span class="blaze-ai-label">✨ BLAZE AI</span>
+                <button class="blaze-copy-btn" id="blaze-copy-btn">📋 Copy Result</button>
+              </div>
+              <div class="blaze-response-content" id="blaze-result-text"></div>
+            </div>
+          </div>
+
+          <div class="blaze-input-footer">
+            <div class="blaze-input-container">
+              <textarea class="blaze-textarea" id="blaze-query" placeholder="Paste application question here..."></textarea>
+              <button class="blaze-submit-btn" id="blaze-go-btn">
+                <span id="blaze-btn-text">Blaze</span>
+                <span class="blaze-btn-arrow">→</span>
+              </button>
+            </div>
+            <div class="blaze-input-hints">
+              <span>Press <b>Shift + Enter</b> for new line</span>
+              <button id="blaze-clear-btn" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:11px;">Clear Workspace</button>
+            </div>
+          </div>
+        </main>
+
       </div>
     </div>
   `;
 
-  // Attach Listeners
-  document.getElementById('blaze-app-select').addEventListener('change', e => {
-    blazeSelectedAppId = e.target.value;
-    renderAiBlaze();
+  // --- Listeners ---
+  const handleNav = (id, callback) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', callback);
+  };
+
+  handleNav('blaze-app-select', e => { blazeSelectedAppId = e.target.value; renderAiBlaze(); });
+  handleNav('blaze-provider-select', e => { 
+    blazeSelectedProvider = e.target.value; 
+    blazeSelectedModel = BLAZE_PROVIDERS[blazeSelectedProvider].models[0].id; // Reset to default for provider
+    localStorage.setItem('rjd_blaze_provider', blazeSelectedProvider);
+    localStorage.setItem('rjd_blaze_model', blazeSelectedModel);
+    renderAiBlaze(); 
+  });
+  handleNav('blaze-model-select', e => { 
+    blazeSelectedModel = e.target.value; 
+    localStorage.setItem('rjd_blaze_model', blazeSelectedModel);
+    renderAiBlaze(); 
   });
 
-  document.getElementById('blaze-model-select').addEventListener('change', e => {
-    blazeSelectedModel = e.target.value;
-    renderAiBlaze();
-  });
-
-  document.querySelectorAll('.shortcut-pill').forEach(pill => {
-    pill.onclick = () => {
-      const template = blazeTemplates.find(t => t.key === pill.dataset.key);
+  document.querySelectorAll('.blaze-shortcut-card').forEach(card => {
+    card.onclick = () => {
+      const template = blazeTemplates.find(t => t.key === card.dataset.key);
       if (template) {
         document.getElementById('blaze-query').value = template.prompt;
         document.getElementById('blaze-query').focus();
+        card.classList.add('pulse-active');
+        setTimeout(() => card.classList.remove('pulse-active'), 300);
       }
     };
   });
@@ -1000,6 +1070,7 @@ async function renderAiBlaze() {
   document.getElementById('blaze-clear-btn').onclick = () => {
     document.getElementById('blaze-query').value = '';
     document.getElementById('blaze-result-wrap').classList.add('hidden');
+    document.getElementById('blaze-result-text').innerHTML = '';
   };
 
   document.getElementById('blaze-copy-btn').onclick = () => {
@@ -1013,68 +1084,84 @@ async function renderAiBlaze() {
     const query = document.getElementById('blaze-query').value.trim();
     if (!query) { showToast('Please enter a question or prompt', true); return; }
 
-    const key = localStorage.getItem('rjd_gemini_key_' + (currentUser?.id || '')) || '';
+    const key = await loadAIKeyDB(blazeSelectedProvider);
     if (!key) {
-      showToast('API Key missing. Go to Settings > API Key', true);
+      showToast(`${BLAZE_PROVIDERS[blazeSelectedProvider].label} Key missing. Check Settings.`, true);
       return;
     }
 
     goBtn.disabled = true;
-    goBtn.classList.add('blaze-pulse');
-    const btnText = document.getElementById('blaze-btn-text');
+    goBtn.classList.add('blazing');
     const statusText = document.getElementById('blaze-status');
-    btnText.textContent = 'Blazing...';
-    statusText.textContent = 'AI is thinking...';
-    statusText.style.color = '#f97316';
+    statusText.textContent = 'Thinking...';
+    statusText.classList.add('working');
 
     const resultWrap = document.getElementById('blaze-result-wrap');
     const resultText = document.getElementById('blaze-result-text');
     resultWrap.classList.remove('hidden');
-    resultText.innerHTML = '<div style="color:var(--text-muted);font-style:italic;">Analyzing context and generating answer...</div>';
+    resultText.innerHTML = '<div class="blaze-loader-wrap"><div class="blaze-pulse-core"></div> Analyzing Context...</div>';
 
     try {
-      const context = {
-        profile: personalProfile,
-        application: selectedApp
-      };
+      const response = await callAIBlaze(query, { profile: personalProfile, application: selectedApp }, key, blazeSelectedProvider, blazeSelectedModel);
       
-      const response = await callGeminiBlaze(query, context, key, blazeSelectedModel);
-      
-      // Typewriter effect
       resultText.innerText = '';
-      let i = 0;
-      const speed = 15;
-      function typeWriter() {
+      let i = 0; const speed = 8;
+      function type() {
         if (i < response.length) {
-          resultText.innerText += response.charAt(i);
-          i++;
-          setTimeout(typeWriter, speed);
+          resultText.innerText += response.charAt(i); i++;
+          setTimeout(type, speed);
           resultWrap.scrollIntoView({ behavior: 'smooth', block: 'end' });
         } else {
-          goBtn.disabled = false;
-          goBtn.classList.remove('blaze-pulse');
-          btnText.textContent = 'Blaze it!';
-          statusText.textContent = 'Ready';
-          statusText.style.color = 'var(--text-muted)';
+          goBtn.disabled = false; goBtn.classList.remove('blazing');
+          statusText.textContent = 'Ready'; statusText.classList.remove('working');
         }
       }
-      typeWriter();
-
+      type();
     } catch (err) {
       showToast('AI error: ' + err.message, true);
-      resultText.innerHTML = `<div style="color:var(--danger);">Error: ${err.message}</div>`;
-      goBtn.disabled = false;
-      goBtn.classList.remove('blaze-pulse');
-      btnText.textContent = 'Blaze it!';
-      statusText.textContent = 'Error';
-      statusText.style.color = 'var(--danger)';
+      resultText.innerHTML = `<div class="blaze-error-msg">Error: ${err.message}</div>`;
+      goBtn.disabled = false; goBtn.classList.remove('blazing');
+      statusText.textContent = 'Error'; statusText.classList.remove('working');
     }
   };
 }
 
+async function callAIBlaze(query, context, key, provider, model) {
+  if (provider === 'openai') return callOpenAI(query, context, key, model);
+  return callGeminiBlaze(query, context, key, model);
+}
+
+async function callOpenAI(query, context, key, model) {
+  const url = 'https://api.openai.com/v1/chat/completions';
+  const p = context.profile || {};
+  const a = context.application || {};
+  
+  const prompt = `PERSONAL DETAILS:\nName: ${p.name || 'N/A'}\nTitle: ${p.title || 'N/A'}\nExp/Edu: ${p.education || 'N/A'}\nCerts: ${p.certs || 'N/A'}\nCustom: ${JSON.stringify(p.custom_sections || [])}\n\nAPPLICATION CONTEXT:\nJob: ${a.company || 'N/A'} - ${a.jobTitle || 'N/A'}\nResume: ${a.resume || 'No resume content.'}\n\nUSER REQUEST:\n${query}`;
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+    body: JSON.stringify({
+      model: model || 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'You are Ai-Blaze, a professional job application assistant. Transform user resume/profile into tailored responses. Be professional, concise and persuasive. Do not hallucinate.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 1500
+    })
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json();
+    throw new Error(err.error?.message || 'OpenAI API failure');
+  }
+  const data = await resp.json();
+  return data.choices?.[0]?.message?.content || 'No response generated.';
+}
+
 async function callGeminiBlaze(query, context, key, modelSelection) {
   const model = modelSelection || "gemini-1.5-flash";
-  // Switch to stable v1 for standard models, fallback to v1beta if 2.0 experimental is used
   const apiVersion = model.includes('2.0') ? 'v1beta' : 'v1';
   const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${key}`;
 
@@ -1107,7 +1194,7 @@ Response:`;
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts: [{ text: systemPrompt }] }],
-      generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 1024 }
+      generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 2048 }
     })
   });
 
@@ -1115,10 +1202,10 @@ Response:`;
     const err = await resp.json();
     throw new Error(err.error?.message || 'Gemini API failure');
   }
-
   const data = await resp.json();
   return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
 }
+
 
 // ── APPLICATIONS TABLE ──
 function renderApplications() {
@@ -1486,52 +1573,80 @@ function renderSettingsSection(sec) {
   if (!panel) return;
 
   if (sec === 'apikey') {
-    // Critical fix #5: read from chrome.storage first (shared with extension), fall back to localStorage
-    const localKey = localStorage.getItem('rjd_gemini_key_' + (currentUser?.id||'')) || '';
-    let savedKey = localKey;
-    if (!savedKey && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      chrome.storage.local.get('rjd_gemini_key', r => {
-        if (r.rjd_gemini_key) {
-          const input = document.getElementById('key-input');
-          if (input) input.value = r.rjd_gemini_key;
-        }
-      });
-    }
-    panel.innerHTML = `
-      <div class="settings-section-title">Gemini API Key</div>
-      <div class="settings-section-sub">Powers AI extraction in the Chrome extension. Free from Google.</div>
-      <div class="settings-info-box">Your key is stored only in your browser. It is sent directly to Google Gemini — never to any other server.</div>
-      <div id="settings-msg"></div>
-      <div class="settings-field" style="max-width:480px;"><label>API Key</label>
-        <div style="display:flex;gap:8px;margin-bottom:10px;">
-          <input type="password" class="settings-input" id="key-input" value="${esc(savedKey)}" placeholder="AIzaSy..." style="flex:1;max-width:520px;"/>
-          <button class="btn-new" id="show-key-btn" style="white-space:nowrap;padding:0 16px;height:42px;">Show</button>
-        </div>
-        <div style="display:flex;gap:10px;margin-bottom:20px;">
-          <button class="settings-btn" id="save-key-btn" style="padding:10px 28px;font-size:14px;">Save Key</button>
-        </div>
-      </div>
-      <div style="font-size:13px;color:#4a5568;background:#f8fafc;border-radius:8px;padding:14px;border:1px solid #e2e8f0;">
-        <strong>Get a free key:</strong><br>
-        1. Go to <a href="https://aistudio.google.com" target="_blank" style="color:#2E75B6;">aistudio.google.com</a><br>
-        2. Click <strong>Get API Key → Create API key</strong><br>
-        3. Copy and paste it above
-      </div>`;
+    panel.innerHTML = `<div style="padding:60px;text-align:center"><div class="spinner"></div></div>`;
+    
+    Promise.all([
+      loadAIKeyDB('google'),
+      loadAIKeyDB('openai')
+    ]).then(([googleKey, openaiKey]) => {
+      panel.innerHTML = `
+        <div class="settings-section-title">AI Provider Configuration</div>
+        <div class="settings-section-sub">Configure your AI engines for extraction and AI-Blaze assistance.</div>
+        
+        <div id="settings-msg" style="margin-bottom:20px;"></div>
 
-    let shown = false;
-    document.getElementById('show-key-btn').addEventListener('click', () => {
-      shown = !shown;
-      document.getElementById('key-input').type = shown ? 'text' : 'password';
-      document.getElementById('show-key-btn').textContent = shown ? 'Hide' : 'Show';
-    });
-    document.getElementById('save-key-btn').addEventListener('click', () => {
-      const key = document.getElementById('key-input').value.trim();
-      if (!key) { document.getElementById('settings-msg').innerHTML='<div class="auth-msg error">Enter your API key</div>'; return; }
-      if (!key.startsWith('AIza')) { document.getElementById('settings-msg').innerHTML='<div class="auth-msg error">Key should start with AIza...</div>'; return; }
-      saveGeminiKeyDB(key).then(saved => {
-        document.getElementById('settings-msg').innerHTML='<div class="auth-msg success">Key saved ' + (saved ? '& synced ✓' : '(locally) ✓') + '</div>';
-        setTimeout(() => { const el=document.getElementById('settings-msg'); if(el) el.innerHTML=''; }, 3000);
-      });
+        <!-- Google Gemini Section -->
+        <div class="provider-config-card" style="margin-bottom:24px; background:var(--bg-inset); padding:20px; border-radius:16px; border:1px solid var(--border);">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+            <div style="width:40px; height:40px; background:#4285f4; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:20px;">💎</div>
+            <div>
+              <div style="font-weight:700; color:var(--text);">Google Gemini</div>
+              <div style="font-size:11px; color:var(--text-muted);">Default provider for extraction and Blaze.</div>
+            </div>
+            <a href="https://aistudio.google.com" target="_blank" style="margin-left:auto; font-size:11px; color:var(--accent); font-weight:700;">Get Free Key ↗</a>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <input type="password" class="settings-input" id="google-key-input" value="${esc(googleKey)}" placeholder="AIzaSy..." style="flex:1;"/>
+            <button class="btn-new" onclick="const i=document.getElementById('google-key-input'); i.type=i.type==='password'?'text':'password'; this.textContent=i.type==='password'?'Show':'Hide';" style="width:70px;">Show</button>
+          </div>
+        </div>
+
+        <!-- OpenAI Section -->
+        <div class="provider-config-card" style="margin-bottom:32px; background:var(--bg-inset); padding:20px; border-radius:16px; border:1px solid var(--border);">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+            <div style="width:40px; height:40px; background:#10a37f; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:20px;">🤖</div>
+            <div>
+              <div style="font-weight:700; color:var(--text);">OpenAI GPT</div>
+              <div style="font-size:11px; color:var(--text-muted);">Optional alternative for high-quality responses.</div>
+            </div>
+            <a href="https://platform.openai.com/api-keys" target="_blank" style="margin-left:auto; font-size:11px; color:var(--accent); font-weight:700;">Get Key ↗</a>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <input type="password" class="settings-input" id="openai-key-input" value="${esc(openaiKey)}" placeholder="sk-..." style="flex:1;"/>
+            <button class="btn-new" onclick="const i=document.getElementById('openai-key-input'); i.type=i.type==='password'?'text':'password'; this.textContent=i.type==='password'?'Show':'Hide';" style="width:70px;">Show</button>
+          </div>
+        </div>
+
+        <button class="settings-btn" id="save-all-keys-btn" style="padding:12px 32px; width:100%; font-weight:800; background:var(--accent);">Save Configuration ✓</button>
+        <div style="margin-top:16px; font-size:12px; color:var(--text-muted); text-align:center;">
+          Keys are stored securely in your browser and synced with Supabase.
+        </div>
+      `;
+
+      document.getElementById('save-all-keys-btn').onclick = async () => {
+        const gKey = document.getElementById('google-key-input').value.trim();
+        const oKey = document.getElementById('openai-key-input').value.trim();
+        const btn = document.getElementById('save-all-keys-btn');
+        btn.textContent = 'Saving...'; btn.disabled = true;
+
+        const results = await Promise.all([
+          saveAIKeyDB('google', gKey),
+          saveAIKeyDB('openai', oKey)
+        ]);
+
+        btn.textContent = 'Configuration Saved ✓';
+        btn.style.background = '#10b981';
+        
+        document.getElementById('settings-msg').innerHTML = '<div class="auth-msg success" style="margin:0">All settings successfully updated & synced.</div>';
+        
+        setTimeout(() => {
+          btn.textContent = 'Save Configuration ✓';
+          btn.disabled = false;
+          btn.style.background = 'var(--accent)';
+          const msg = document.getElementById('settings-msg');
+          if(msg) msg.innerHTML = '';
+        }, 3000);
+      };
     });
 
   } else if (sec === 'blaze_shortcuts') {
