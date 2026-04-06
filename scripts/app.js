@@ -633,6 +633,25 @@ async function showApp() {
   });
 
   navigateTo('dashboard');
+
+  // ✨ CSP COMPLIANCE: Global Event Delegation for Dynamic Content
+  document.getElementById('page-content').addEventListener('click', e => {
+    const target = e.target;
+    // 1. AI-Blaze Manage Keys Shortcut
+    if (target.closest('.blaze-manage-btn')) {
+      navigateTo('settings'); settingsSection = 'apikey'; renderSettings();
+      return;
+    }
+    // 2. Settings Password Toggle
+    if (target.dataset.togglePassword) {
+      const input = document.getElementById(target.dataset.togglePassword);
+      if (input) {
+        input.type = input.type === 'password' ? 'text' : 'password';
+        target.textContent = input.type === 'password' ? 'Show' : 'Hide';
+      }
+      return;
+    }
+  });
 }
 
 function showSection(id) {
@@ -998,7 +1017,7 @@ async function renderAiBlaze() {
                 `).join('')}
               </select>
             </div>
-            <button class="blaze-manage-btn" onclick="navigateTo('settings'); settingsSection='apikey'; renderSettings();">Manage Keys ⚙️</button>
+            <button class="blaze-manage-btn">Manage Keys ⚙️</button>
           </div>
         </aside>
 
@@ -1618,7 +1637,7 @@ function renderSettingsSection(sec) {
           </div>
           <div style="display:flex; gap:8px;">
             <input type="password" class="settings-input" id="google-key-input" value="${esc(googleKey)}" placeholder="AIzaSy..." style="flex:1;"/>
-            <button class="btn-new" onclick="const i=document.getElementById('google-key-input'); i.type=i.type==='password'?'text':'password'; this.textContent=i.type==='password'?'Show':'Hide';" style="width:70px;">Show</button>
+            <button class="btn-new" data-toggle-password="google-key-input" style="width:70px;">Show</button>
           </div>
         </div>
 
@@ -1634,7 +1653,7 @@ function renderSettingsSection(sec) {
           </div>
           <div style="display:flex; gap:8px;">
             <input type="password" class="settings-input" id="openai-key-input" value="${esc(openaiKey)}" placeholder="sk-..." style="flex:1;"/>
-            <button class="btn-new" onclick="const i=document.getElementById('openai-key-input'); i.type=i.type==='password'?'text':'password'; this.textContent=i.type==='password'?'Show':'Hide';" style="width:70px;">Show</button>
+            <button class="btn-new" data-toggle-password="openai-key-input" style="width:70px;">Show</button>
           </div>
         </div>
 
