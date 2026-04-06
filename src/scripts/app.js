@@ -1127,7 +1127,8 @@ async function renderAiBlaze() {
     const query = document.getElementById('blaze-query').value.trim();
     if (!query) { showToast('Please enter a question or prompt', true); return; }
 
-    const key = await loadAIKeyDB(blazeSelectedProvider);
+    // Fix: Ollama does not require an API key as it's local
+    const key = blazeSelectedProvider === 'ollama' ? 'local' : await loadAIKeyDB(blazeSelectedProvider);
     if (!key) {
       showToast(`${BLAZE_PROVIDERS[blazeSelectedProvider].label} Key missing. Check Settings.`, true);
       return;
