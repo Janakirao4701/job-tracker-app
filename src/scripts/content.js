@@ -119,10 +119,13 @@
       const { id, url, opts } = message.payload || {};
       if (!id || !url) return;
 
+      console.log(`[AI Blaze Bridge] Proxying request to: ${url}`);
       try {
         const response = await safeSendMessage({ action: 'sb_proxy_fetch', payload: { url, opts } });
+        console.log(`[AI Blaze Bridge] Background response for ${id}:`, response);
         window.postMessage({ type: 'RJD_PROXY_RESPONSE', payload: { id, response } }, '*');
       } catch (err) {
+        console.error(`[AI Blaze Bridge] Bridge error for ${id}:`, err);
         window.postMessage({ type: 'RJD_PROXY_RESPONSE', payload: { id, error: err.message } }, '*');
       }
     }

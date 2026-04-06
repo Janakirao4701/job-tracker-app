@@ -1199,28 +1199,37 @@ ${query}`;
   // Fix: If running on a web domain (Vercel), we must proxy through the extension
   // to bypass CORS for localhost.
   if (window.location.protocol !== 'chrome-extension:') {
-    console.log('AI Blaze: Redirecting Ollama request via extension bridge...');
+    const baseUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+    const finalUrl = `${baseUrl}/api/generate`;
+    
+    console.log(`AI Blaze: Redirecting Ollama request to ${finalUrl} via extension bridge...`);
+    
     return new Promise((resolve, reject) => {
       const requestId = Math.random().toString(36).substring(7);
       const timeout = setTimeout(() => {
         window.removeEventListener('message', handleResponse);
-        reject(new Error('Extension proxy timeout. Is the AI Blaze extension installed and active?'));
+        reject(new Error('Extension proxy timeout. Check if AI Blaze extension is active and has permissions.'));
       }, 30000);
 
       function handleResponse(event) {
         if (event.source !== window) return;
         const message = event.data;
         if (message && message.type === 'RJD_PROXY_RESPONSE' && message.payload?.id === requestId) {
-          console.log('AI Blaze: Received proxy response from extension.');
           clearTimeout(timeout);
           window.removeEventListener('message', handleResponse);
           
           const { response, error } = message.payload;
-          if (error) reject(new Error(error));
-          else if (response && response.ok) {
+          if (error) {
+            console.error('AI Blaze: Extension bridge error:', error);
+            reject(new Error(`Extension bridge error: ${error}`));
+          } else if (response && response.ok) {
+            console.log('AI Blaze: Received successful response from Ollama.');
             resolve(response.data?.response || 'No response generated.');
           } else {
-            reject(new Error('Ollama proxy failed. Ensure Ollama is running.'));
+            console.error('AI Blaze: Ollama proxy fetch failed:', response);
+            const status = response?.status || 'Unknown';
+            const errMsg = response?.data?.error || 'Ollama connection failed';
+            reject(new Error(`Ollama Error (${status}): ${errMsg}. Ensure Ollama is running and the model "${model}" is pulled.`));
           }
         }
       }
@@ -1230,7 +1239,7 @@ ${query}`;
         type: 'RJD_PROXY_REQUEST',
         payload: {
           id: requestId,
-          url: `${url}/api/generate`,
+          url: finalUrl,
           opts: {
             method: 'POST',
             body: JSON.stringify({
