@@ -3,11 +3,17 @@
 
 Write-Host "Syncing app.html changes into index.html..." -ForegroundColor Cyan
 
-# 1. Ensure image paths in app.html are correct for its folder
-(Get-Content pages/app.html) -replace 'src="icons/icon', 'src="../icons/icon' | Set-Content pages/app.html
+# 1. Sync app.html to index.html with correct root paths
+$appContent = Get-Content src/pages/app.html
 
-# 2. Clone app.html into index.html but dynamically fix the relative paths!
-(Get-Content pages/app.html) -replace '=\"\.\./', '="' -replace "='../", "='" | Set-Content index.html
+# Fix paths:
+# ../../public/ -> public/
+# ../lib/ -> src/lib/
+# ../scripts/ -> src/scripts/
+# ../styles/ -> src/styles/
+$indexContent = $appContent -replace '\.\./\.\./public/', 'public/' -replace '\.\./(lib|scripts|styles)/', 'src/$1/'
+
+$indexContent | Set-Content index.html
 
 Write-Host "Sync Complete! Deploying to GitHub..." -ForegroundColor Cyan
 
