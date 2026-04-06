@@ -1166,8 +1166,9 @@ async function callOpenAI(query, context, key, model) {
 }
 
 async function callGeminiBlaze(query, context, key, modelSelection) {
-  const model = modelSelection || "gemini-1.5-flash";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+  // Use v1 for more stability if v1beta is giving 'not found' errors for standard model names
+  const model = modelSelection || "gemini-1.5-flash"; 
+  const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${key}`;
 
   const p = context.profile || {};
   const a = context.application || {};
@@ -1204,6 +1205,22 @@ Response:`;
 
   if (!resp.ok) {
     const err = await resp.json();
+    // Fallback to v1beta if v1 is not available for this specific model/key
+    if (resp.status === 404) {
+       const altUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+       const altResp = await fetch(altUrl, {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           contents: [{ parts: [{ text: systemPrompt }] }],
+           generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 2048 }
+         })
+       });
+       if (altResp.ok) {
+         const altData = await altResp.json();
+         return altData.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
+       }
+    }
     throw new Error(err.error?.message || 'Gemini API failure');
   }
   const data = await resp.json();
