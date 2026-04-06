@@ -5,7 +5,7 @@
  */
 window.ResumeEngine = {
   // ── CONTENT PARSING (Robust split-based) ──
-  parseContent: function(text) {
+  parseContent: function (text) {
     const sections = { summary: '', skills: '', experience: '' };
     if (!text) return sections;
 
@@ -49,9 +49,9 @@ window.ResumeEngine = {
   },
 
   // ── PREMIUM HELPERS ──
-  
+
   // DASH BULLET (LaTeX style)
-  makeBullet: function(text, docx, FONT, SZ_BODY, COLOR_DARK) {
+  makeBullet: function (text, docx, FONT, SZ_BODY, COLOR_DARK) {
     const { Paragraph, TextRun } = docx;
     return new Paragraph({
       numbering: { reference: 'bullets', level: 0 },
@@ -61,7 +61,7 @@ window.ResumeEngine = {
   },
 
   // SECTION HEADING (With bottom rule)
-  sectionHeading: function(text, docx, FONT, SZ_SEC, COLOR_HEAD, COLOR_RULE) {
+  sectionHeading: function (text, docx, FONT, SZ_SEC, COLOR_HEAD, COLOR_RULE) {
     const { Paragraph, TextRun, BorderStyle } = docx;
     return new Paragraph({
       spacing: { before: 200, after: 80 },
@@ -76,7 +76,7 @@ window.ResumeEngine = {
     });
   },
 
-  parseSkills: function(raw, docx, FONT, SZ_BODY, COLOR_HEAD, COLOR_DARK) {
+  parseSkills: function (raw, docx, FONT, SZ_BODY, COLOR_HEAD, COLOR_DARK) {
     const { Paragraph, TextRun } = docx;
     if (!raw) return [];
     const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !l.match(/^\[/));
@@ -95,7 +95,7 @@ window.ResumeEngine = {
     });
   },
 
-  parseExperience: function(raw, docx, FONT, SZ_JOB, SZ_BODY, SZ_BASE, TEXT_W, COLOR_HEAD, COLOR_DARK, COLOR_MID, COLOR_LIGHT) {
+  parseExperience: function (raw, docx, FONT, SZ_JOB, SZ_BODY, SZ_BASE, TEXT_W, COLOR_HEAD, COLOR_DARK, COLOR_MID, COLOR_LIGHT) {
     const { Paragraph, TextRun, TabStopType } = docx;
     if (!raw) return [];
     const lines = raw.split('\n').filter(l => l.trim());
@@ -156,7 +156,7 @@ window.ResumeEngine = {
     return result;
   },
 
-  parseEducation: function(raw, docx, FONT, SZ_JOB, SZ_BODY, SZ_BASE, TEXT_W, COLOR_HEAD, COLOR_MID, COLOR_LIGHT, COLOR_DARK) {
+  parseEducation: function (raw, docx, FONT, SZ_JOB, SZ_BODY, SZ_BASE, TEXT_W, COLOR_HEAD, COLOR_MID, COLOR_LIGHT, COLOR_DARK) {
     const { Paragraph, TextRun, TabStopType } = docx;
     if (!raw) return [];
     const lines = raw.split('\n').map(l => l.trim()).filter(l => l);
@@ -195,30 +195,30 @@ window.ResumeEngine = {
     return result;
   },
 
-  parseCerts: function(raw, docx, FONT, SZ_BODY, COLOR_DARK) {
+  parseCerts: function (raw, docx, FONT, SZ_BODY, COLOR_DARK) {
     if (!raw) return [];
     return raw.split('\n').map(l => l.trim()).filter(l => l && !l.match(/^certif/i))
       .map(line => this.makeBullet(line.replace(/^[\s\-•*·]+/, '').trim(), docx, FONT, SZ_BODY, COLOR_DARK));
   },
 
   // ── MAIN GENERATOR ──
-  generate: async function(app, profile, options = {}) {
+  generate: async function (app, profile, options = {}) {
     const docx = window.docx;
     const { Document, Packer, Paragraph, TextRun, ExternalHyperlink, AlignmentType, TabStopType, LevelFormat } = docx;
 
     // ── PREMIUM CONSTANTS ──
     const PAGE_W = 12240; const PAGE_H = 15840;
-    const MAR_TB = 792;   const MAR_LR = 936;
+    const MAR_TB = 792; const MAR_LR = 936;
     const TEXT_W = PAGE_W - MAR_LR * 2;
     const SZ_BASE = 20; const SZ_NAME = 34; const SZ_TITLE = 22;
     const SZ_SEC = 20; const SZ_JOB = 21; const SZ_BODY = 20;
     const FONT = 'Calibri';
-    const COLOR_HEAD = '111111'; const COLOR_DARK = '2B2B2B'; 
+    const COLOR_HEAD = '111111'; const COLOR_DARK = '2B2B2B';
     const COLOR_MID = '555555'; const COLOR_LIGHT = '888888'; const COLOR_RULE = 'AAAAAA';
 
     // Parse Content
     const { summary, skills, experience } = this.parseContent(app.resume);
-    
+
     // Build Header Rows
     const docChildren = [
       // Name & Phone Row
@@ -252,7 +252,7 @@ window.ResumeEngine = {
         spacing: { before: 0, after: 80 },
         tabStops: [{ type: TabStopType.RIGHT, position: TEXT_W }],
         children: [
-          ...(profile.location ? [new TextRun({ text: profile.location, font: FONT, size: SZ_BODY, italics: true, color: COLOR_LIGHT })] : []),
+          ...(profile.location ? [new TextRun({ text: profile.location, font: FONT, size: SZ_BODY, italics: true, color: COLOR_DARK })] : []),
           new TextRun({ text: '\t' }),
           ...(profile.linkedin ? [new ExternalHyperlink({
             children: [new TextRun({ text: profile.linkedin.replace(/^https?:\/\//, ''), font: FONT, size: SZ_BODY, color: COLOR_DARK })],
