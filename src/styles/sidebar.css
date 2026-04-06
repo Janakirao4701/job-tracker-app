@@ -744,3 +744,47 @@
 }
 .rjd-followup-overdue { color: var(--danger); }
 .rjd-followup-normal { color: var(--text-muted); }
+
+/* ── Settings Switch (Toggle) ── */
+.rjd-switch {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 20px;
+}
+.rjd-switch input { 
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.rjd-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--border-color);
+  transition: .4s;
+  border-radius: 20px;
+}
+.rjd-slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+#rjd-sidebar input:checked + .rjd-slider {
+  background-color: var(--accent-primary);
+}
+#rjd-sidebar input:focus + .rjd-slider {
+  box-shadow: 0 0 1px var(--accent-primary);
+}
+#rjd-sidebar input:checked + .rjd-slider:before {
+  transform: translateX(14px);
+}

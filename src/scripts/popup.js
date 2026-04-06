@@ -2,6 +2,16 @@
 const SUPABASE_URL = CONFIG.SUPABASE_URL;
 const SUPABASE_KEY = CONFIG.SUPABASE_KEY;
 
+function verifyTokenProject(token) {
+  if (!token) return false;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const projectRef = payload.ref || (payload.iss && payload.iss.includes('supabase') ? payload.iss.split('/')[2].split('.')[0] : null);
+    if (projectRef && !SUPABASE_URL.includes(projectRef)) return false;
+  } catch (e) { return false; }
+  return true;
+}
+
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function initials(n) { return (n||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
 
@@ -136,7 +146,8 @@ function renderLoggedIn(user, apps) {
 document.addEventListener('DOMContentLoaded', () => {
   chrome.storage.local.get(['rjd_session', 'rjd_apps_cache'], async (res) => {
     const session = res.rjd_session || null;
-    if (!session || !session.token || !session.user) {
+    if (!session || !session.token || !session.user || !verifyTokenProject(session.token)) {
+      if (session) chrome.storage.local.remove('rjd_session');
       renderNotLoggedIn();
       return;
     }

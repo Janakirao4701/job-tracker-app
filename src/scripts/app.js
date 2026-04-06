@@ -93,6 +93,21 @@ function workTodayISO() {
   return getWorkDayISO(new Date().toISOString());
 }
 
+// Fix #22: Verify if the JWT token belongs to the current Supabase project
+function verifyTokenProject(token) {
+  if (!token) return false;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    // The 'ref' or 'iss' usually contains the project identifier
+    const projectRef = payload.ref || (payload.iss && payload.iss.includes('supabase') ? payload.iss.split('/')[2].split('.')[0] : null);
+    if (projectRef && !SUPABASE_URL.includes(projectRef)) {
+      console.warn('AI Blaze (Dashboard): Session token project mismatch detected!', { tokenProj: projectRef, currentProj: SUPABASE_URL });
+      return false;
+    }
+  } catch (e) { return false; }
+  return true;
+}
+
 function showToast(msg, isError) {
   const t = document.getElementById('toast');
   if (!t) return;
@@ -166,7 +181,22 @@ async function loadApps() {
     if (data.length < PAGE_SIZE) break;
     offset += PAGE_SIZE;
   }
-  return allRows.map(mapRow);
+  
+  if (allRows.length === 0) {
+    try {
+      const cached = JSON.parse(localStorage.getItem(`rjd_apps_cache_${currentUser.id}`) || '[]');
+      if (cached.length > 0) {
+        console.warn('AI Blaze: DB fetch failed or empty; using local cache.');
+        return cached;
+      }
+    } catch(e) {}
+  }
+  
+  const mapped = allRows.map(mapRow);
+  if (mapped.length > 0) {
+    localStorage.setItem(`rjd_apps_cache_${currentUser.id}`, JSON.stringify(mapped));
+  }
+  return mapped;
 }
 
 // Fix #15: Single in-flight promise prevents multiple simultaneous refresh calls
@@ -248,54 +278,30 @@ async function deleteApp(id) {
 // ── SESSION ──
 // ── AI KEY — multi-provider (Gemini/OpenAI) ──
 async function saveAIKeyDB(provider, key) {
-  const column = provider === 'openai' ? 'openai_key' : 'gemini_key';
   const storageSuffix = provider === 'google' ? 'gemini' : provider;
-  const payload = { username: currentUser.id };
-  payload[column] = key;
-
-  try {
-    const res = await fetch(SUPABASE_URL + '/rest/v1/user_settings', {
-      method: 'POST',
-      headers: headers({'Prefer': 'resolution=merge-duplicates,return=representation'}),
-      body: JSON.stringify(payload)
-    });
-    if (res.ok) {
-      localStorage.setItem(`rjd_${storageSuffix}_key_` + currentUser.id, key);
-      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-        const syncObj = {}; syncObj[`rjd_${storageSuffix}_key`] = key;
-        chrome.storage.local.set(syncObj);
-      }
-      return true;
-    }
-  } catch(e) {}
   
+  // Security Fix: Save ONLY to local browser storage to avoid cloud exposure
   localStorage.setItem(`rjd_${storageSuffix}_key_` + currentUser.id, key);
-  return false;
+  
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    const syncObj = {}; 
+    syncObj[`rjd_${storageSuffix}_key`] = key;
+    chrome.storage.local.set(syncObj);
+  }
+  
+  console.log(`AI Config: ${provider} key saved locally.`);
+  return { ok: true, provider };
 }
 
 async function loadAIKeyDB(provider) {
   const storageSuffix = provider === 'google' ? 'gemini' : provider;
   const localKey = localStorage.getItem(`rjd_${storageSuffix}_key_` + currentUser.id);
-  // Also check legacy shared key for extension without user ID
+  // Also check legacy shared key
   const globalKey = localStorage.getItem(`rjd_${storageSuffix}_key`);
+  
   if (localKey) return localKey;
   if (globalKey) return globalKey;
   
-  const column = provider === 'openai' ? 'openai_key' : 'gemini_key';
-  try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_settings?username=eq.${currentUser.id}&select=${column}`,
-      { headers: headers() }
-    );
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data[0] && data[0][column]) {
-        const key = data[0][column];
-        localStorage.setItem(`rjd_${storageSuffix}_key_` + currentUser.id, key);
-        return key;
-      }
-    }
-  } catch(e) {}
   return '';
 }
 
@@ -1026,7 +1032,7 @@ async function renderAiBlaze() {
                 `).join('')}
               </select>
             </div>
-            <button class="blaze-manage-btn">Manage Keys ⚙️</button>
+            <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">Configure keys in <a href="#" onclick="navigateTo('settings'); settingsSection='apikey'; renderSettings(); return false;" style="color:var(--accent); text-decoration:none;">Settings</a>.</div>
           </div>
         </aside>
 
@@ -1034,8 +1040,18 @@ async function renderAiBlaze() {
         <main class="blaze-glass-main">
           <div class="blaze-chat-container">
             <div class="blaze-welcome">
-              <h2>What are we blazing today?</h2>
-              <p>Type your question or click a shortcut to generate tailored application content.</p>
+              <h2 style="margin-bottom:12px;">Welcome to AI-Blaze Premium</h2>
+              <p style="margin-bottom:24px; color:var(--text-muted); font-size:13px;">Your intelligent assistant for job applications. Use your resume and company context to generate perfect responses.</p>
+              
+              <div style="background:var(--bg-inset); padding:20px; border-radius:16px; border:1px solid var(--border); text-align:left; margin-bottom:32px;">
+                <div style="font-weight:700; color:var(--text); margin-bottom:12px; font-size:14px;">🚀 How it works:</div>
+                <div style="display:flex; flex-direction:column; gap:12px; font-size:12px; color:var(--text2);">
+                  <div style="display:flex; gap:10px;"><span style="color:var(--accent);">1.</span> <strong>Context:</strong> Pick a "Target Application" on the left to include that JD and your tailored resume in the prompt.</div>
+                  <div style="display:flex; gap:10px;"><span style="color:var(--accent);">2.</span> <strong>Provider:</strong> Make sure you've set your Gemini or OpenAI API key in <a href="#" onclick="navigateTo('settings'); settingsSection='apikey'; renderSettings(); return false;" style="color:var(--accent); text-decoration:none; font-weight:700;">Settings</a>.</div>
+                  <div style="display:flex; gap:10px;"><span style="color:var(--accent);">3.</span> <strong>Shortcuts:</strong> Click "Quick Actions" for one-tap results, or simply type your request in the chat.</div>
+                  <button class="settings-btn" onclick="navigateTo('settings'); settingsSection='apikey'; renderSettings();" style="margin-top:8px; width:100%; height:40px; font-size:12px;">Configure AI Keys Now →</button>
+                </div>
+              </div>
             </div>
 
             <div id="blaze-history"></div>
@@ -1695,6 +1711,12 @@ function renderSettingsSection(sec) {
             </div>
             <a href="https://platform.openai.com/api-keys" target="_blank" style="margin-left:auto; font-size:11px; color:var(--accent); font-weight:700;">Get Key ↗</a>
           </div>
+          <div style="display:flex; gap:8px;">
+            <input type="password" class="settings-input" id="openai-key-input" value="${esc(openaiKey)}" placeholder="sk-..." style="flex:1;"/>
+            <button class="btn-new" data-toggle-password="openai-key-input" style="width:70px;">Show</button>
+          </div>
+        </div>
+
         <!-- Ollama Configuration -->
         <div class="settings-field" style="background:var(--bg-inset); padding:16px; border-radius:12px; margin-bottom:20px; border:1px solid var(--border);">
           <div style="display:flex; align-items:center; margin-bottom:12px;">
@@ -1719,40 +1741,57 @@ function renderSettingsSection(sec) {
 
         <button class="settings-btn" id="save-all-keys-btn" style="padding:12px 32px; width:100%; font-weight:800; background:var(--accent);">Save Configuration ✓</button>
         <div style="margin-top:16px; font-size:12px; color:var(--text-muted); text-align:center;">
-          Keys are stored securely in your browser and synced with Supabase.
+          <strong>Security Protocol:</strong> Your private API keys are stored only in your local browser storage and never uploaded to any cloud server or Supabase.
         </div>
       `;
 
       document.getElementById('save-all-keys-btn').onclick = async () => {
         const gKey = document.getElementById('google-key-input').value.trim();
+        const oKey = document.getElementById('openai-key-input').value.trim();
         const oUrl = document.getElementById('ollama-url-input').value.trim();
         const oModel = document.getElementById('ollama-model-input').value.trim();
         const btn = document.getElementById('save-all-keys-btn');
+        const msgEl = document.getElementById('settings-msg');
+        
         btn.textContent = 'Saving...'; btn.disabled = true;
+        msgEl.innerHTML = '';
 
-        const results = await Promise.all([
-          saveAIKeyDB('google', gKey),
-          saveAIKeyDB('openai', oKey)
-        ]);
+        try {
+          const results = await Promise.all([
+            saveAIKeyDB('google', gKey),
+            saveAIKeyDB('openai', oKey)
+          ]);
 
-        // Save Ollama settings locally
-        localStorage.setItem('rjd_ollama_url', oUrl);
-        localStorage.setItem('rjd_ollama_model', oModel);
-        blazeOllamaUrl = oUrl;
-        blazeOllamaModel = oModel;
+          const allOk = results.every(r => r.ok);
+          const failures = results.filter(r => !r.ok);
 
-        btn.textContent = 'Configuration Saved ✓';
-        btn.style.background = '#10b981';
-        
-        document.getElementById('settings-msg').innerHTML = '<div class="auth-msg success" style="margin:0">All settings successfully updated & synced.</div>';
-        
-        setTimeout(() => {
-          btn.textContent = 'Save Configuration ✓';
-          btn.disabled = false;
-          btn.style.background = 'var(--accent)';
-          const msg = document.getElementById('settings-msg');
-          if(msg) msg.innerHTML = '';
-        }, 3000);
+          // Save Ollama settings locally
+          localStorage.setItem('rjd_ollama_url', oUrl);
+          localStorage.setItem('rjd_ollama_model', oModel);
+          blazeOllamaUrl = oUrl;
+          blazeOllamaModel = oModel;
+
+          if (allOk) {
+            btn.textContent = 'Configuration Saved ✓';
+            btn.style.background = '#10b981';
+            msgEl.innerHTML = '<div class="auth-msg success" style="margin:0"><strong>Security Guarantee:</strong> Keys are saved strictly to your local browser storage and will never be synced to the cloud.</div>';
+          } else {
+            // Since we're local-only, allOk should practically always be true now
+            btn.textContent = 'Save Configuration ✓';
+            btn.style.background = 'var(--accent)';
+          }
+        } catch (err) {
+          console.error('Save AI Config Error:', err);
+          msgEl.innerHTML = '<div class="auth-msg error" style="margin:0">Critical Error: ' + err.message + '</div>';
+        } finally {
+          setTimeout(() => {
+            btn.textContent = 'Save Configuration ✓';
+            btn.disabled = false;
+            btn.style.background = 'var(--accent)';
+            const msg = document.getElementById('settings-msg');
+            if(msg && msg.querySelector('.success')) msg.innerHTML = '';
+          }, 4000);
+        }
       };
     });
 
@@ -1812,7 +1851,7 @@ function renderSettingsSection(sec) {
     panel.innerHTML = `<div style="display:flex;justify-content:center;padding:40px;"><div class="loading-spinner"></div></div>`;
     
     loadResumeProfileDB().then(p => {
-      const customSections = p.custom_sections || [];
+      const customSections = p.customSections || p.custom_sections || [];
       
       const renderSectionsHTML = () => {
         return customSections.map((s, idx) => `
@@ -1831,6 +1870,19 @@ function renderSettingsSection(sec) {
         <div class="settings-section-sub">These details are used to auto-fill your generated resumes. (Cloud Synced ✓)</div>
         <div id="resume-settings-msg"></div>
         
+        <div style="margin-bottom:24px; padding-bottom:24px; border-bottom:1px solid var(--border);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div>
+              <div style="font-size:15px; font-weight:700; color:var(--text);">v2.0 Copilot Beta</div>
+              <div style="font-size:12px; color:var(--text-muted);">Enable Highlight-to-Prompt and Shortcut Triggers across all sites.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="v2-copilot-toggle-web">
+              <span class="slider round"></span>
+            </label>
+          </div>
+        </div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
           <div class="settings-field"><label>Full Name</label><input type="text" class="settings-input" id="res-name" value="${esc(p.name)}" placeholder="Venkata Vinay Vamsi"/></div>
           <div class="settings-field"><label>Professional Title</label><input type="text" class="settings-input" id="res-title" value="${esc(p.title)}" placeholder="Senior Data Engineer"/></div>
@@ -1863,56 +1915,74 @@ function renderSettingsSection(sec) {
           <span id="save-status" style="font-size:12px;color:var(--text-muted);"></span>
         </div>`;
 
-      // Add Section logic
-      document.getElementById('add-section-btn').addEventListener('click', () => {
-        customSections.push({ title: '', content: '' });
-        document.getElementById('custom-sections-container').innerHTML = renderSectionsHTML();
-        attachSecListeners();
-      });
-
-      const attachSecListeners = () => {
-        document.querySelectorAll('.remove-sec-btn').forEach(btn => {
-          btn.onclick = () => {
-            customSections.splice(parseInt(btn.dataset.idx), 1);
-            document.getElementById('custom-sections-container').innerHTML = renderSectionsHTML();
-            attachSecListeners();
-          };
-        });
+      const syncUIAndListeners = () => {
+        const container = document.getElementById('custom-sections-container');
+        if (container) {
+          container.innerHTML = renderSectionsHTML();
+          document.querySelectorAll('.remove-sec-btn').forEach((btn, i) => {
+            btn.onclick = () => {
+              customSections.splice(i, 1);
+              syncUIAndListeners();
+            };
+          });
+          document.querySelectorAll('.custom-sec-title').forEach((el, i) => {
+            el.oninput = (e) => { customSections[i].title = e.target.value; };
+          });
+          document.querySelectorAll('.custom-sec-content').forEach((el, i) => {
+            el.oninput = (e) => { customSections[i].content = e.target.value; };
+          });
+        }
       };
-      attachSecListeners();
 
-      document.getElementById('save-resume-profile-btn').addEventListener('click', async () => {
-        const btn = document.getElementById('save-resume-profile-btn');
-        const status = document.getElementById('save-status');
-        btn.disabled = true;
-        status.textContent = 'Saving...';
-
-        // Capture custom sections
-        const updatedCustom = [];
-        document.querySelectorAll('.custom-sec-item').forEach(item => {
-          const t = item.querySelector('.custom-sec-title').value.trim();
-          const c = item.querySelector('.custom-sec-content').value.trim();
-          if (t) updatedCustom.push({ title: t, content: c });
-        });
-
-        const profile = {
-          name: document.getElementById('res-name').value.trim(),
-          title: document.getElementById('res-title').value.trim(),
-          email: document.getElementById('res-email').value.trim(),
-          phone: document.getElementById('res-phone').value.trim(),
-          location: document.getElementById('res-location').value.trim(),
-          linkedin: document.getElementById('res-linkedin').value.trim(),
-          education: document.getElementById('res-education').value.trim(),
-          certs: document.getElementById('res-certs').value.trim(),
-          custom_sections: updatedCustom
+      const addBtn = document.getElementById('add-section-btn');
+      if (addBtn) {
+        addBtn.onclick = () => {
+          customSections.push({ title: '', content: '' });
+          syncUIAndListeners();
         };
+      }
+      syncUIAndListeners();
 
-        const ok = await saveResumeProfileDB(profile);
-        btn.disabled = false;
-        status.textContent = ok ? 'Saved ✓' : 'Save failed';
-        showToast(ok ? 'Profile saved' : 'Save failed', !ok);
-        setTimeout(() => { if (status) status.textContent = ''; }, 3000);
-      });
+      const v2Toggle = document.getElementById('v2-copilot-toggle-web');
+      if (v2Toggle) {
+        v2Toggle.checked = localStorage.getItem('rjd_v2_enabled') === 'true';
+        v2Toggle.onchange = () => {
+          localStorage.setItem('rjd_v2_enabled', v2Toggle.checked);
+          if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+            chrome.storage.local.set({ rjd_v2_enabled: v2Toggle.checked });
+          }
+          showToast('Copilot Updated ✓');
+        };
+      }
+
+      const saveBtn = document.getElementById('save-resume-profile-btn');
+      if (saveBtn) {
+        saveBtn.onclick = async () => {
+          const status = document.getElementById('save-status');
+          if (status) status.textContent = 'Saving...';
+          
+          const profile = {
+            name: document.getElementById('res-name').value.trim(),
+            title: document.getElementById('res-title').value.trim(),
+            email: document.getElementById('res-email').value.trim(),
+            phone: document.getElementById('res-phone').value.trim(),
+            location: document.getElementById('res-location').value.trim(),
+            linkedin: document.getElementById('res-linkedin').value.trim(),
+            education: document.getElementById('res-education').value.trim(),
+            certs: document.getElementById('res-certs').value.trim(),
+            customSections: customSections
+          };
+          
+          if (!profile.name) { showToast('Please enter your name', true); return; }
+          const ok = await saveResumeProfileDB(profile);
+          if (status) {
+            status.textContent = ok ? 'Saved ✓' : 'Failed';
+            status.style.color = ok ? '#10b981' : '#dc2626';
+            setTimeout(() => { if (status) status.textContent = ''; }, 3000);
+          }
+          showToast(ok ? 'Profile saved' : 'Failed to save', !ok);
+        };
+      }
     });
   } else if (sec === 'account') {
     panel.innerHTML = `
@@ -2272,10 +2342,18 @@ document.getElementById('signout-btn').addEventListener('click', async () => {
   if (window._appRefreshTimer) { clearInterval(window._appRefreshTimer); window._appRefreshTimer = null; }
   const fields = ['auth-email','auth-password','auth-name','forgot-email'];
   fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  document.getElementById('auth-msg').innerHTML = '';
+  const authMsg = document.getElementById('auth-msg');
+  if (authMsg) authMsg.innerHTML = '';
   showSection('auth-section');
   setMode('signin');
 });
+
+function clearStoredSession() {
+  localStorage.removeItem('rjd_web_session');
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    chrome.storage.local.remove('rjd_session');
+  }
+}
 
 // ── ADD APP MODAL ──
 document.getElementById('add-app-btn').addEventListener('click', () => {

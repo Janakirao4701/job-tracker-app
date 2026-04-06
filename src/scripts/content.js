@@ -24,6 +24,8 @@
   let filterSearch = '';
   let filterDate   = '';
   let currentDetailId = null;
+  let currentTab = 'tracker'; // tracker | assistant
+  let isSidebarOpen = false;
 
   // ── OFFLINE QUEUE ──
   const QUEUE_KEY = 'rjd_offline_queue';
@@ -94,6 +96,33 @@
     };
   }
 
+  function verifyTokenProject(token) {
+    if (!isContextValid() || !token) return false;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      // The 'ref' or 'iss' usually contains the project identifier
+      const projectRef = payload.ref || (payload.iss && payload.iss.includes('supabase') ? payload.iss.split('/')[2].split('.')[0] : null);
+      if (projectRef && !SUPABASE_URL.includes(projectRef)) {
+        console.warn('AI Blaze: Session token project mismatch detected!', { tokenProj: projectRef, currentProj: SUPABASE_URL });
+        return false;
+      }
+    } catch (e) { return false; }
+    return true;
+  }
+
+  // Safe chrome API helpers — detect extension reloads
+  function isContextValid() {
+    return typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
+  }
+
+  function chromeStore() {
+    if (!isContextValid()) {
+      console.warn('AI Blaze: Extension context invalidated — please refresh the page.');
+      return null;
+    }
+    return chrome.storage.local;
+  }
+
   // Fix #15: Single in-flight promise prevents multiple simultaneous refresh calls
   let _refreshPromise = null;
   async function refreshSession() {
@@ -136,9 +165,33 @@
   async function sbFetch(url, opts) {
     if (!navigator.onLine) throw new Error('You are offline.');
     
+    if (!isContextValid()) {
+      showToast('AI Blaze extension was reloaded. Please refresh the page to continue.', true);
+      throw new Error('Extension context invalidated');
+    }
+
     const callProxy = async (u, o) => {
-      return new Promise(resolve => {
-        chrome.runtime.sendMessage({ action: 'sb_proxy_fetch', payload: { url: u, opts: o } }, resolve);
+      return new Promise((resolve, reject) => {
+        try {
+          chrome.runtime.sendMessage({ action: 'sb_proxy_fetch', payload: { url: u, opts: o } }, (res) => {
+            if (chrome.runtime.lastError) {
+              const err = chrome.runtime.lastError.message;
+              if (err.includes('Extension context invalidated')) {
+                 showToast('AI Blaze extension was reloaded. Please refresh the page.', true);
+                 reject(new Error('Extension context invalidated'));
+              } else {
+                 reject(new Error(err));
+              }
+            } else {
+              resolve(res);
+            }
+          });
+        } catch(e) { 
+          if (e.message.includes('Extension context invalidated')) {
+            showToast('Reload required: Extension context lost.', true);
+          }
+          reject(e); 
+        }
       });
     };
 
@@ -154,8 +207,8 @@
     
     if (res && res.status === 401) {
       sessionToken = null; currentUser = null; clearSession();
-      showToast('Session expired — sign in again', true);
-      throw new Error('Session expired');
+      showToast('Session error — please sign out and sign in again', true);
+      throw new Error('Unauthorized project or expired session');
     }
     
     if (!res || !res.ok) {
@@ -203,14 +256,20 @@
       if (res && res.ok) {
         const data = await res.json();
         if (data && data[0] && data[0].resume_profile) {
-          const p = data[0].resume_profile;
-          localStorage.setItem('rjd_resume_profile', JSON.stringify(p));
+          const profile = data[0].resume_profile;
+          localStorage.setItem('rjd_resume_profile', JSON.stringify(profile));
           const s = chromeStore();
-          if (s) s.set({ rjd_resume_profile: p });
-          return p;
+          if (s) s.set({ rjd_resume_profile: profile });
+          return profile;
         }
       }
-    } catch(e) { console.warn('Load profile failed', e); }
+    } catch(e) {
+      if (e.message && e.message.includes('Extension context invalidated')) {
+        // Silently fail if context is lost - a toast is already shown by sbFetch
+      } else {
+        console.warn('Load resume profile from DB failed:', e);
+      }
+    }
     // Fallback to local
     const s2 = chromeStore();
     return new Promise(resolve => {
@@ -796,36 +855,105 @@ RULES:
 - No markdown, no explanation.
 - company_name: the actual HIRING COMPANY.
 - job_title: the exact role title.
-- If unknown, use "". 
+- If unknown, use "".
 
 CONTEXT:
 ${context}`;
 
-    const res = await fetch(`${ollamaUrl}/api/generate`, {
+    return callOllama(ollamaUrl, ollamaModel, prompt).then(res => {
+      try {
+        const cleaned = res.replace(/```json|```/g, '').trim();
+        return JSON.parse(cleaned);
+      } catch(e) {
+        // Regex fallback
+        const company = res.match(/"company_name"\s*:\s*"([^"]*)"/)?.[1] || "";
+        const title = res.match(/"job_title"\s*:\s*"([^"]*)"/)?.[1] || "";
+        return { company_name: company, job_title: title };
+      }
+    });
+  }
+
+  async function extractWithGemini(jdText, pageUrl) {
+    const engine = localStorage.getItem('rjd_extraction_engine') || 'gemini';
+    if (engine === 'ollama') return extractWithOllama(jdText, pageUrl);
+
+    const key = await new Promise(res => loadGeminiKey(res));
+    if (!key) throw new Error('No Gemini API key found in Settings.');
+
+    const context = buildExtractionContext(jdText, pageUrl);
+    const prompt = `You are a precise job-posting parser. Extract the company name and job title from the context below. Return ONLY JSON: {"company_name":"...","job_title":"..."}\n\nCONTEXT:\n${context}`;
+
+    const res = await callGeminiBlaze(key, prompt);
+    try {
+      const cleaned = res.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(cleaned);
+      parsed.url = pageUrl;
+      return parsed;
+    } catch(e) {
+      console.error('Gemini parse error:', e, res);
+      throw new Error('Failed to parse AI response. Try again.');
+    }
+  }
+
+  /**
+   * Universal AI Engines for v2.0 Copilot
+   */
+  async function callOllama(url, model, prompt) {
+    try {
+      const resp = await fetch(`${url}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: model || 'llama3.2',
+          prompt: prompt,
+          stream: false
+        })
+      });
+
+      if (!resp.ok) throw new Error('Ollama connection failed. Ensure Ollama is running.');
+      const data = await resp.json();
+      return data.response || 'No response generated.';
+    } catch (e) {
+      throw new Error(`Ollama Error: ${e.message}`);
+    }
+  }
+
+  async function callGeminiBlaze(key, prompt) {
+    const model = localStorage.getItem('rjd_blaze_model') || "gemini-2.0-flash-lite";
+    const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${key}`;
+
+    const resp = await fetch(url, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: ollamaModel,
-        prompt: prompt,
-        stream: false,
-        format: 'json'
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 2048 }
       })
     });
 
-    if (!res.ok) throw new Error('Ollama connection failed. Ensure local Ollama is running.');
-    const data = await res.json();
-    let parsed = { company_name: '', job_title: '' };
-    try {
-      parsed = JSON.parse(data.response);
-    } catch (e) {
-      // Fallback regex extraction if JSON fails
-      const raw = data.response;
-      parsed.company_name = raw.match(/"company_name"\s*:\s*"([^"]*)"/)?.[1] || '';
-      parsed.job_title = raw.match(/"job_title"\s*:\s*"([^"]*)"/)?.[1] || '';
+    if (!resp.ok) {
+      const err = await resp.json();
+      // Simple fallback to v1beta
+      if (resp.status === 404) {
+         const altUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+         const altResp = await fetch(altUrl, {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+             contents: [{ parts: [{ text: prompt }] }],
+             generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 2048 }
+           })
+         });
+         if (altResp.ok) {
+           const altData = await altResp.json();
+           return altData.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
+         }
+      }
+      throw new Error(err.error?.message || 'Gemini API failure');
     }
-    parsed.url = pageUrl;
-    return parsed;
+    const data = await resp.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
   }
-
 
   async function runExtract() {
     const statusEl = document.getElementById('rjd-extract-status');
@@ -949,8 +1077,20 @@ ${context}`;
               <button id="extract-engine-gemini" style="flex:1; padding:8px; border-radius:8px; border:2px solid var(--accent); background:var(--accent-light); color:var(--accent-primary); font-size:11px; font-weight:600; cursor:pointer;">✦ Gemini 2.5</button>
               <button id="extract-engine-ollama" style="flex:1; padding:8px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-muted); font-size:11px; font-weight:600; cursor:pointer;">🦙 Ollama Local</button>
             </div>
-            <div style="font-size:10px; color:var(--text-muted); line-height:1.4;">
+            <div style="font-size:10px; color:var(--text-muted); line-height:1.4; margin-bottom:12px;">
               Ollama uses your <b>llama3.2</b> model locally at <b>http://localhost:11434</b>.
+            </div>
+          </div>
+          <div style="border-top:1px solid var(--border-light,#f1f5f9); padding-top:14px; margin-bottom:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+               <div style="font-size:13px; font-weight:700; color:var(--text-primary);">v2.0 Copilot Beta</div>
+               <label class="rjd-switch">
+                 <input type="checkbox" id="v2-copilot-toggle">
+                 <span class="rjd-slider round"></span>
+               </label>
+            </div>
+            <div style="font-size:11px; color:var(--text-muted); line-height:1.4;">
+              Enable Highlight-to-Prompt, Shortcut Triggers (-ans, /fix), and Smart Context across all websites.
             </div>
           </div>
 
@@ -983,6 +1123,18 @@ ${context}`;
           updateEngineUI(engine);
           document.getElementById('extract-engine-gemini').onclick = () => updateEngineUI('gemini');
           document.getElementById('extract-engine-ollama').onclick = () => updateEngineUI('ollama');
+          
+          // v2 Copilot Toggle Logic
+          const v2Toggle = document.getElementById('v2-copilot-toggle');
+          const isV2Enabled = localStorage.getItem('rjd_v2_enabled') === 'true';
+          v2Toggle.checked = isV2Enabled;
+          v2Toggle.onchange = () => {
+            localStorage.setItem('rjd_v2_enabled', v2Toggle.checked);
+            if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+              chrome.storage.local.set({ rjd_v2_enabled: v2Toggle.checked });
+            }
+            showToast('Copilot ' + (v2Toggle.checked ? 'Enabled' : 'Disabled') + ' — Refresh page to apply');
+          };
         }, 0);
 
         let shown = false;
@@ -1538,6 +1690,10 @@ ${context}`;
     main.innerHTML = `
       <div id="rjd-tracker-wrap">
         <div id="rjd-main" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+          <div id="rjd-tab-nav" style="display:flex;background:var(--bg-secondary,#f8fafc);border-bottom:1px solid var(--border-color,#e2e8f0);padding:4px 4px 0;">
+            <div id="rjd-tab-tracker" class="rjd-tab-item ${currentTab==='tracker'?'active':''}" style="flex:1;text-align:center;padding:10px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid ${currentTab==='tracker'?'var(--accent-primary,#4f46e5)':'transparent'};color:${currentTab==='tracker'?'var(--accent-primary,#4f46e5)':'var(--text-muted,#94a3b8)'};">📊 Applications</div>
+            <div id="rjd-tab-assistant" class="rjd-tab-item ${currentTab==='assistant'?'active':''}" style="flex:1;text-align:center;padding:10px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid ${currentTab==='assistant'?'var(--accent-primary,#4f46e5)':'transparent'};color:${currentTab==='assistant'?'var(--accent-primary,#4f46e5)':'var(--text-muted,#94a3b8)'};">✦ AI Assistant</div>
+          </div>
           <div id="rjd-toolbar">
             <div class="rjd-toolbar-left">
               <div class="rjd-toolbar-avatar">${escHtml(initials)}</div>
@@ -1546,8 +1702,8 @@ ${context}`;
             <div style="display:flex;gap:6px;">
               <button id="rjd-quick-extract-btn" class="rjd-primary-btn" style="font-size:11px;padding:6px 12px;white-space:nowrap;">✦ Extract & Save</button>
               <button id="rjd-new-app-btn" class="rjd-primary-btn" style="background:var(--bg-secondary,#f8fafc);color:var(--accent-primary,#4f46e5);border:1.5px solid var(--accent-border,#c7d2fe);box-shadow:none;">+ New</button>
-              <button id="rjd-refresh-btn" title="Refresh" style="background:var(--bg-secondary,#f8fafc);border:1px solid var(--border-color,#e2e8f0);color:var(--text-muted,#94a3b8);font-size:14px;cursor:pointer;padding:6px 8px;border-radius:8px;line-height:1;transition:all 0.2s;">↻</button>
-              <button id="rjd-settings-btn" title="Settings" style="background:var(--bg-secondary,#f8fafc);border:1px solid var(--border-color,#e2e8f0);color:var(--text-muted,#94a3b8);font-size:14px;cursor:pointer;padding:6px 8px;border-radius:8px;line-height:1;transition:all 0.2s;">⚙</button>
+              <button id="rjd-refresh-btn" title="Refresh" ...>↻</button>
+              <button id="rjd-settings-btn" title="Settings" ...>⚙</button>
             </div>
           </div>
 
@@ -1722,6 +1878,95 @@ ${context}`;
 
     renderTable();
     bindTrackerEvents();
+    
+    // Tab switching
+    document.getElementById('rjd-tab-tracker').onclick = () => { currentTab = 'tracker'; renderTrackerScreen(); };
+    document.getElementById('rjd-tab-assistant').onclick = () => { currentTab = 'assistant'; renderAssistantScreen(); };
+  }
+
+  // ════════════════════════════════════════
+  // AI ASSISTANT SCREEN
+  // ════════════════════════════════════════
+  function renderAssistantScreen() {
+    const main = document.getElementById('rjd-sidebar-content');
+    if (!main) return;
+    currentTab = 'assistant';
+
+    main.innerHTML = `
+      <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;background:var(--bg-primary,#fff);">
+        <div id="rjd-tab-nav" style="display:flex;background:var(--bg-secondary,#f8fafc);border-bottom:1px solid var(--border-color,#e2e8f0);padding:4px 4px 0;">
+          <div id="rjd-tab-tracker" style="flex:1;text-align:center;padding:10px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text-muted,#94a3b8);">📊 Applications</div>
+          <div id="rjd-tab-assistant" style="flex:1;text-align:center;padding:10px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid var(--accent-primary,#4f46e5);color:var(--accent-primary,#4f46e5);">✦ AI Assistant</div>
+        </div>
+
+        <div id="rjd-chat-box" style="flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px;">
+          <div style="background:var(--bg-secondary,#f8fafc);border:1px solid var(--border-color,#e2e8f0);padding:12px;border-radius:12px;font-size:12px;color:var(--text-primary,#1e293b);">
+            <strong>Hello!</strong> I am your AI Career Copilot. I can help with application questions, emails, and resume analysis.
+            <br><br>
+            <span style="color:var(--text-muted,#64748b);">Try: "Summarize this role", or "How matches my experience?"</span>
+          </div>
+          <div id="rjd-chat-history"></div>
+        </div>
+
+        <div style="padding:14px;border-top:1px solid var(--border-color,#e2e8f0);background:var(--bg-secondary,#f8fafc);">
+          <div style="display:flex;gap:8px;background:var(--bg-primary,#fff);border:1.5px solid var(--border-color,#e2e8f0);border-radius:14px;padding:8px 12px;box-shadow:0 1px 2px rgba(0,0,0,0.05);transition:border-color 0.2s;">
+            <textarea id="rjd-chat-input" placeholder="Ask anything..." rows="1" style="flex:1;border:none;background:transparent;resize:none;font-family:inherit;font-size:13px;outline:none;padding:4px 0;max-height:120px;"></textarea>
+            <button id="rjd-chat-send" style="background:var(--accent-primary,#4f46e5);color:#fff;border:none;border-radius:10px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;flex-shrink:0;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+          </div>
+        </div>
+      </div>`;
+
+    document.getElementById('rjd-tab-tracker').onclick = () => renderTrackerScreen();
+    
+    const input = document.getElementById('rjd-chat-input');
+    input.oninput = () => { input.style.height = 'auto'; input.style.height = (input.scrollHeight) + 'px'; };
+    input.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessageToAI(); } };
+    document.getElementById('rjd-chat-send').onclick = () => sendMessageToAI();
+  }
+
+  async function sendMessageToAI() {
+    const input = document.getElementById('rjd-chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+    
+    input.value = '';
+    input.style.height = 'auto';
+    
+    appendChatMessage('user', text);
+    const loadingId = appendChatMessage('ai', '✦ Thinking...', true);
+    
+    try {
+      const response = await processAIShortcut(text);
+      updateChatMessage(loadingId, response);
+    } catch (err) {
+      updateChatMessage(loadingId, '✕ Error: ' + err.message);
+    }
+  }
+
+  function appendChatMessage(role, text, isLoading = false) {
+    const hist = document.getElementById('rjd-chat-history');
+    if (!hist) return null;
+    const id = 'msg-' + Date.now();
+    const isUser = role === 'user';
+    const msg = document.createElement('div');
+    msg.id = id;
+    msg.style.cssText = `display:flex;justify-content:${isUser?'flex-end':'flex-start'};margin-bottom:8px;`;
+    msg.innerHTML = `
+      <div style="max-width:85%;padding:10px 14px;border-radius:14px;font-size:13px;line-height:1.5;background:${isUser?'var(--accent-primary,#4f46e5)':'var(--bg-secondary,#f1f5f9)'};color:${isUser?'#fff':'var(--text-primary,#1e293b)'};box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+        ${text.replace(/\n/g, '<br>')}
+      </div>`;
+    hist.appendChild(msg);
+    hist.parentElement.scrollTop = hist.parentElement.scrollHeight;
+    return id;
+  }
+
+  function updateChatMessage(id, text) {
+    const msg = document.getElementById(id);
+    if (!msg) return;
+    msg.querySelector('div').innerHTML = text.replace(/\n/g, '<br>');
+    msg.parentElement.parentElement.scrollTop = msg.parentElement.parentElement.scrollHeight;
   }
 
   function bindTrackerEvents() {
@@ -2052,6 +2297,63 @@ ${context}`;
     const s = chromeStore(); if (s) s.set({ rjd_theme: theme });
   }
 
+
+    // Consolidated Assistant Bridge logic in the main message listener below
+
+    /**
+     * Process AI for shortcuts without polluting chat history (or as hidden turn)
+     */
+    async function processAIShortcut(prompt) {
+      try {
+        const engine = localStorage.getItem('rjd_extraction_engine') || 'gemini';
+        showToast(`AI Working (${engine})...`);
+        
+        // Load context (Profile)
+        const profile = await loadResumeProfileDB();
+        
+        // Build context-aware prompt
+        let contextPrefix = "";
+        if (profile && profile.name) {
+          contextPrefix = `Context: User Name is ${profile.name}. Title: ${profile.title || 'N/A'}. Exp: ${profile.education || 'N/A'}. `;
+        }
+        
+        const fullPrompt = `${contextPrefix}User Request: ${prompt}`;
+        
+        // Call the appropriate engine
+        let result = '';
+        if (engine === 'ollama') {
+          const url = localStorage.getItem('rjd_ollama_url') || 'http://localhost:11434';
+          const model = localStorage.getItem('rjd_ollama_model') || 'llama3.2';
+          result = await callOllama(url, model, fullPrompt);
+        } else {
+          if (!GEMINI_KEY) {
+             // Try to load if not yet available
+             await new Promise(resolve => loadGeminiKey(k => { GEMINI_KEY = k; resolve(); }));
+          }
+          if (!GEMINI_KEY) throw new Error('Gemini API key missing. Please set it in Settings.');
+          result = await callGeminiBlaze(GEMINI_KEY, fullPrompt);
+        }
+        
+        return result || "AI error: No response";
+      } catch (err) {
+        console.error("Shortcut AI Error:", err);
+        return `[AI Error: ${err.message}]`;
+      }
+    }
+
+  // Cleanup and toggle
+  function toggleSidebar(force) {
+    const sidebar = document.getElementById('rjd-sidebar');
+    if (sidebar) {
+      if (force === true) { sidebar.classList.add('open'); isSidebarOpen = true; }
+      else if (force === false) { sidebar.classList.remove('open'); isSidebarOpen = false; }
+      else {
+        sidebar.classList.toggle('open');
+        isSidebarOpen = sidebar.classList.contains('open');
+      }
+    }
+  }
+
   function buildSidebar() {
     const style = document.createElement('style');
     style.textContent = `
@@ -2223,6 +2525,11 @@ ${context}`;
   function applySession(sess) {
     const tog = document.getElementById('rjd-toggle');
     if (sess && sess.token && sess.user) {
+      // Validate project before applying
+      if (!verifyTokenProject(sess.token)) {
+        clearSession();
+        return;
+      }
       sessionToken        = sess.token;
       sessionRefreshToken = sess.refreshToken || '';
       currentUser         = sess.user;
@@ -2277,7 +2584,13 @@ ${context}`;
     const _poll = setInterval(() => {
       try {
         // Stop polling if extension context is gone (happens after extension reload)
-        if (!chrome.runtime || !chrome.runtime.id) { clearInterval(_poll); return; }
+        if (!isContextValid()) {
+          console.log('AI Blaze: Stopping session poll — context invalidated.');
+          clearInterval(_poll);
+          const tog = document.getElementById('rjd-toggle');
+          if (tog) tog.title = 'Extension reloaded — please refresh the page';
+          return;
+        }
         chrome.storage.local.get('rjd_session', r => {
           if (chrome.runtime.lastError) { clearInterval(_poll); return; }
           const sess = r.rjd_session || null;
@@ -2320,5 +2633,63 @@ ${context}`;
       showToast('Download failed: ' + err.message, true);
     }
   }
+
+  // ── COPILOT BRIDGE ──
+  window.addEventListener('message', async (e) => {
+    // 1. Open Sidebar & Focus Input
+    if (e.data?.type === 'AI_BLAZE_OPEN_SIDEBAR') {
+      const sidebar = document.getElementById('rjd-sidebar');
+      if (!isSidebarOpen) toggleSidebar(true);
+      
+      // Force switch to Assistant tab
+      renderAssistantScreen();
+      
+      setTimeout(() => {
+        const input = document.getElementById('rjd-chat-input');
+        if (input) {
+          input.value = e.data.prompt || '';
+          input.focus();
+          // Adjust height
+          input.style.height = 'auto';
+          input.style.height = input.scrollHeight + 'px';
+          // Auto-trigger if prompt is provided
+          if (e.data.prompt) document.getElementById('rjd-chat-send').click();
+        }
+      }, 300);
+    }
+
+    // 2. Direct Shortcut Replacement / Quick Action
+    if (e.data?.type === 'AI_BLAZE_QUICK_ACTION') {
+      const { action, text, prompt: customPrompt, targetEl } = e.data;
+      
+      // If it's NOT a replacement, it might still want to open sidebar
+      if (!targetEl && !isSidebarOpen) {
+        toggleSidebar(true);
+        renderAssistantScreen();
+      }
+
+      // Process
+      try {
+        const engine = localStorage.getItem('rjd_extraction_engine') || 'gemini';
+        let finalPrompt = customPrompt;
+        if (!finalPrompt) {
+          if (action === 'fix') finalPrompt = `Fix grammar, spelling, and professionalize the following text: "${text}"`;
+          else if (action === 'summarize') finalPrompt = `Summarize the following text concisely: "${text}"`;
+          else finalPrompt = text;
+        }
+
+        const responseText = await processAIShortcut(finalPrompt);
+        window.postMessage({ type: 'AI_BLAZE_RESPONSE_READY', text: responseText }, '*');
+        
+        // If sidebar is open, show in Chat too if not replacement
+        if (!targetEl && currentTab === 'assistant') {
+          appendChatMessage('ai', responseText);
+        }
+      } catch (err) {
+        console.error('Copilot Bridge Error:', err);
+        window.postMessage({ type: 'AI_BLAZE_RESPONSE_READY', text: '✕ AI Error: ' + err.message }, '*');
+      }
+    }
+  });
 
 })();

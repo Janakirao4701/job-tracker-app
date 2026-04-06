@@ -1,5 +1,5 @@
-const SUPABASE_URL = 'https://ayreitpysvixquqfbeix.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5cmVpdHB5c3ZpeHF1cWZiZWl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTMyNDYxNTIsImV4cCI6MjAyODgyMjE1Mn0.39-M7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9-7-9'; // Using public anon key for check
+const SUPABASE_URL = 'https://dxsdvzhnqbynicrvbcfi.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4c2R2emhucWJ5bmljcnZiY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTUyMDcsImV4cCI6MjA4OTY5MTIwN30.7csAFAIjVOU8_acamyYoTFLgXzao56k9aDYgGDFd2oo';
 
 async function checkColumn() {
   try {
