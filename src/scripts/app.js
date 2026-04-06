@@ -1199,29 +1199,36 @@ ${query}`;
   // Fix: If running on a web domain (Vercel), we must proxy through the extension
   // to bypass CORS for localhost.
   if (window.location.protocol !== 'chrome-extension:') {
+    console.log('AI Blaze: Redirecting Ollama request via extension bridge...');
     return new Promise((resolve, reject) => {
       const requestId = Math.random().toString(36).substring(7);
       const timeout = setTimeout(() => {
-        window.removeEventListener('rjd-proxy-response', handleResponse);
+        window.removeEventListener('message', handleResponse);
         reject(new Error('Extension proxy timeout. Is the AI Blaze extension installed and active?'));
       }, 30000);
 
-      function handleResponse(e) {
-        if (e.detail && e.detail.id === requestId) {
+      function handleResponse(event) {
+        if (event.source !== window) return;
+        const message = event.data;
+        if (message && message.type === 'RJD_PROXY_RESPONSE' && message.payload?.id === requestId) {
+          console.log('AI Blaze: Received proxy response from extension.');
           clearTimeout(timeout);
-          window.removeEventListener('rjd-proxy-response', handleResponse);
-          if (e.detail.error) reject(new Error(e.detail.error));
-          else if (e.detail.response && e.detail.response.ok) {
-            resolve(e.detail.response.data?.response || 'No response generated.');
+          window.removeEventListener('message', handleResponse);
+          
+          const { response, error } = message.payload;
+          if (error) reject(new Error(error));
+          else if (response && response.ok) {
+            resolve(response.data?.response || 'No response generated.');
           } else {
-            reject(new Error('Ollama proxy failed. Ensure Ollama is running and CORS is configured if not using the extension.'));
+            reject(new Error('Ollama proxy failed. Ensure Ollama is running.'));
           }
         }
       }
 
-      window.addEventListener('rjd-proxy-response', handleResponse);
-      window.dispatchEvent(new CustomEvent('rjd-proxy-request', {
-        detail: {
+      window.addEventListener('message', handleResponse);
+      window.postMessage({
+        type: 'RJD_PROXY_REQUEST',
+        payload: {
           id: requestId,
           url: `${url}/api/generate`,
           opts: {
@@ -1233,7 +1240,7 @@ ${query}`;
             })
           }
         }
-      }));
+      }, '*');
     });
   }
 

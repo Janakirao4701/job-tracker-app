@@ -112,19 +112,19 @@
 
   // --- WEB-TO-EXTENSION BRIDGE ---
   // Listen for proxy requests from the web dashboard (Vercel)
-  window.addEventListener('rjd-proxy-request', async (e) => {
-    const { id, url, opts } = e.detail || {};
-    if (!id || !url) return;
+  window.addEventListener('message', async (event) => {
+    if (event.source !== window) return;
+    const message = event.data;
+    if (message && message.type === 'RJD_PROXY_REQUEST') {
+      const { id, url, opts } = message.payload || {};
+      if (!id || !url) return;
 
-    try {
-      const response = await safeSendMessage({ action: 'sb_proxy_fetch', payload: { url, opts } });
-      window.dispatchEvent(new CustomEvent('rjd-proxy-response', { 
-        detail: { id, response } 
-      }));
-    } catch (err) {
-      window.dispatchEvent(new CustomEvent('rjd-proxy-response', { 
-        detail: { id, error: err.message } 
-      }));
+      try {
+        const response = await safeSendMessage({ action: 'sb_proxy_fetch', payload: { url, opts } });
+        window.postMessage({ type: 'RJD_PROXY_RESPONSE', payload: { id, response } }, '*');
+      } catch (err) {
+        window.postMessage({ type: 'RJD_PROXY_RESPONSE', payload: { id, error: err.message } }, '*');
+      }
     }
   });
 
