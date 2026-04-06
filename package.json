@@ -5,7 +5,8 @@
   "author": "Janakirao",
   "license": "MIT",
   "scripts": {
-    "deploy": "powershell -File ./deploy.ps1",
+    "build": "node build.js",
+    "deploy": "npm run build && powershell -File ./deploy.ps1",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

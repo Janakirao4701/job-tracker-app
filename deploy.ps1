@@ -3,17 +3,8 @@
 
 Write-Host "Syncing app.html changes into index.html..." -ForegroundColor Cyan
 
-# 1. Sync app.html to index.html with correct root paths
-$appContent = Get-Content src/pages/app.html
-
-# Fix paths:
-# ../../public/ -> public/
-# ../lib/ -> src/lib/
-# ../scripts/ -> src/scripts/
-# ../styles/ -> src/styles/
-$indexContent = $appContent -replace '\.\./\.\./public/', 'public/' -replace '\.\./(lib|scripts|styles)/', 'src/$1/'
-
-$indexContent | Set-Content index.html
+# 1. Sync app.html to index.html using the Node build script
+npm run build
 
 Write-Host "Sync Complete! Deploying to GitHub..." -ForegroundColor Cyan
 

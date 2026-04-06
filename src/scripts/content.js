@@ -125,9 +125,23 @@
 
   // Fix #15: Single in-flight promise prevents multiple simultaneous refresh calls
   let _refreshPromise = null;
+
+  async function safeSendMessage(message) {
+    if (!isContextValid()) return null;
+    return new Promise(resolve => {
+      try {
+        chrome.runtime.sendMessage(message, response => {
+          if (chrome.runtime.lastError) resolve(null);
+          else resolve(response);
+        });
+      } catch (e) { resolve(null); }
+    });
+  }
+
   async function refreshSession() {
-    if (!sessionRefreshToken) return false;
-    if (_refreshPromise) return _refreshPromise; // coalesce concurrent callers
+    if (!sessionRefreshToken || !isContextValid()) return false;
+    if (_refreshPromise) return _refreshPromise; 
+    
     _refreshPromise = (async () => {
       try {
         const payload = {
@@ -138,28 +152,29 @@
             body: JSON.stringify({ refresh_token: sessionRefreshToken }),
           }
         };
-        const response = await new Promise(resolve => {
-          chrome.runtime.sendMessage({ action: 'sb_proxy_fetch', payload }, resolve);
-        });
+
+        const response = await safeSendMessage({ action: 'sb_proxy_fetch', payload });
         
         if (response && response.ok && response.data && response.data.access_token) {
           const data = response.data;
           sessionToken = data.access_token;
           if (data.refresh_token) sessionRefreshToken = data.refresh_token;
           saveSession(sessionToken, currentUser, sessionRefreshToken);
-          const s = chromeStore();
-          if (s) {
-            chrome.runtime.sendMessage({
-              action: 'session_saved',
-              payload: { token: sessionToken, user: currentUser, refreshToken: sessionRefreshToken }
-            }, () => { if (chrome.runtime.lastError) {} });
-          }
+          
+          await safeSendMessage({
+            action: 'session_saved',
+            payload: { token: sessionToken, user: currentUser, refreshToken: sessionRefreshToken }
+          });
           return true;
         }
-      } catch(e) { console.warn('Token refresh failed', e); }
+      } catch(e) { 
+        if (isContextValid()) console.warn('Token refresh failed', e); 
+      } finally {
+        _refreshPromise = null;
+      }
       return false;
     })();
-    try { return await _refreshPromise; } finally { _refreshPromise = null; }
+    return _refreshPromise;
   }
 
   async function sbFetch(url, opts) {
@@ -171,28 +186,11 @@
     }
 
     const callProxy = async (u, o) => {
-      return new Promise((resolve, reject) => {
-        try {
-          chrome.runtime.sendMessage({ action: 'sb_proxy_fetch', payload: { url: u, opts: o } }, (res) => {
-            if (chrome.runtime.lastError) {
-              const err = chrome.runtime.lastError.message;
-              if (err.includes('Extension context invalidated')) {
-                 showToast('AI Blaze extension was reloaded. Please refresh the page.', true);
-                 reject(new Error('Extension context invalidated'));
-              } else {
-                 reject(new Error(err));
-              }
-            } else {
-              resolve(res);
-            }
-          });
-        } catch(e) { 
-          if (e.message.includes('Extension context invalidated')) {
-            showToast('Reload required: Extension context lost.', true);
-          }
-          reject(e); 
-        }
-      });
+      const res = await safeSendMessage({ action: 'sb_proxy_fetch', payload: { url: u, opts: o } });
+      if (!res) {
+        throw new Error('Extension context invalidated — please refresh the page');
+      }
+      return res;
     };
 
     let res = await callProxy(url, opts);
@@ -1893,26 +1891,24 @@ ${context}`;
     currentTab = 'assistant';
 
     main.innerHTML = `
-      <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;background:var(--bg-primary,#fff);">
+      <div class="rjd-chat-container">
         <div id="rjd-tab-nav" style="display:flex;background:var(--bg-secondary,#f8fafc);border-bottom:1px solid var(--border-color,#e2e8f0);padding:4px 4px 0;">
           <div id="rjd-tab-tracker" style="flex:1;text-align:center;padding:10px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text-muted,#94a3b8);">📊 Applications</div>
           <div id="rjd-tab-assistant" style="flex:1;text-align:center;padding:10px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid var(--accent-primary,#4f46e5);color:var(--accent-primary,#4f46e5);">✦ AI Assistant</div>
         </div>
 
-        <div id="rjd-chat-box" style="flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px;">
-          <div style="background:var(--bg-secondary,#f8fafc);border:1px solid var(--border-color,#e2e8f0);padding:12px;border-radius:12px;font-size:12px;color:var(--text-primary,#1e293b);">
-            <strong>Hello!</strong> I am your AI Career Copilot. I can help with application questions, emails, and resume analysis.
-            <br><br>
-            <span style="color:var(--text-muted,#64748b);">Try: "Summarize this role", or "How matches my experience?"</span>
+        <div id="rjd-chat-box">
+          <div class="rjd-chat-greeting">
+            <h1>How can I help you today?</h1>
           </div>
           <div id="rjd-chat-history"></div>
         </div>
 
-        <div style="padding:14px;border-top:1px solid var(--border-color,#e2e8f0);background:var(--bg-secondary,#f8fafc);">
-          <div style="display:flex;gap:8px;background:var(--bg-primary,#fff);border:1.5px solid var(--border-color,#e2e8f0);border-radius:14px;padding:8px 12px;box-shadow:0 1px 2px rgba(0,0,0,0.05);transition:border-color 0.2s;">
-            <textarea id="rjd-chat-input" placeholder="Ask anything..." rows="1" style="flex:1;border:none;background:transparent;resize:none;font-family:inherit;font-size:13px;outline:none;padding:4px 0;max-height:120px;"></textarea>
-            <button id="rjd-chat-send" style="background:var(--accent-primary,#4f46e5);color:#fff;border:none;border-radius:10px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;flex-shrink:0;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        <div class="rjd-chat-input-wrap">
+          <div class="rjd-chat-input-container">
+            <textarea id="rjd-chat-input" placeholder="Message AI Blaze..." rows="1"></textarea>
+            <button id="rjd-chat-send" title="Send Message">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
             </button>
           </div>
         </div>
@@ -1921,9 +1917,12 @@ ${context}`;
     document.getElementById('rjd-tab-tracker').onclick = () => renderTrackerScreen();
     
     const input = document.getElementById('rjd-chat-input');
-    input.oninput = () => { input.style.height = 'auto'; input.style.height = (input.scrollHeight) + 'px'; };
-    input.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessageToAI(); } };
-    document.getElementById('rjd-chat-send').onclick = () => sendMessageToAI();
+    if (input) {
+      input.oninput = () => { input.style.height = 'auto'; input.style.height = (input.scrollHeight) + 'px'; };
+      input.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessageToAI(); } };
+    }
+    const sendBtn = document.getElementById('rjd-chat-send');
+    if (sendBtn) sendBtn.onclick = () => sendMessageToAI();
   }
 
   async function sendMessageToAI() {
@@ -1948,25 +1947,37 @@ ${context}`;
   function appendChatMessage(role, text, isLoading = false) {
     const hist = document.getElementById('rjd-chat-history');
     if (!hist) return null;
+    
+    // Remove greeting on first message
+    const greeting = document.querySelector('.rjd-chat-greeting');
+    if (greeting) greeting.style.display = 'none';
+
     const id = 'msg-' + Date.now();
     const isUser = role === 'user';
     const msg = document.createElement('div');
     msg.id = id;
-    msg.style.cssText = `display:flex;justify-content:${isUser?'flex-end':'flex-start'};margin-bottom:8px;`;
+    msg.className = 'rjd-chat-msg';
+    if (isUser) msg.style.justifyContent = 'flex-end';
+    
     msg.innerHTML = `
-      <div style="max-width:85%;padding:10px 14px;border-radius:14px;font-size:13px;line-height:1.5;background:${isUser?'var(--accent-primary,#4f46e5)':'var(--bg-secondary,#f1f5f9)'};color:${isUser?'#fff':'var(--text-primary,#1e293b)'};box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+      <div class="${isUser ? 'rjd-chat-msg-user' : 'rjd-chat-msg-ai'}">
         ${text.replace(/\n/g, '<br>')}
       </div>`;
+    
     hist.appendChild(msg);
-    hist.parentElement.scrollTop = hist.parentElement.scrollHeight;
+    // Scroll correctly
+    const scrollBox = document.getElementById('rjd-chat-box');
+    if (scrollBox) scrollBox.scrollTop = scrollBox.scrollHeight;
     return id;
   }
 
   function updateChatMessage(id, text) {
     const msg = document.getElementById(id);
     if (!msg) return;
-    msg.querySelector('div').innerHTML = text.replace(/\n/g, '<br>');
-    msg.parentElement.parentElement.scrollTop = msg.parentElement.parentElement.scrollHeight;
+    const bubble = msg.querySelector('div');
+    if (bubble) bubble.innerHTML = text.replace(/\n/g, '<br>');
+    const scrollBox = document.getElementById('rjd-chat-box');
+    if (scrollBox) scrollBox.scrollTop = scrollBox.scrollHeight;
   }
 
   function bindTrackerEvents() {
