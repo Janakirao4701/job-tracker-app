@@ -670,6 +670,11 @@ function navigateTo(page) {
   if (addBtn) addBtn.classList.toggle('hidden', page !== 'applications');
   const refreshBtn = document.getElementById('refresh-btn');
   if (refreshBtn) refreshBtn.style.display = '';
+
+  // Toggle full-page class for AI-Blaze to remove padding/topbar
+  const mainEl = document.querySelector('.main');
+  if (mainEl) mainEl.classList.toggle('full-page', page === 'aiblaze');
+
   renderPage(page);
 }
 
