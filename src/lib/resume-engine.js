@@ -54,9 +54,12 @@ window.ResumeEngine = {
   makeBullet: function (text, docx, FONT, SZ_BODY, COLOR_DARK) {
     const { Paragraph, TextRun } = docx;
     return new Paragraph({
-      numbering: { reference: 'bullets', level: 0 },
-      spacing: { before: 30, after: 30 },
-      children: [new TextRun({ text, font: FONT, size: SZ_BODY, color: COLOR_DARK })]
+      indent: { left: 180, hanging: 180 }, // Tighter following user feedback
+      spacing: { before: 15, after: 15 },
+      children: [
+        new TextRun({ text: '•  ', bold: true, font: FONT, size: SZ_BODY, color: COLOR_DARK }),
+        new TextRun({ text, font: FONT, size: SZ_BODY, color: COLOR_DARK })
+      ]
     });
   },
 
