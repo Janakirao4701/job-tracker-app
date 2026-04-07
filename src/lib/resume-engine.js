@@ -85,6 +85,7 @@ window.ResumeEngine = {
     const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !l.match(/^\[/));
     return lines.map(line => {
       const idx = line.indexOf(':');
+      // Case 1: Standard Category: Item1, Item2
       if (idx > -1 && idx < 60) {
         return new Paragraph({
           spacing: { before: 20, after: 20 },
@@ -94,7 +95,19 @@ window.ResumeEngine = {
           ]
         });
       }
-      return new Paragraph({ spacing: { before: 20, after: 20 }, children: [new TextRun({ text: line, font: FONT, size: SZ_BODY, color: COLOR_DARK })] });
+      // Case 2: Category Header on its own line (Short line, no commas)
+      const isHeader = line.length < 50 && !line.includes(',');
+      if (isHeader) {
+        return new Paragraph({
+          spacing: { before: 40, after: 10 },
+          children: [new TextRun({ text: line, bold: true, font: FONT, size: SZ_BODY, color: COLOR_HEAD })]
+        });
+      }
+      // Case 3: Plain skills list or unknown format
+      return new Paragraph({ 
+        spacing: { before: 10, after: 30 }, 
+        children: [new TextRun({ text: line, font: FONT, size: SZ_BODY, color: COLOR_DARK })] 
+      });
     });
   },
 
