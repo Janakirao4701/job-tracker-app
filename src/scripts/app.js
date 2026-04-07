@@ -317,7 +317,7 @@ async function loadGeminiKeyDB() { return loadAIKeyDB('google'); }
 // ── RESUME PROFILE DB SYNC ──
 async function saveResumeProfileDB(profile) {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/user_settings`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/user_settings?on_conflict=username`, {
       method: 'POST',
       headers: headers({'Prefer': 'resolution=merge-duplicates,return=representation'}),
       body: JSON.stringify({

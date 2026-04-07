@@ -31,12 +31,21 @@
   const QUEUE_KEY = 'rjd_offline_queue';
   function getQueue(cb) {
     const s = chromeStore();
-    if (s) s.get(QUEUE_KEY, r => cb(r[QUEUE_KEY] || []));
-    else cb([]);
+    if (s) {
+      s.get(QUEUE_KEY, r => {
+        if (chrome.runtime.lastError) return cb([]);
+        cb(r[QUEUE_KEY] || []);
+      });
+    } else cb([]);
   }
   function saveQueue(queue, cb) {
     const s = chromeStore();
-    if (s) s.set({ [QUEUE_KEY]: queue }, cb);
+    if (s) {
+      s.set({ [QUEUE_KEY]: queue }, () => {
+        if (chrome.runtime.lastError) return;
+        if (cb) cb();
+      });
+    }
     updateQueueBadge(queue.length);
   }
   function updateQueueBadge(count) {
@@ -245,7 +254,7 @@
   async function saveResumeProfileDB(profile) {
     if (!currentUser) return false;
     try {
-      const res = await sbFetch(`${SUPABASE_URL}/rest/v1/user_settings`, {
+      const res = await sbFetch(`${SUPABASE_URL}/rest/v1/user_settings?on_conflict=username`, {
         method: 'POST',
         headers: { 
           'apikey': SUPABASE_KEY, 
@@ -253,12 +262,12 @@
           'Content-Type': 'application/json',
           'Prefer': 'resolution=merge-duplicates,return=representation'
         },
-        body: JSON.stringify({ username: currentUser, resume_profile: profile })
+        body: JSON.stringify({ username: currentUser.id, resume_profile: profile })
       });
       if (res && res.ok) {
         localStorage.setItem('rjd_resume_profile', JSON.stringify(profile));
         const s = chromeStore();
-        if (s) s.set({ rjd_resume_profile: profile });
+        if (s) s.set({ rjd_resume_profile: profile }, () => { if (chrome.runtime.lastError) return; });
         return true;
       }
     } catch(e) { console.warn('Save profile failed', e); }
@@ -278,7 +287,7 @@
           const profile = data[0].resume_profile;
           localStorage.setItem('rjd_resume_profile', JSON.stringify(profile));
           const s = chromeStore();
-          if (s) s.set({ rjd_resume_profile: profile });
+          if (s) s.set({ rjd_resume_profile: profile }, () => { if (chrome.runtime.lastError) return; });
           return profile;
         }
       }
@@ -292,8 +301,15 @@
     // Fallback to local
     const s2 = chromeStore();
     return new Promise(resolve => {
-      if (s2) s2.get('rjd_resume_profile', r => resolve(r.rjd_resume_profile || JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}')));
-      else resolve(JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}'));
+      if (s2) {
+        s2.get('rjd_resume_profile', r => {
+          if (chrome.runtime.lastError) {
+            resolve(JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}'));
+            return;
+          }
+          resolve(r.rjd_resume_profile || JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}'));
+        });
+      } else resolve(JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}'));
     });
   }
 
@@ -420,20 +436,20 @@
 
   function saveSession(token, user, refreshToken) {
     const s = chromeStore();
-    if (s) s.set({ rjd_session: { token, user, refreshToken: refreshToken||'' } });
+    if (s) s.set({ rjd_session: { token, user, refreshToken: refreshToken||'' } }, () => { if (chrome.runtime.lastError) return; });
   }
 
   function clearSession() {
     const s = chromeStore();
-    if (s) s.remove('rjd_session');
+    if (s) s.remove('rjd_session', () => { if (chrome.runtime.lastError) return; });
   }
 
   function loadSession(cb) {
     const s = chromeStore();
     if (s) {
       s.get('rjd_session', r => {
+        if (chrome.runtime.lastError) return cb(null);
         const sess = r.rjd_session || null;
-        // Support both 'refreshToken' (current) and legacy 'refresh_token' key
         if (sess) sessionRefreshToken = sess.refreshToken || sess.refresh_token || '';
         cb(sess);
       });
@@ -445,14 +461,20 @@
   // ── GEMINI KEY STORAGE ──
   function saveGeminiKey(key, cb) {
     const s = chromeStore();
-    if (s) s.set({ rjd_gemini_key: key }, cb || (() => {}));
+    if (s) s.set({ rjd_gemini_key: key }, () => { 
+      if (chrome.runtime.lastError) return;
+      if (cb) cb(); 
+    });
   }
 
   function loadGeminiKey(cb) {
     if (typeof cb !== 'function') return;
     const s = chromeStore();
     if (s) {
-      s.get('rjd_gemini_key', r => cb(r.rjd_gemini_key || ''));
+      s.get('rjd_gemini_key', r => {
+        if (chrome.runtime.lastError) return cb('');
+        cb(r.rjd_gemini_key || '');
+      });
     } else {
       cb('');
     }
@@ -1982,7 +2004,7 @@ ${context}`;
     
     msg.innerHTML = `
       <div class="${isUser ? 'rjd-chat-msg-user' : 'rjd-chat-msg-ai'}">
-        ${text.replace(/\n/g, '<br>')}
+        ${formatMsg(text)}
       </div>`;
     
     hist.appendChild(msg);
@@ -1996,9 +2018,35 @@ ${context}`;
     const msg = document.getElementById(id);
     if (!msg) return;
     const bubble = msg.querySelector('div');
-    if (bubble) bubble.innerHTML = text.replace(/\n/g, '<br>');
+    if (bubble) bubble.innerHTML = formatMsg(text);
     const scrollBox = document.getElementById('rjd-chat-box');
     if (scrollBox) scrollBox.scrollTop = scrollBox.scrollHeight;
+  }
+
+  /**
+   * Simple Markdown-ish Formatter for Chat
+   */
+  function formatMsg(text) {
+    if (!text) return '';
+    let html = escHtml(text);
+    
+    // Bold: **text**
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    // Italics: *text* (only if not a bullet)
+    // We do italics after bullets to avoid conflict
+    
+    // Bullets: ^* or ^- 
+    const lines = html.split('\n').map(l => {
+      let line = l.trim();
+      if (line.startsWith('* ') || line.startsWith('- ') || line.startsWith('• ')) {
+        return `<div style="display:flex; gap:6px; margin-bottom:4px;"><span>•</span><span>${line.substring(2)}</span></div>`;
+      }
+      return l;
+    });
+
+    html = lines.join('\n').replace(/\n/g, '<br>');
+    return html;
   }
 
   function bindTrackerEvents() {
@@ -2330,8 +2378,6 @@ ${context}`;
   }
 
 
-    // Consolidated Assistant Bridge logic in the main message listener below
-
     /**
      * Process AI for shortcuts without polluting chat history (or as hidden turn)
      */
@@ -2343,13 +2389,23 @@ ${context}`;
         // Load context (Profile)
         const profile = await loadResumeProfileDB();
         
-        // Build context-aware prompt
         let contextPrefix = "";
         if (profile && profile.name) {
-          contextPrefix = `Context: User Name is ${profile.name}. Title: ${profile.title || 'N/A'}. Exp: ${profile.education || 'N/A'}. `;
+          contextPrefix = `Context: User Name is ${profile.name}. Current Title: ${profile.title || 'N/A'}. Education: ${profile.education || 'N/A'}. `;
         }
+
+        // Build context-aware prompt with strict formatting instructions
+        const systemInstruction = `
+Instruction: You are an expert Resume Writer and Data Engineer Career Coach. 
+When generating or tailoring a resume, YOU MUST use EXACTLY these markers for sections:
+[professional summary] - for the summary section.
+[technical skills] - for the skills section. Each skill category must end with a colon (e.g., "Languages: Python, SQL").
+[professional experience] - for the experience section. Format each job header as: "Company | Location | Job Title | Date Range". Use "• " bullets for achievements.
+
+Return the resume content formatted clearly between these markers.
+        `;
         
-        const fullPrompt = `${contextPrefix}User Request: ${prompt}`;
+        const fullPrompt = `${systemInstruction}\n\n${contextPrefix}\n\nUser Request: ${prompt}`;
         
         // Call the appropriate engine
         let result = '';
@@ -2643,6 +2699,10 @@ ${context}`;
       const s = chromeStore();
       if (s) {
         s.get('rjd_resume_profile', r => {
+          if (chrome.runtime.lastError) {
+            resolve(JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}'));
+            return;
+          }
           resolve(r.rjd_resume_profile || JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}'));
         });
       } else {

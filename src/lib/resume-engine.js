@@ -64,8 +64,8 @@ window.ResumeEngine = {
   sectionHeading: function (text, docx, FONT, SZ_SEC, COLOR_HEAD, COLOR_RULE) {
     const { Paragraph, TextRun, BorderStyle } = docx;
     return new Paragraph({
-      spacing: { before: 200, after: 80 },
-      border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: COLOR_RULE, space: 4 } },
+      spacing: { before: 180, after: 40 },
+      border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: COLOR_RULE, space: 4 } },
       children: [new TextRun({
         text: text.toUpperCase(),
         bold: true,
@@ -82,44 +82,53 @@ window.ResumeEngine = {
     const lines = raw.split('\n').map(l => l.trim()).filter(l => l && !l.match(/^\[/));
     return lines.map(line => {
       const idx = line.indexOf(':');
-      if (idx > -1) {
+      if (idx > -1 && idx < 60) {
         return new Paragraph({
-          spacing: { before: 30, after: 30 },
+          spacing: { before: 20, after: 20 },
           children: [
             new TextRun({ text: line.substring(0, idx + 1), bold: true, font: FONT, size: SZ_BODY, color: COLOR_HEAD }),
-            new TextRun({ text: '  ' + line.substring(idx + 1).trimStart(), font: FONT, size: SZ_BODY, color: COLOR_DARK }),
+            new TextRun({ text: ' ' + line.substring(idx + 1).trimStart(), font: FONT, size: SZ_BODY, color: COLOR_DARK }),
           ]
         });
       }
-      return new Paragraph({ spacing: { before: 30, after: 30 }, children: [new TextRun({ text: line, font: FONT, size: SZ_BODY, color: COLOR_DARK })] });
+      return new Paragraph({ spacing: { before: 20, after: 20 }, children: [new TextRun({ text: line, font: FONT, size: SZ_BODY, color: COLOR_DARK })] });
     });
   },
 
   parseExperience: function (raw, docx, FONT, SZ_JOB, SZ_BODY, SZ_BASE, TEXT_W, COLOR_HEAD, COLOR_DARK, COLOR_MID, COLOR_LIGHT) {
     const { Paragraph, TextRun, TabStopType } = docx;
     if (!raw) return [];
+    
+    // Split by newline but handle cases where content might be pasted with mixed separators
     const lines = raw.split('\n').filter(l => l.trim());
     const result = [];
+    
     for (const line of lines) {
-      const t = line.trim();
+      let t = line.trim();
       if (!t || t.match(/^\[/)) continue;
 
-      // Handle Key Achievements Header (Bold, no bullet)
-      if (t.toLowerCase().includes('key achievements:')) {
+      // Handle Key Achievements / Highlights Header (Bold)
+      if (t.toLowerCase().includes('key achievements:') || t.toLowerCase().includes('highlights:') || t.toLowerCase().includes('responsibilities:')) {
+        const colonIdx = t.indexOf(':');
+        const headerText = colonIdx > -1 ? t.substring(0, colonIdx + 1) : t;
+        const restText = colonIdx > -1 ? t.substring(colonIdx + 1).trim() : '';
+
         result.push(new Paragraph({
           spacing: { before: 100, after: 40 },
-          children: [new TextRun({ text: "Key Achievements:", bold: true, font: FONT, size: SZ_BODY, color: COLOR_DARK })]
+          children: [
+            new TextRun({ text: headerText, bold: true, font: FONT, size: SZ_BODY, color: COLOR_DARK }),
+            ...(restText ? [new TextRun({ text: ' ' + restText, font: FONT, size: SZ_BODY, color: COLOR_DARK })] : [])
+          ]
         }));
         continue;
       }
 
-      if (t.startsWith('-') || t.startsWith('•') || t.startsWith('*')) {
-        result.push(this.makeBullet(t.replace(/^[-•*]\s*/, ''), docx, FONT, SZ_BODY, COLOR_DARK));
+      if (t.startsWith('-') || t.startsWith('•') || t.startsWith('*') || t.startsWith('·')) {
+        result.push(this.makeBullet(t.replace(/^[-•*·]\s*/, ''), docx, FONT, SZ_BODY, COLOR_DARK));
       } else if (t.includes('|')) {
         const parts = t.split('|').map(p => p.trim());
         let company = '', location = '', jobTitle = '', dateRange = '';
 
-        // Explicit mapping based on part count to avoid semantic collisions
         if (parts.length >= 4) {
           company = parts[0]; location = parts[1]; jobTitle = parts[2]; dateRange = parts[3];
         } else if (parts.length === 3) {
@@ -128,10 +137,9 @@ window.ResumeEngine = {
           company = parts[0]; dateRange = parts[1];
         }
 
-        // Row 1: COMPANY (Left) | DATE (Right)
         if (company || dateRange) {
           result.push(new Paragraph({
-            spacing: { before: 160, after: 20 },
+            spacing: { before: 180, after: 30 },
             tabStops: [{ type: TabStopType.RIGHT, position: TEXT_W }],
             children: [
               new TextRun({ text: company.toUpperCase(), bold: true, font: FONT, size: SZ_BODY, color: COLOR_HEAD }),
@@ -141,16 +149,23 @@ window.ResumeEngine = {
           }));
         }
 
-        // Row 2: JOB TITLE, LOCATION (Bold)
         const titleText = `${jobTitle}${location ? ', ' + location : ''}`;
         if (titleText) {
           result.push(new Paragraph({
-            spacing: { before: 0, after: 40 },
+            spacing: { before: 0, after: 50 },
             children: [new TextRun({ text: titleText, bold: true, font: FONT, size: SZ_JOB, color: COLOR_DARK })]
           }));
         }
       } else {
-        result.push(new Paragraph({ spacing: { before: 30, after: 30 }, children: [new TextRun({ text: t, font: FONT, size: SZ_BODY, color: COLOR_DARK })] }));
+        // Fallback: If line is short and ends with colon, bold it (automatic category detection)
+        if (t.length < 50 && t.endsWith(':')) {
+             result.push(new Paragraph({
+               spacing: { before: 80, after: 40 },
+               children: [new TextRun({ text: t, bold: true, font: FONT, size: SZ_BODY, color: COLOR_DARK })]
+             }));
+        } else {
+             result.push(new Paragraph({ spacing: { before: 30, after: 30 }, children: [new TextRun({ text: t, font: FONT, size: SZ_BODY, color: COLOR_DARK })] }));
+        }
       }
     }
     return result;
@@ -211,9 +226,9 @@ window.ResumeEngine = {
     const MAR_TB = 792; const MAR_LR = 936;
     const TEXT_W = PAGE_W - MAR_LR * 2;
     const SZ_BASE = 20; const SZ_NAME = 34; const SZ_TITLE = 22;
-    const SZ_SEC = 20; const SZ_JOB = 21; const SZ_BODY = 20;
+    const SZ_SEC = 22; const SZ_JOB = 21; const SZ_BODY = 20;
     const FONT = 'Calibri';
-    const COLOR_HEAD = '111111'; const COLOR_DARK = '2B2B2B';
+    const COLOR_HEAD = '000000'; const COLOR_DARK = '222222';
     const COLOR_MID = '555555'; const COLOR_LIGHT = '888888'; const COLOR_RULE = 'AAAAAA';
 
     // Parse Content
@@ -264,7 +279,7 @@ window.ResumeEngine = {
       // SUMMARY
       this.sectionHeading('Professional Summary', docx, FONT, SZ_SEC, COLOR_HEAD, COLOR_RULE),
       new Paragraph({
-        spacing: { before: 40, after: 40 },
+        spacing: { before: 20, after: 40 },
         children: [new TextRun({ text: summary || '(not provided)', font: FONT, size: SZ_BODY, color: COLOR_DARK })]
       }),
 
@@ -295,8 +310,13 @@ window.ResumeEngine = {
         const lines = sec.content.split('\n').filter(l => l.trim());
         for (const line of lines) {
           const t = line.trim();
-          if (t.startsWith('-') || t.startsWith('•') || t.startsWith('*')) {
-            docChildren.push(this.makeBullet(t.replace(/^[-•*]\s*/, ''), docx, FONT, SZ_BODY, COLOR_DARK));
+          if (t.startsWith('-') || t.startsWith('•') || t.startsWith('*') || t.startsWith('·')) {
+            docChildren.push(this.makeBullet(t.replace(/^[-•*·]\s*/, ''), docx, FONT, SZ_BODY, COLOR_DARK));
+          } else if (t.length < 50 && t.endsWith(':')) {
+            docChildren.push(new Paragraph({ 
+              spacing: { before: 80, after: 40 }, 
+              children: [new TextRun({ text: t, bold: true, font: FONT, size: SZ_BODY, color: COLOR_DARK })] 
+            }));
           } else {
             docChildren.push(new Paragraph({ spacing: { before: 20, after: 20 }, children: [new TextRun({ text: t, font: FONT, size: SZ_BODY, color: COLOR_DARK })] }));
           }
