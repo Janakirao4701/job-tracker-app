@@ -928,8 +928,9 @@ ${context}`;
     parsed.eligibilityReason = '';
 
     // ── Post-processing fallbacks ──
-    const sig   = scrapePageSignals();
-    const jdSig = parseJdTextSignals(jdText);
+    try {
+    const sig   = scrapePageSignals() || {};
+    const jdSig = parseJdTextSignals(jdText) || {};
 
     // If we have precise domain extraction, trust it over Gemini for company name
     if (sig.preciseDomain && sig.company) {
@@ -940,7 +941,7 @@ ${context}`;
 
     // If Gemini returned a job board as the company, override with signals
     const JOB_BOARDS = /^(linkedin|indeed|glassdoor|naukri|monster|ziprecruiter|dice|simplyhired|hired\.com|wellfound|angel\.co|internshala|simplify|greenhouse|lever|workday|ashby|lever\.co|greenhouse\.io|myworkdayjobs|breezy|ashbyhq)$/i;
-    if (!parsed.company_name || JOB_BOARDS.test(parsed.company_name.trim())) {
+    if (!parsed.company_name || JOB_BOARDS.test((parsed.company_name || '').trim())) {
       parsed.company_name = jdSig.company || sig.company || sig.domCompany || sig.ogSiteName || sig.hostname || '';
     }
 
@@ -968,7 +969,13 @@ ${context}`;
         .replace(new RegExp(`\\s*at\\s+${parsed.company_name}\\s*$`, 'i'), '')
         .trim();
     }
+    } catch(postErr) {
+      console.warn('[AI Blaze] Post-processing error:', postErr.message);
+    }
 
+    // Final safety: ensure strings
+    parsed.company_name = String(parsed.company_name || '');
+    parsed.job_title    = String(parsed.job_title || '');
     parsed.url = pageUrl;
     return parsed;
   }
