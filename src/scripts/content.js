@@ -2202,9 +2202,14 @@ ${context}`;
       // Try to read clipboard
       try { clipText = await navigator.clipboard.readText(); } catch(e) {}
 
+      // Fall back to page body text if clipboard is empty (same behavior as runExtract)
+      if (!clipText.trim()) {
+        clipText = document.body.innerText.substring(0, 8000);
+      }
+
       // Load Gemini key if not yet in memory
       if (!GEMINI_KEY) await new Promise(r => loadGeminiKey(k => { GEMINI_KEY = k; r(); }));
-      // Try Gemini extraction if key exists and clipboard has content
+      // Try Gemini extraction if key exists and we have content to parse
       if (GEMINI_KEY && GEMINI_KEY.trim() && clipText.trim()) {
         try {
           const result = await extractWithGemini(clipText, pageUrl);
@@ -2218,6 +2223,7 @@ ${context}`;
             return;
           }
         } catch(e) {
+          console.warn('[AI Blaze] Quick extract failed:', e.message);
           // Extraction failed — will open form for manual fill
         }
       }
