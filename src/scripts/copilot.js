@@ -391,16 +391,28 @@
       };
     },
     workday: () => {
+      const logo = document.querySelector('[data-automation-id="companyLogo"]');
       return {
-        company: document.title.split('-')?.[0]?.trim() || '',
+        company: logo?.alt || logo?.getAttribute('aria-label') || document.title.split('-')?.[0]?.trim() || '',
         title: document.querySelector('[data-automation-id="jobTitle"]')?.innerText || '',
         description: document.querySelector('[data-automation-id="jobPostingDescription"]')?.innerText || ''
       };
     },
     generic: () => {
       const url = new URL(window.location.href);
-      const host = url.hostname.toLowerCase().replace(/^www\.|^jobs\.|^careers\.|^boards\.|^app\./, '').split('.')[0];
-      const fallbackCompany = host.replace(/[\-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const host = url.hostname.toLowerCase().replace(/^www\.|^jobs\.|^careers\.|^boards\.|^app\./, '');
+      const parts = host.split('.');
+      let hostname = parts[0];
+
+      // Sync with content.js: Handle subdomains and path-based identifiers
+      if (parts.length >= 3 && (host.includes('lever.co') || host.includes('greenhouse.io') || host.includes('workdayjobs.com'))) {
+        hostname = parts[0];
+      } else if (host === 'lever.co' || host === 'greenhouse.io') {
+         const pathParts = url.pathname.split('/').filter(Boolean);
+         if (pathParts.length > 0) hostname = pathParts[0];
+      }
+
+      const fallbackCompany = hostname.replace(/[\-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       return {
         company: fallbackCompany,
         title: document.title.split('|')[0].split('-')[0].trim(),

@@ -287,7 +287,7 @@
     if (!currentUser) return {};
     try {
       const res = await sbFetch(
-        `${SUPABASE_URL}/rest/v1/user_settings?username=eq.${currentUser}&select=resume_profile`,
+        `${SUPABASE_URL}/rest/v1/user_settings?username=eq.${currentUser.id}&select=resume_profile`,
         { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + sessionToken } }
       );
       if (res && res.ok) {
@@ -438,10 +438,7 @@
     }
   }
 
-  // ── SESSION PERSISTENCE ──
-  function chromeStore() {
-    return (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id && chrome.storage && chrome.storage.local) ? chrome.storage.local : null;
-  }
+
 
   function saveSession(token, user, refreshToken) {
     const s = chromeStore();
@@ -615,8 +612,9 @@
       if (hostname.includes('myworkdayjobs.com')) {
         let title = document.querySelector('[data-automation-id="jobTitle"]')?.innerText 
                  || document.querySelector('h1')?.innerText;
-        let company = document.querySelector('[data-automation-id="companyLogo"]')?.[1] // Sometimes in alt
-                   || document.title.split('-')?.[0];
+        let company = document.querySelector('[data-automation-id="companyLogo"]')?.alt
+                   || document.querySelector('[data-automation-id="companyLogo"]')?.getAttribute('aria-label')
+                   || document.title.split('-')?.[0]?.trim();
         if (company || title) return { company: company?.trim(), jobTitle: title?.trim(), source: 'workday_dom' };
       }
     } catch(e) {}
@@ -698,12 +696,20 @@
       const url = new URL(window.location.href);
       const host = url.hostname.toLowerCase().replace(/^www\.|^jobs\.|^careers\.|^boards\.|^app\./, '');
       const parts = host.split('.');
+      
       // Handle subdomains for portals (acme.lever.co -> acme)
       if (parts.length >= 3 && (host.includes('lever.co') || host.includes('greenhouse.io') || host.includes('workdayjobs.com'))) {
         signals.hostname = parts[0];
       } else if (parts.length >= 2) {
         signals.hostname = parts[0];
       }
+
+      // REFINEMENT: Handle path-based identifiers (e.g. jobs.lever.co/acme/)
+      if (host === 'lever.co' || host === 'greenhouse.io') {
+         const pathParts = url.pathname.split('/').filter(Boolean);
+         if (pathParts.length > 0) signals.hostname = pathParts[0];
+      }
+
       if (signals.hostname) {
         signals.hostname = signals.hostname.replace(/[\-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       }
@@ -827,60 +833,16 @@
     const context = buildExtractionContext(jdText, pageUrl);
     const hasJD   = jdText && jdText.trim().length > 50;
 
-    const prompt = `You are a precise job-posting parser and ATS expert.
+    const prompt = `You are a job posting data extractor.
 
-Your task has TWO parts:
-
----
-
-## PART 1 — EXTRACT JOB DETAILS
-Extract the company name and job title.
+Extract the company name and job title from the context below.
 
 RULES:
-- Return a JSON block FIRST: {"company_name":"...","job_title":"..."}
-- company_name: the actual HIRING COMPANY (never a job board like LinkedIn, Indeed, Glassdoor, Naukri, Internshala, Monster, Simplify, Wellfound)
-- job_title: the exact role title (e.g. "Senior Data Engineer", "Product Manager")
-- If a value truly cannot be determined, use "" — never guess randomly
-
-EXTRACTION PRIORITY (highest to lowest):
-1. [JD TEXT company hint] and [VERIFIED DOM COMPANY] — highly reliable
-2. Read [JOB DESCRIPTION TEXT] carefully — company name and job title are typically in the first few lines
-3. Fall back to context clues only if explicit mention is absent
-
----
-
-## PART 2 — ELIGIBILITY CHECK
-Evaluate the job description against the exclusion criteria below.
-
-EXCLUDE any roles from these companies:
-- KPMG, Infosys, Deloitte, Fidelity, Amazon
-- Any state/government agency
-
-EXCLUDE roles in these sectors:
-- Management & consulting
-- Government projects
-- Aerospace / defense
-- United Nations (UN) jobs
-
-EXCLUDE roles that require:
-- U.S. citizenship
-- Visa sponsorship (H-1B or any other)
-
-After evaluation, respond with:
-- "Eligibility: Eligible" or "Eligibility: Not Eligible"
-- "Reason: [one line]"
-
----
-
-
-## OUTPUT FORMAT (always follow this structure):
-
-{"company_name":"...","job_title":"..."}
-
-Eligibility: [Eligible / Not Eligible]
-Reason: [one line]
-
----
+- Output ONLY a single raw JSON object. No markdown, no code fences, no explanation.
+- Format: {"company_name":"...","job_title":"..."}
+- company_name: the actual HIRING COMPANY — never a job board (LinkedIn, Indeed, Naukri, Glassdoor, Internshala, Wellfound, Simplify, Monster)
+- job_title: the exact role title
+- If a value cannot be determined, use ""
 
 CONTEXT:
 ${context}`;
@@ -888,25 +850,21 @@ ${context}`;
     const res = await callGeminiBlaze(key, prompt);
     let raw = res.trim();
 
-    // Extract JSON object from raw string
-    const jsonMatch = raw.match(/\{[\s\S]*?\}/);
-    let parsed = { company_name: "", job_title: "" };
-    if (jsonMatch) {
-      try {
-        parsed = JSON.parse(jsonMatch[0]);
-      } catch(e) {
-        const cn = jsonMatch[0].match(/"company_name"\s*:\s*"([^"]*)"/)?.[1] || '';
-        const jt = jsonMatch[0].match(/"job_title"\s*:\s*"([^"]*)"/)?.[1]    || '';
-        parsed = { company_name: cn, job_title: jt };
-      }
+    // Strip markdown fences if Gemini wraps with ```json ... ```
+    raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+
+    let parsed = { company_name: '', job_title: '' };
+    try {
+      parsed = JSON.parse(raw);
+    } catch(e) {
+      // Regex fallback if JSON.parse still fails
+      parsed.company_name = raw.match(/"company_name"\s*:\s*"([^"]*)"/)?.[1] || '';
+      parsed.job_title    = raw.match(/"job_title"\s*:\s*"([^"]*)"/)?.[1]    || '';
     }
 
-    // Parse Eligibility
-    const eligibilityMatch = raw.match(/Eligibility:\s*(Eligible|Not Eligible)/i);
-    const reasonMatch      = raw.match(/Reason:\s*(.*)/i);
-    
-    parsed.isEligible = eligibilityMatch ? eligibilityMatch[1].toLowerCase() === 'eligible' : true;
-    parsed.eligibilityReason = reasonMatch ? reasonMatch[1].trim() : "";
+    // Eligibility is always true now (extraction only — eligibility removed from prompt)
+    parsed.isEligible = true;
+    parsed.eligibilityReason = '';
 
     // ── Post-processing fallbacks ──
     const sig   = scrapePageSignals();
@@ -1011,7 +969,7 @@ ${context}`;
   }
 
   async function callGeminiBlaze(key, prompt) {
-    const model = localStorage.getItem('rjd_blaze_model') || "gemini-2.0-flash-lite";
+    const model = localStorage.getItem('rjd_blaze_model') || "gemini-1.5-flash";
     const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${key}`;
 
     const resp = await fetch(url, {
@@ -1059,15 +1017,25 @@ ${context}`;
       try { clipText = await navigator.clipboard.readText(); } catch(e) {}
 
       if (!clipText.trim()) {
-        statusEl.textContent = '⚡ No clipboard text — using page signals...';
+        // Fall back to page body text so Gemini always has content to work with
+        clipText = document.body.innerText.substring(0, 8000);
+        statusEl.textContent = '⚡ No clipboard — using page text...';
       }
 
       const result = await extractWithGemini(clipText, window.location.href);
 
-      document.getElementById('rjd-new-company').value = result.company_name || '';
-      document.getElementById('rjd-new-title').value   = result.job_title   || '';
-      document.getElementById('rjd-new-url').value     = result.url         || '';
-      document.getElementById('rjd-new-jd').value      = clipText;
+      // Always fill URL and JD
+      document.getElementById('rjd-new-url').value = result.url || '';
+      document.getElementById('rjd-new-jd').value  = clipText;
+
+      // Only fill company/title if eligible
+      if (result.isEligible !== false) {
+        document.getElementById('rjd-new-company').value = result.company_name || '';
+        document.getElementById('rjd-new-title').value   = result.job_title   || '';
+      } else {
+        document.getElementById('rjd-new-company').value = '';
+        document.getElementById('rjd-new-title').value   = '';
+      }
 
       const gotBoth    = result.company_name && result.job_title;
       const gotPartial = result.company_name || result.job_title;
@@ -2226,6 +2194,13 @@ ${context}`;
           const result = await extractWithGemini(clipText, pageUrl);
           company  = result.company_name || '';
           jobTitle = result.job_title    || '';
+
+          // Block ineligible jobs
+          if (result.isEligible === false) {
+            showToast('✕ Not Eligible: ' + (result.eligibilityReason || 'Exclusion criteria met'), true);
+            btn.textContent = '✦ Extract & Save'; btn.disabled = false; _extracting = false;
+            return;
+          }
         } catch(e) {
           // Extraction failed — will open form for manual fill
         }
