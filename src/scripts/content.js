@@ -984,13 +984,20 @@ ${context}`;
 
 
   async function callGeminiBlaze(key, prompt) {
-    const model = await new Promise(res => {
+    const DEFAULT_MODEL = 'gemini-2.0-flash';
+    const DEPRECATED = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-3.1-flash-lite'];
+    let model = await new Promise(res => {
       if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-        chrome.storage.local.get('rjd_gemini_model', data => res(data.rjd_gemini_model || 'gemini-2.0-flash'));
+        chrome.storage.local.get('rjd_gemini_model', data => res(data.rjd_gemini_model || DEFAULT_MODEL));
       } else {
-        res(localStorage.getItem('rjd_gemini_model') || 'gemini-2.0-flash');
+        res(localStorage.getItem('rjd_gemini_model') || DEFAULT_MODEL);
       }
     });
+    // Auto-migrate deprecated models
+    if (DEPRECATED.includes(model)) {
+      model = DEFAULT_MODEL;
+      try { chrome.storage?.local?.set({ rjd_gemini_model: model }); } catch(e) {}
+    }
 
     const endpoints = [
       `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${key}`,
