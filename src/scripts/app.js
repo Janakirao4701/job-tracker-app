@@ -395,7 +395,9 @@ function clearStoredSession() {
   localStorage.removeItem('rjd_web_session');
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     chrome.storage.local.remove('rjd_session', () => {
-      chrome.runtime.sendMessage({ action: 'session_cleared' });
+      chrome.runtime.sendMessage({ action: 'session_cleared' }, () => {
+        if (chrome.runtime.lastError) { /* ignore No SW errors */ }
+      });
     });
   }
 }

@@ -161,10 +161,19 @@
     return new Promise(resolve => {
       try {
         chrome.runtime.sendMessage(message, response => {
-          if (chrome.runtime.lastError) resolve(null);
-          else resolve(response);
+          if (chrome.runtime.lastError) {
+            const err = chrome.runtime.lastError.message;
+            if (!err.includes('No SW') && !err.includes('context invalidated')) {
+              console.warn('[AI Blaze] sendMessage error:', err);
+            }
+            resolve(null);
+          } else {
+            resolve(response);
+          }
         });
-      } catch (e) { resolve(null); }
+      } catch (e) { 
+        resolve(null); 
+      }
     });
   }
 

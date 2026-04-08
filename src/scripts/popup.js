@@ -136,7 +136,9 @@ function renderLoggedIn(user, apps) {
 
   document.getElementById('btn-so').addEventListener('click', () => {
     chrome.storage.local.remove('rjd_session', () => {
-      chrome.runtime.sendMessage({ action: 'session_cleared' });
+      chrome.runtime.sendMessage({ action: 'session_cleared' }, () => {
+        if (chrome.runtime.lastError) { /* ignore No SW errors */ }
+      });
       window.close();
     });
   });
@@ -182,7 +184,9 @@ document.addEventListener('DOMContentLoaded', () => {
           session.token = refreshData.access_token;
           if (refreshData.refresh_token) session.refreshToken = refreshData.refresh_token;
           chrome.storage.local.set({ rjd_session: session });
-          chrome.runtime.sendMessage({ action: 'session_saved', payload: session });
+          chrome.runtime.sendMessage({ action: 'session_saved', payload: session }, () => {
+            if (chrome.runtime.lastError) { /* ignore No SW errors */ }
+          });
           // Retry original fetch
           r = await fetch(SUPABASE_URL + '/rest/v1/applications?select=*&username=eq.' + session.user.id + '&order=created_at.desc', {
             headers: { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+session.token }
