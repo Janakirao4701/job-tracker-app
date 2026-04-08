@@ -850,28 +850,33 @@
   // Build the richest possible context string to send to Gemini
   function buildExtractionContext(jdText, pageUrl) {
     const parts = [];
-    const hasJD = jdText && jdText.trim().length > 50;
+    const hasJD = jdText && typeof jdText === 'string' && jdText.trim().length > 50;
 
-    // ── PRIORITY 1: JD text pre-parsed signals (most reliable when on a different page) ──
-    if (hasJD) {
-      const jdSig = parseJdTextSignals(jdText);
-      if (jdSig.company)   parts.push(`[JD TEXT company hint] ${jdSig.company}`);
-      if (jdSig.jobTitle)  parts.push(`[JD TEXT title hint] ${jdSig.jobTitle}`);
+    try {
+      // ── PRIORITY 1: JD text pre-parsed signals (most reliable when on a different page) ──
+      if (hasJD) {
+        const jdSig = parseJdTextSignals(jdText) || {};
+        if (jdSig.company)   parts.push(`[JD TEXT company hint] ${jdSig.company}`);
+        if (jdSig.jobTitle)  parts.push(`[JD TEXT title hint] ${jdSig.jobTitle}`);
+      }
+
+      // ── PRIORITY 2: Page structured/DOM signals (only useful if on the actual job page) ──
+      const sig = scrapePageSignals() || {};
+      if (sig.preciseDomain) {
+        parts.push(`[VERIFIED DOM COMPANY] ${sig.company}`);
+        parts.push(`[VERIFIED DOM TITLE] ${sig.jobTitle}`);
+      } else {
+        if (sig.company)    parts.push(`[PAGE structured data company] ${sig.company}`);
+        if (sig.jobTitle)   parts.push(`[PAGE structured data title] ${sig.jobTitle}`);
+        if (sig.rawTitle)   parts.push(`[PAGE title/H1] ${sig.rawTitle}`);
+        if (sig.ogSiteName) parts.push(`[PAGE og:site_name] ${sig.ogSiteName}`);
+        if (sig.domCompany) parts.push(`[PAGE DOM company element] ${sig.domCompany}`);
+        if (sig.hostname)   parts.push(`[PAGE hostname hint] ${sig.hostname}`);
+      }
+    } catch(e) {
+      console.warn('[AI Blaze] Context scraping error:', e.message);
     }
 
-    // ── PRIORITY 2: Page structured/DOM signals (only useful if on the actual job page) ──
-    const sig = scrapePageSignals();
-    if (sig.preciseDomain) {
-      parts.push(`[VERIFIED DOM COMPANY] ${sig.company}`);
-      parts.push(`[VERIFIED DOM TITLE] ${sig.jobTitle}`);
-    } else {
-      if (sig.company)    parts.push(`[PAGE structured data company] ${sig.company}`);
-      if (sig.jobTitle)   parts.push(`[PAGE structured data title] ${sig.jobTitle}`);
-      if (sig.rawTitle)   parts.push(`[PAGE title/H1] ${sig.rawTitle}`);
-      if (sig.ogSiteName) parts.push(`[PAGE og:site_name] ${sig.ogSiteName}`);
-      if (sig.domCompany) parts.push(`[PAGE DOM company element] ${sig.domCompany}`);
-      if (sig.hostname)   parts.push(`[PAGE hostname hint] ${sig.hostname}`);
-    }
     parts.push(`[PAGE URL] ${pageUrl}`);
 
     // ── PRIORITY 3: Full JD text (let Gemini read it directly) ──
