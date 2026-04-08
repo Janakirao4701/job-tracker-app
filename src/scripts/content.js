@@ -691,27 +691,51 @@
       if (el?.innerText?.trim()) { signals.domCompany = el.innerText.trim(); break; }
     }
 
-    // URL hostname as last-resort company hint
+    // Logo Scraper: Check alt text of the first link containing a logo/brand
+    if (!signals.domCompany) {
+      const logoLink = document.querySelector('header a, nav a, .navbar a, [class*="logo"] a');
+      if (logoLink) {
+        const logoImg = logoLink.querySelector('img, svg');
+        const label = logoLink.getAttribute('aria-label') || logoImg?.getAttribute('alt') || logoImg?.getAttribute('aria-label');
+        if (label && !/logo|home|brand/i.test(label.trim())) {
+          signals.domCompany = label.trim();
+        }
+      }
+    }
+
+    // URL hostname and path as deep company hints
     try {
       const url = new URL(window.location.href);
-      const host = url.hostname.toLowerCase().replace(/^www\.|^jobs\.|^careers\.|^boards\.|^app\./, '');
-      const parts = host.split('.');
+      const host = url.hostname.toLowerCase();
+      const path = url.pathname.toLowerCase();
       
-      // Handle subdomains for portals (acme.lever.co -> acme)
-      if (parts.length >= 3 && (host.includes('lever.co') || host.includes('greenhouse.io') || host.includes('workdayjobs.com'))) {
-        signals.hostname = parts[0];
-      } else if (parts.length >= 2) {
-        signals.hostname = parts[0];
+      const GENERIC_SUBDOMAINS = /^(www|jobs|careers|apply|boards|app|recruit|hire|join|talent|work|portal|listing|career|job|opportunity|opportunities)$/;
+
+      // Handle subdomains (acme.lever.co -> acme, acme.com -> acme)
+      const parts = host.replace(/^www\./, '').split('.');
+      let candidate = parts[0];
+
+      // If subdomain is generic, use the domain name instead
+      if (GENERIC_SUBDOMAINS.test(candidate) && parts.length >= 2) {
+        candidate = parts[1];
       }
 
-      // REFINEMENT: Handle path-based identifiers (e.g. jobs.lever.co/acme/)
-      if (host === 'lever.co' || host === 'greenhouse.io') {
-         const pathParts = url.pathname.split('/').filter(Boolean);
-         if (pathParts.length > 0) signals.hostname = pathParts[0];
+      // Special handling for major portals where path is often better
+      if (host.includes('lever.co') || host.includes('greenhouse.io') || host.includes('workdayjobs.com') || host.includes('simplify.jobs')) {
+         const pathSegments = path.split('/').filter(Boolean);
+         // Check if first or second segment might be the company
+         // (e.g. /p/acme, /company/acme, /acme/jobs)
+         if (pathSegments.length > 0) {
+            let segment = pathSegments[0];
+            if (/^(p|company|at|jobs|hiring|listing)$/.test(segment) && pathSegments.length > 1) {
+              segment = pathSegments[1];
+            }
+            candidate = segment;
+         }
       }
 
-      if (signals.hostname) {
-        signals.hostname = signals.hostname.replace(/[\-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      if (candidate && !GENERIC_SUBDOMAINS.test(candidate)) {
+        signals.hostname = candidate.replace(/[\-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       }
     } catch(e) {}
 
@@ -771,16 +795,27 @@
       }
     }
 
-    // Pattern 5: "We are <Company>" / "<Company> is looking for" / "At <Company>..."
+    // Pattern 5: "We are <Company>" / "At <Company>..." / "Welcome to <Company>"
     if (!signals.company) {
-      for (const line of lines.slice(0, 30)) {
-        let m = line.match(/^(?:we are|we're|welcome to|join|at)\s+([A-Z][A-Za-z0-9&' ]{1,40?})[,!.]/i);
+      for (const line of lines.slice(0, 40)) {
+        let m = line.match(/^(?:we are|we're|welcome to|join|at|about)\s+([A-Z][A-Za-z0-9&' ]{1,40?})[,!.]/i);
         if (!m) m = line.match(/^([A-Z][A-Za-z0-9&' ]{1,40?})\s+is\s+(?:looking|hiring|seeking|a\s+leading|a\s+global)/i);
         if (m) { 
-          const candidate = m[1].trim();
-          if (!/^(the|this|our|we)$/i.test(candidate)) {
+          const candidate = m[1].trim().replace(/\s*(at|@).*/i, '');
+          if (candidate.length > 2 && !/^(the|this|our|we|join)$/i.test(candidate)) {
             signals.company = candidate; break; 
           }
+        }
+      }
+    }
+
+    // Pattern 6: Copyright footer or "All rights reserved"
+    if (!signals.company) {
+      for (const line of lines.slice(-20)) {
+        const m = line.match(/\(c\)|©|Copyright\s+(?:\d{4}\s+)?(?:by\s+)?([A-Z][A-Za-z0-9&' ]{2,50?})(?:,?\s+|\.)/i);
+        if (m && !/^(all rights reserved|inc|llc|inc\.|llc\.)$/i.test(m[1].trim())) {
+          signals.company = m[1].replace(/,?\s+(inc|llc|corp|ltd).*/i, '').trim();
+          break;
         }
       }
     }
@@ -838,7 +873,7 @@ Extract the company name and job title from the context below.
 RULES:
 - Output ONLY a single raw JSON object. No markdown, no code fences, no explanation.
 - Format: {"company_name":"...","job_title":"..."}
-- company_name: the actual HIRING COMPANY — never a job board (LinkedIn, Indeed, Naukri, Glassdoor, Internshala, Wellfound, Simplify, Monster)
+- company_name: the actual HIRING COMPANY — never a job board (LinkedIn, Indeed, Naukri, Glassdoor, Internshala, Wellfound, Simplify, Monster). USE the [PAGE URL] or [PAGE hostname hint] to identify the hiring organization if it is not clearly listed in the text.
 - job_title: the exact role title
 - If a value cannot be determined, use ""
 
