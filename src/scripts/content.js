@@ -982,9 +982,9 @@ ${context}`;
   async function callGeminiBlaze(key, prompt) {
     const model = await new Promise(res => {
       if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-        chrome.storage.local.get('rjd_gemini_model', data => res(data.rjd_gemini_model || 'gemini-1.5-flash'));
+        chrome.storage.local.get('rjd_gemini_model', data => res(data.rjd_gemini_model || 'gemini-2.0-flash'));
       } else {
-        res(localStorage.getItem('rjd_gemini_model') || 'gemini-1.5-flash');
+        res(localStorage.getItem('rjd_gemini_model') || 'gemini-2.0-flash');
       }
     });
 
@@ -1153,7 +1153,7 @@ ${context}`;
           <input type="password" id="rjd-sk-input" placeholder="AIzaSy..." style="width:100%;padding:10px 12px;border:1.5px solid var(--border-color,#e2e8f0);border-radius:8px;font-size:12px;font-family:inherit;background:var(--bg-primary,#fff) !important;color:var(--text-primary,#1e293b) !important;margin-bottom:10px;"/>
           
           <label style="font-size:10px;font-weight:700;color:var(--text-muted,#94a3b8);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">Model ID</label>
-          <input type="text" id="rjd-sm-input" placeholder="gemini-1.5-flash" list="rjd-models-list" style="width:100%;padding:10px 12px;border:1.5px solid var(--border-color,#e2e8f0);border-radius:8px;font-size:12px;font-family:inherit;background:var(--bg-primary,#fff) !important;color:var(--text-primary,#1e293b) !important;margin-bottom:16px;"/>
+          <input type="text" id="rjd-sm-input" placeholder="gemini-2.0-flash" list="rjd-models-list" style="width:100%;padding:10px 12px;border:1.5px solid var(--border-color,#e2e8f0);border-radius:8px;font-size:12px;font-family:inherit;background:var(--bg-primary,#fff) !important;color:var(--text-primary,#1e293b) !important;margin-bottom:16px;"/>
           <datalist id="rjd-models-list">
             <option value="gemini-1.5-flash">
             <option value="gemini-1.5-pro">
