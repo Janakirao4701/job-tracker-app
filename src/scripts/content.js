@@ -1049,6 +1049,7 @@ ${context}`;
     try {
       let clipText = '';
       try { clipText = await navigator.clipboard.readText(); } catch(e) {}
+      clipText = clipText || '';
 
       if (!clipText.trim()) {
         // Fall back to page body text so Gemini always has content to work with
@@ -2219,6 +2220,7 @@ ${context}`;
 
       // Try to read clipboard
       try { clipText = await navigator.clipboard.readText(); } catch(e) {}
+      clipText = clipText || '';
 
       // Fall back to page body text if clipboard is empty (same behavior as runExtract)
       if (!clipText.trim()) {
