@@ -919,6 +919,10 @@ ${context}`;
       parsed.job_title    = raw.match(/"job_title"\s*:\s*"([^"]*)"/)?.[1]    || '';
     }
 
+    // Normalize: ensure company_name and job_title are always strings
+    parsed.company_name = String(parsed.company_name ?? '');
+    parsed.job_title    = String(parsed.job_title ?? '');
+
     // Eligibility is always true now (extraction only — eligibility removed from prompt)
     parsed.isEligible = true;
     parsed.eligibilityReason = '';
