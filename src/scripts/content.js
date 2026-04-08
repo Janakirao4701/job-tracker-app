@@ -1679,8 +1679,8 @@ ${context}`;
     const panel = document.getElementById('rjd-detail-panel');
     document.getElementById('rjd-main').style.display  = 'none';
     panel.style.display = 'flex';
-    document.getElementById('rjd-detail-company').textContent = app.company  || '—';
-    document.getElementById('rjd-detail-title').textContent   = app.jobTitle || '—';
+    document.getElementById('rjd-detail-company-input').value = app.company  || '';
+    document.getElementById('rjd-detail-title-input').value   = app.jobTitle || '';
     // URL — populate editable input and sync Open link
     const urlInput = document.getElementById('rjd-detail-url-input');
     const urlLink  = document.getElementById('rjd-detail-url');
@@ -1933,10 +1933,17 @@ ${context}`;
         <div id="rjd-detail-panel" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
           <div class="rjd-panel-header">
             <button class="rjd-back-btn" id="rjd-detail-back">← Back</button>
-            <span class="rjd-panel-title" id="rjd-detail-company">Detail</span>
+            <span class="rjd-panel-title">Details</span>
           </div>
           <div class="rjd-panel-body">
-            <div class="rjd-detail-row"><span class="rjd-detail-lbl">Job Title</span><span id="rjd-detail-title"></span></div>
+            <div class="rjd-detail-row">
+              <span class="rjd-detail-lbl">Company</span>
+              <input type="text" id="rjd-detail-company-input" style="flex:1;padding:6px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:#1e293b;outline:none;" placeholder="Company Name"/>
+            </div>
+            <div class="rjd-detail-row">
+              <span class="rjd-detail-lbl">Job Title</span>
+              <input type="text" id="rjd-detail-title-input" style="flex:1;padding:6px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:#1e293b;outline:none;" placeholder="Job Title"/>
+            </div>
             <div class="rjd-detail-row"><span class="rjd-detail-lbl">URL</span>
               <div style="display:flex;gap:6px;align-items:center;flex:1;">
                 <input type="url" id="rjd-detail-url-input" style="flex:1;padding:4px 8px;border:1px solid #cbd5e0;border-radius:5px;font-size:12px;font-family:inherit;background:#fff;color:#1a202c;" placeholder="https://..."/>
@@ -1961,7 +1968,7 @@ ${context}`;
             <div class="rjd-detail-section">
               <div class="rjd-detail-lbl">Notes</div>
               <textarea id="rjd-detail-notes" class="rjd-notes-input" rows="3"></textarea>
-              <button id="rjd-save-notes-btn" class="rjd-action-btn" style="margin-top:6px;">Save Notes</button>
+              <button id="rjd-save-notes-btn" class="rjd-action-btn" style="margin-top:6px;">Save Changes</button>
             </div>
             <div style="margin-top:12px;"><button id="rjd-delete-app-btn" class="rjd-delete-app-btn">Delete Application</button></div>
           </div>
@@ -2360,12 +2367,14 @@ ${context}`;
       if (e.target.id === 'rjd-save-notes-btn') {
         const app = applications.find(a=>a.id===currentDetailId);
         if (app) {
+          app.company = document.getElementById('rjd-detail-company-input').value.trim();
+          app.jobTitle = document.getElementById('rjd-detail-title-input').value.trim();
           app.notes = document.getElementById('rjd-detail-notes').value;
           app.followUpDate = document.getElementById('rjd-detail-followup').value || '';
           const newUrl = (document.getElementById('rjd-detail-url-input')?.value || '').trim();
           app.url = newUrl;
           await dbUpdateApp(app);
-          showToast('Saved');
+          showToast('Changes Saved ✓');
           renderTable();
         }
       }

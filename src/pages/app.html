@@ -343,7 +343,7 @@ tr:hover td{background:var(--bg)}
 .blaze-input-footer { padding: 16px 32px 32px; }
 .blaze-input-container { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; padding: 10px 14px; display: flex; gap: 12px; transition: border-color 0.2s; }
 .blaze-input-container:focus-within { border-color: #4f46e5; box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1); }
-.blaze-textarea { flex: 1; background: none; border: none; resize: none; padding: 4px 0; color: #fff; font-size: 14px; font-family: inherit; min-height: 24px; max-height: 200px; line-height: 1.5; }
+.blaze-textarea { flex: 1; background: none; border: none; resize: vertical; padding: 4px 0; color: #fff; font-size: 14px; font-family: inherit; min-height: 24px; max-height: 200px; line-height: 1.5; }
 .blaze-textarea:focus { outline: none; }
 .blaze-textarea::placeholder { color: #94a3b8; opacity: 0.7; }
 .blaze-submit-btn { background: #4f46e5; color: #fff; border: none; border-radius: 16px; width: 40px; height: 40px; font-weight: 800; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); }
@@ -572,16 +572,16 @@ tr:hover td{background:var(--bg)}
 <div class="detail-modal-overlay hidden" id="detail-modal">
   <div class="modal" style="max-width:640px">
     <div class="modal-header">
-      <div>
-        <div class="modal-title" id="detail-modal-title">Application</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:2px" id="detail-modal-sub"></div>
+      <div style="flex:1; display:flex; flex-direction:column; gap:6px; margin-right: 12px;">
+        <input type="text" id="detail-modal-title" class="settings-input" style="font-size:17px; font-weight:700; border:none; padding:4px 8px; background:var(--bg-inset); border-radius:8px; width:100%;" placeholder="Company Name"/>
+        <input type="text" id="detail-modal-sub" class="settings-input" style="font-size:12px; font-weight:500; border:none; padding:4px 8px; background:var(--bg-inset); border-radius:8px; width:100%; color:var(--text-muted);" placeholder="Job Title"/>
       </div>
       <button class="modal-close" id="detail-modal-close">✕</button>
     </div>
     <div class="modal-body">
-      <div style="display:flex;gap:10px;margin-bottom:16px;align-items:center">
+      <div style="display:flex; gap:10px; margin-bottom:16px; align-items:center">
         <select class="status-select" id="detail-status-sel" style="flex:0 0 auto"></select>
-        <div style="display:flex;gap:6px;align-items:center;flex:1">
+        <div style="display:flex; gap:6px; align-items:center; flex:1">
           <input type="url" class="filter-input" id="detail-url-input" placeholder="Job URL" style="flex:1"/>
           <a id="detail-url-link" target="_blank" class="url-link" style="white-space:nowrap">Open ↗</a>
         </div>
@@ -592,17 +592,17 @@ tr:hover td{background:var(--bg)}
         <button class="detail-tab" data-tab="notes">Notes</button>
       </div>
       <div id="detail-tab-jd" class="detail-tab-panel">
-        <div id="detail-jd-text" style="background:var(--bg-inset);border:1px solid var(--border);border-radius:10px;padding:16px;font-size:12px;font-family:'SF Mono',monospace;line-height:1.7;color:var(--text2);max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-word"></div>
+        <textarea id="detail-jd-text" style="width:100%; height:300px; background:var(--bg-inset); border:1px solid var(--border); border-radius:10px; padding:16px; font-size:12px; font-family:'SF Mono',monospace; line-height:1.7; color:var(--text2); overflow-y:auto; resize:vertical; outline:none;" placeholder="No job description saved."></textarea>
       </div>
       <div id="detail-tab-resume" class="detail-tab-panel hidden">
-        <div id="detail-resume-text" style="background:var(--bg-inset);border:1px solid var(--border);border-radius:10px;padding:16px;font-size:12px;font-family:'SF Mono',monospace;line-height:1.7;color:var(--text2);max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-word"></div>
+        <textarea id="detail-resume-text" style="width:100%; height:300px; background:var(--bg-inset); border:1px solid var(--border); border-radius:10px; padding:16px; font-size:12px; font-family:'SF Mono',monospace; line-height:1.7; color:var(--text2); overflow-y:auto; resize:vertical; outline:none;" placeholder="No tailored resume saved."></textarea>
       </div>
       <div id="detail-tab-notes" class="detail-tab-panel hidden">
         <div class="field-group" style="margin-bottom:12px">
           <label>Notes</label>
           <textarea class="settings-input" id="detail-notes-input" rows="4" placeholder="Add notes..."></textarea>
         </div>
-        <div style="display:flex;gap:12px">
+        <div style="display:flex; gap:12px">
           <div class="field-group" style="flex:1">
             <label>Follow-up Date</label>
             <input type="date" class="settings-input" id="detail-followup-input"/>

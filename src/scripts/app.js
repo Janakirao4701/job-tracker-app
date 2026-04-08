@@ -1461,9 +1461,11 @@ function renderApplications() {
 
 // ── DETAIL MODAL ──
 function openDetailModal(app) {
-  // Title & subtitle
-  document.getElementById('detail-modal-title').textContent = app.company || 'Application';
-  document.getElementById('detail-modal-sub').textContent   = app.jobTitle || '';
+  // Company & Job Title (now inputs)
+  const titleInput = document.getElementById('detail-modal-title');
+  const subInput   = document.getElementById('detail-modal-sub');
+  if (titleInput) titleInput.value = app.company || '';
+  if (subInput)   subInput.value   = app.jobTitle || '';
 
   // JD tab
   const jdEl = document.getElementById('detail-jd-text');
@@ -1520,6 +1522,8 @@ function openDetailModal(app) {
 
   // Save changes
   document.getElementById('detail-modal-save').onclick = async () => {
+    app.company      = document.getElementById('detail-modal-title').value.trim();
+    app.jobTitle     = document.getElementById('detail-modal-sub').value.trim();
     app.notes        = document.getElementById('detail-notes-input').value.trim();
     app.followUpDate = document.getElementById('detail-followup-input').value;
     app.status       = document.getElementById('detail-status-sel').value;
@@ -1536,7 +1540,7 @@ function openDetailModal(app) {
       app.date = d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
     }
     const ok = await updateApp(app);
-    if (ok) { showToast('Saved ✓'); document.getElementById('detail-modal').classList.add('hidden'); renderPage(currentPage); }
+    if (ok) { showToast('Changes Saved ✓'); document.getElementById('detail-modal').classList.add('hidden'); renderPage(currentPage); }
     else    { showToast('Save failed', true); }
   };
 }
