@@ -1,12 +1,12 @@
 /**
- * AI Blaze — Copilot v2.0 (Modular Engine)
+ * AI Blaze — Copilot v2.0 (Gemini Edition)
  * 
  * Features:
  * 1. Highlight-to-Prompt (Quick Actions)
  * 2. Shortcut Triggers Anywhere (-ans, /fix)
  * 3. Shadow DOM UI Injection
  * 
- * Powered by Gemini 2.5 & Ollama
+ * Powered by Gemini 3.1 Flash Lite
  */
 
 (function() {

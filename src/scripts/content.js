@@ -824,11 +824,9 @@
   }
 
   async function extractWithGemini(jdText, pageUrl) {
-    const engine = localStorage.getItem('rjd_extraction_engine') || 'gemini';
-    if (engine === 'ollama') return extractWithOllama(jdText, pageUrl);
-
     const key = await new Promise(res => loadGeminiKey(res));
     if (!key) throw new Error('Gemini API key not set — open Settings to add it');
+
 
     const context = buildExtractionContext(jdText, pageUrl);
     const hasJD   = jdText && jdText.trim().length > 50;
@@ -913,64 +911,19 @@ ${context}`;
   }
 
 
-  async function extractWithOllama(jdText, pageUrl) {
-    const ollamaUrl = localStorage.getItem('rjd_ollama_url') || 'http://localhost:11434';
-    const ollamaModel = localStorage.getItem('rjd_ollama_model') || 'llama3.2';
-    const context = buildExtractionContext(jdText, pageUrl);
 
-    const prompt = `You are a precise job-posting parser. Extract the company name and job title from the context below.
-
-RULES:
-- Return ONLY valid JSON: {"company_name":"...","job_title":"..."}
-- No markdown, no explanation.
-- company_name: the actual HIRING COMPANY.
-- job_title: the exact role title.
-- If unknown, use "".
-
-CONTEXT:
-${context}`;
-
-    return callOllama(ollamaUrl, ollamaModel, prompt).then(res => {
-      try {
-        const cleaned = res.replace(/```json|```/g, '').trim();
-        return JSON.parse(cleaned);
-      } catch(e) {
-        // Regex fallback
-        const company = res.match(/"company_name"\s*:\s*"([^"]*)"/)?.[1] || "";
-        const title = res.match(/"job_title"\s*:\s*"([^"]*)"/)?.[1] || "";
-        return { company_name: company, job_title: title };
-      }
-    });
-  }
 
 
 
   /**
    * Universal AI Engines for v2.0 Copilot
    */
-  async function callOllama(url, model, prompt) {
-    try {
-      const resp = await fetch(`${url}/api/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: model || 'llama3.2',
-          prompt: prompt,
-          stream: false
-        })
-      });
 
-      if (!resp.ok) throw new Error('Ollama connection failed. Ensure Ollama is running.');
-      const data = await resp.json();
-      return data.response || 'No response generated.';
-    } catch (e) {
-      throw new Error(`Ollama Error: ${e.message}`);
-    }
-  }
 
   async function callGeminiBlaze(key, prompt) {
-    const model = localStorage.getItem('rjd_blaze_model') || "gemini-1.5-flash";
+    const model = "gemini-3.1-flash-lite";
     const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${key}`;
+
 
     const resp = await fetch(url, {
       method: 'POST',
@@ -1139,16 +1092,7 @@ ${context}`;
             <button id="rjd-sk-show" style="padding:8px 14px;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;font-size:11px;cursor:pointer;background:var(--bg-secondary,#f8fafc);color:var(--text-muted,#94a3b8);font-family:inherit;transition:all 0.2s;">Show</button>
             <button id="rjd-sk-save" class="rjd-primary-btn" style="flex:1;padding:8px;">Save Key</button>
           </div>
-          <div style="border-top:1px solid var(--border-light,#f1f5f9); padding-top:14px; margin-bottom:16px;">
-            <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px;">Extraction Engine</div>
-            <div style="display:flex; gap:8px; margin-bottom:10px;">
-              <button id="extract-engine-gemini" style="flex:1; padding:8px; border-radius:8px; border:2px solid var(--accent); background:var(--accent-light); color:var(--accent-primary); font-size:11px; font-weight:600; cursor:pointer;">✦ Gemini 2.5</button>
-              <button id="extract-engine-ollama" style="flex:1; padding:8px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-muted); font-size:11px; font-weight:600; cursor:pointer;">🦙 Ollama Local</button>
-            </div>
-            <div style="font-size:10px; color:var(--text-muted); line-height:1.4; margin-bottom:12px;">
-              Ollama uses your <b>llama3.2</b> model locally at <b>http://localhost:11434</b>.
-            </div>
-          </div>
+
           <div style="border-top:1px solid var(--border-light,#f1f5f9); padding-top:14px; margin-bottom:16px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                <div style="font-size:13px; font-weight:700; color:var(--text-primary);">v2.0 Copilot Beta</div>
@@ -1173,36 +1117,20 @@ ${context}`;
 
         loadGeminiKey(k => { if (k) document.getElementById('rjd-sk-input').value = k; });
 
-        // Engine Toggle Logic
-        const engine = localStorage.getItem('rjd_extraction_engine') || 'gemini';
-        const updateEngineUI = (newEngine) => {
-          const gBtn = document.getElementById('extract-engine-gemini');
-          const oBtn = document.getElementById('extract-engine-ollama');
-          if (newEngine === 'gemini') {
-            gBtn.style.border = '2px solid var(--accent)'; gBtn.style.background = 'var(--accent-light)'; gBtn.style.color = 'var(--accent-primary)';
-            oBtn.style.border = '1px solid var(--border-color)'; oBtn.style.background = 'var(--bg-secondary)'; oBtn.style.color = 'var(--text-muted)';
-          } else {
-            oBtn.style.border = '2px solid var(--accent)'; oBtn.style.background = 'var(--accent-light)'; oBtn.style.color = 'var(--accent-primary)';
-            gBtn.style.border = '1px solid var(--border-color)'; gBtn.style.background = 'var(--bg-secondary)'; gBtn.style.color = 'var(--text-muted)';
-          }
-          localStorage.setItem('rjd_extraction_engine', newEngine);
-        };
         setTimeout(() => {
-          updateEngineUI(engine);
-          document.getElementById('extract-engine-gemini').onclick = () => updateEngineUI('gemini');
-          document.getElementById('extract-engine-ollama').onclick = () => updateEngineUI('ollama');
-          
           // v2 Copilot Toggle Logic
           const v2Toggle = document.getElementById('v2-copilot-toggle');
           const isV2Enabled = localStorage.getItem('rjd_v2_enabled') === 'true';
-          v2Toggle.checked = isV2Enabled;
-          v2Toggle.onchange = () => {
-            localStorage.setItem('rjd_v2_enabled', v2Toggle.checked);
-            if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-              chrome.storage.local.set({ rjd_v2_enabled: v2Toggle.checked });
-            }
-            showToast('Copilot ' + (v2Toggle.checked ? 'Enabled' : 'Disabled') + ' — Refresh page to apply');
-          };
+          if (v2Toggle) {
+            v2Toggle.checked = isV2Enabled;
+            v2Toggle.onchange = () => {
+              localStorage.setItem('rjd_v2_enabled', v2Toggle.checked);
+              if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+                chrome.storage.local.set({ rjd_v2_enabled: v2Toggle.checked });
+              }
+              showToast('Copilot ' + (v2Toggle.checked ? 'Enabled' : 'Disabled') + ' — Refresh page to apply');
+            };
+          }
         }, 0);
 
         let shown = false;
@@ -1397,7 +1325,7 @@ ${context}`;
               <span style="color:#718096;">Version</span><span style="font-weight:600;color:#1a202c;">4.2.0</span>
             </div>
             <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12px;">
-              <span style="color:#718096;">AI Model</span><span style="font-weight:600;color:#1a202c;">Gemini 2.5 + Ollama</span>
+              <span style="color:#718096;">AI Model</span><span style="font-weight:600;color:#1a202c;">Gemini 3.1 Flash Lite</span>
             </div>
             <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12px;">
               <span style="color:#718096;">Database</span><span style="font-weight:600;color:#1a202c;">Supabase</span>
