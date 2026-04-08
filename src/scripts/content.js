@@ -473,6 +473,27 @@
     });
   }
 
+  function saveGeminiModel(model, cb) {
+    const s = chromeStore();
+    if (s) s.set({ rjd_gemini_model: model }, () => { 
+      if (chrome.runtime.lastError) return;
+      if (cb) cb(); 
+    });
+  }
+
+  function loadGeminiModel(cb) {
+    if (typeof cb !== 'function') return;
+    const s = chromeStore();
+    if (s) {
+      s.get('rjd_gemini_model', r => {
+        if (chrome.runtime.lastError) return cb('gemini-1.5-flash');
+        cb(r.rjd_gemini_model || 'gemini-1.5-flash');
+      });
+    } else {
+      cb('gemini-1.5-flash');
+    }
+  }
+
   function loadGeminiKey(cb) {
     if (typeof cb !== 'function') return;
     const s = chromeStore();
@@ -956,41 +977,45 @@ ${context}`;
 
 
   async function callGeminiBlaze(key, prompt) {
-    const model = "gemini-3.1-flash-lite";
-    const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${key}`;
-
-
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 2048 }
-      })
+    const model = await new Promise(res => {
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        chrome.storage.local.get('rjd_gemini_model', data => res(data.rjd_gemini_model || 'gemini-1.5-flash'));
+      } else {
+        res(localStorage.getItem('rjd_gemini_model') || 'gemini-1.5-flash');
+      }
     });
 
-    if (!resp.ok) {
-      const err = await resp.json();
-      // Simple fallback to v1beta
-      if (resp.status === 404) {
-         const altUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-         const altResp = await fetch(altUrl, {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({
-             contents: [{ parts: [{ text: prompt }] }],
-             generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 2048 }
-           })
-         });
-         if (altResp.ok) {
-           const altData = await altResp.json();
-           return altData.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
-         }
+    const endpoints = [
+      `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`
+    ];
+
+    let lastErr = null;
+    for (const url of endpoints) {
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 2048 }
+          })
+        });
+
+        if (resp.ok) {
+          const data = await resp.json();
+          return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        }
+        
+        const errData = await resp.json();
+        lastErr = errData.error?.message || `HTTP ${resp.status}`;
+        if (resp.status !== 404 && resp.status !== 400) break; 
+      } catch (e) {
+        lastErr = e.message;
       }
-      throw new Error(err.error?.message || 'Gemini API failure');
     }
-    const data = await resp.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
+
+    throw new Error(`Gemini Error: ${lastErr} (Model: ${model}). Check your API key or use a different model in Settings.`);
   }
 
   async function runExtract() {
@@ -1123,9 +1148,20 @@ ${context}`;
           <div id="rjd-sk-msg"></div>
           <label style="font-size:10px;font-weight:700;color:var(--text-muted,#94a3b8);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">API Key</label>
           <input type="password" id="rjd-sk-input" placeholder="AIzaSy..." style="width:100%;padding:10px 12px;border:1.5px solid var(--border-color,#e2e8f0);border-radius:8px;font-size:12px;font-family:inherit;background:var(--bg-primary,#fff) !important;color:var(--text-primary,#1e293b) !important;margin-bottom:10px;"/>
+          
+          <label style="font-size:10px;font-weight:700;color:var(--text-muted,#94a3b8);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">Model ID</label>
+          <input type="text" id="rjd-sm-input" placeholder="gemini-1.5-flash" list="rjd-models-list" style="width:100%;padding:10px 12px;border:1.5px solid var(--border-color,#e2e8f0);border-radius:8px;font-size:12px;font-family:inherit;background:var(--bg-primary,#fff) !important;color:var(--text-primary,#1e293b) !important;margin-bottom:16px;"/>
+          <datalist id="rjd-models-list">
+            <option value="gemini-1.5-flash">
+            <option value="gemini-1.5-pro">
+            <option value="gemini-2.0-flash">
+            <option value="gemini-2.5-flash-lite">
+            <option value="gemini-3.1-flash-lite">
+          </datalist>
+
           <div style="display:flex;gap:8px;margin-bottom:16px;">
             <button id="rjd-sk-show" style="padding:8px 14px;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;font-size:11px;cursor:pointer;background:var(--bg-secondary,#f8fafc);color:var(--text-muted,#94a3b8);font-family:inherit;transition:all 0.2s;">Show</button>
-            <button id="rjd-sk-save" class="rjd-primary-btn" style="flex:1;padding:8px;">Save Key</button>
+            <button id="rjd-sk-save" class="rjd-primary-btn" style="flex:1;padding:8px;">Save Config</button>
           </div>
 
           <div style="border-top:1px solid var(--border-light,#f1f5f9); padding-top:14px; margin-bottom:16px;">
@@ -1151,6 +1187,7 @@ ${context}`;
           </div>`;
 
         loadGeminiKey(k => { if (k) document.getElementById('rjd-sk-input').value = k; });
+        loadGeminiModel(m => { if (m) document.getElementById('rjd-sm-input').value = m; });
 
         setTimeout(() => {
           // v2 Copilot Toggle Logic
@@ -1174,13 +1211,23 @@ ${context}`;
           document.getElementById('rjd-sk-input').type = shown ? 'text' : 'password';
           document.getElementById('rjd-sk-show').textContent = shown ? 'Hide' : 'Show';
         });
+
         document.getElementById('rjd-sk-save').addEventListener('click', () => {
           const key = document.getElementById('rjd-sk-input').value.trim();
+          const model = document.getElementById('rjd-sm-input').value.trim();
+          
           if (!key) { showSMsg('Enter your API key', true); return; }
           if (!key.startsWith('AIza')) { showSMsg('Key should start with AIza...', true); return; }
+          
           saveGeminiKey(key, () => {
             GEMINI_KEY = key;
-            showSMsg('Key saved ✓', false);
+            if (model) {
+              saveGeminiModel(model, () => {
+                showSMsg('Config saved ✓', false);
+              });
+            } else {
+              showSMsg('Key saved ✓', false);
+            }
           });
         });
 

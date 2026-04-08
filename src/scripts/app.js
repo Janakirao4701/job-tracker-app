@@ -314,6 +314,22 @@ async function loadAIKeyDB(provider) {
 async function saveGeminiKeyDB(key) { return saveAIKeyDB('google', key); }
 async function loadGeminiKeyDB() { return loadAIKeyDB('google'); }
 
+async function saveAIModelDB(provider, model) {
+  const storageSuffix = provider === 'google' ? 'gemini' : provider;
+  localStorage.setItem(`rjd_${storageSuffix}_model`, model);
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    const syncObj = {}; 
+    syncObj[`rjd_${storageSuffix}_model`] = model;
+    chrome.storage.local.set(syncObj);
+  }
+  return true;
+}
+
+async function loadAIModelDB(provider) {
+  const storageSuffix = provider === 'google' ? 'gemini' : provider;
+  return localStorage.getItem(`rjd_${storageSuffix}_model`) || 'gemini-1.5-flash';
+}
+
 // ── RESUME PROFILE DB SYNC ──
 async function saveResumeProfileDB(profile) {
   try {
@@ -1565,7 +1581,8 @@ function renderSettingsSection(sec) {
   if (sec === 'apikey') {
     panel.innerHTML = `<div style="padding:60px;text-align:center"><div class="spinner"></div></div>`;
     
-    loadAIKeyDB('google').then(googleKey => {
+    loadAIKeyDB('google').then(async googleKey => {
+      const googleModel = await loadAIModelDB('google');
       panel.innerHTML = `
         <div class="settings-section-title">AI Provider Configuration</div>
         <div class="settings-section-sub">Configure your Gemini engine for extraction and AI-Blaze assistance.</div>
@@ -1577,13 +1594,30 @@ function renderSettingsSection(sec) {
             <div style="width:40px; height:40px; background:#4285f4; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:20px;">💎</div>
             <div>
               <div style="font-weight:700; color:var(--text);">Google Gemini</div>
-              <div style="font-size:11px; color:var(--text-muted);">Standard extraction engine (Gemini 3.1 Flash Lite).</div>
+              <div style="font-size:11px; color:var(--text-muted);">Consolidated extraction engine for all AI features.</div>
             </div>
             <a href="https://aistudio.google.com" target="_blank" style="margin-left:auto; font-size:11px; color:var(--accent); font-weight:700;">Get Free Key ↗</a>
           </div>
-          <div style="display:flex; gap:8px;">
-            <input type="password" class="settings-input" id="google-key-input" value="${esc(googleKey)}" placeholder="AIzaSy..." style="flex:1;"/>
-            <button class="btn-new" data-toggle-password="google-key-input" style="width:70px;">Show</button>
+          
+          <div style="margin-bottom:16px;">
+            <label style="display:block; font-size:11px; font-weight:700; margin-bottom:6px; color:var(--text-muted);">API KEY</label>
+            <div style="display:flex; gap:8px;">
+              <input type="password" class="settings-input" id="google-key-input" value="${esc(googleKey)}" placeholder="AIzaSy..." style="flex:1;"/>
+              <button class="btn-new" data-toggle-password="google-key-input" style="width:70px;">Show</button>
+            </div>
+          </div>
+
+          <div>
+            <label style="display:block; font-size:11px; font-weight:700; margin-bottom:6px; color:var(--text-muted);">MODEL ID</label>
+            <input type="text" class="settings-input" id="google-model-input" value="${esc(googleModel)}" placeholder="e.g. gemini-1.5-flash" style="width:100%;" list="gemini-models-list"/>
+            <datalist id="gemini-models-list">
+              <option value="gemini-1.5-flash">
+              <option value="gemini-1.5-pro">
+              <option value="gemini-2.0-flash">
+              <option value="gemini-2.5-flash-lite">
+              <option value="gemini-3.1-flash-lite">
+            </datalist>
+            <div style="font-size:10px; color:var(--text-muted); margin-top:6px;">Pro-tip: Use <strong>gemini-1.5-flash</strong> for best speed/stability fallback.</div>
           </div>
         </div>
 
@@ -1595,6 +1629,7 @@ function renderSettingsSection(sec) {
 
       document.getElementById('save-all-keys-btn').onclick = async () => {
         const key = document.getElementById('google-key-input').value.trim();
+        const model = document.getElementById('google-model-input').value.trim();
         const btn = document.getElementById('save-all-keys-btn');
         const msgEl = document.getElementById('settings-msg');
         
@@ -1603,6 +1638,7 @@ function renderSettingsSection(sec) {
 
         try {
           await saveAIKeyDB('google', key);
+          if (model) await saveAIModelDB('google', model);
           btn.textContent = 'Configuration Saved ✓';
           btn.style.background = '#10b981';
           msgEl.innerHTML = '<div class="auth-msg success" style="margin:0"><strong>Security Guarantee:</strong> Keys are saved strictly to your local browser storage and will never be synced to the cloud.</div>';
