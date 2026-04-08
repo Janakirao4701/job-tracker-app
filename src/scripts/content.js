@@ -596,6 +596,29 @@
         let title = document.querySelector('.profile_on_detail_page')?.innerText;
         if (company && title) return { company: company.trim(), jobTitle: title.trim(), source: 'internshala_dom' };
       }
+      // Greenhouse
+      if (hostname.includes('greenhouse.io')) {
+        let company = document.querySelector('.company-name')?.innerText
+                   || document.querySelector('.app-title')?.innerText?.split('at')?.[1];
+        let title = document.querySelector('.app-title')?.innerText?.split('at')?.[0]
+                 || document.querySelector('h1.entry-title')?.innerText;
+        if (company || title) return { company: company?.trim(), jobTitle: title?.trim(), source: 'greenhouse_dom' };
+      }
+      // Lever
+      if (hostname.includes('lever.co')) {
+        let title = document.querySelector('.posting-headline h2')?.innerText;
+        let company = document.querySelector('meta[property="og:site_name"]')?.content 
+                   || document.title.split('-')?.[1];
+        if (company || title) return { company: company?.trim(), jobTitle: title?.trim(), source: 'lever_dom' };
+      }
+      // Workday
+      if (hostname.includes('myworkdayjobs.com')) {
+        let title = document.querySelector('[data-automation-id="jobTitle"]')?.innerText 
+                 || document.querySelector('h1')?.innerText;
+        let company = document.querySelector('[data-automation-id="companyLogo"]')?.[1] // Sometimes in alt
+                   || document.title.split('-')?.[0];
+        if (company || title) return { company: company?.trim(), jobTitle: title?.trim(), source: 'workday_dom' };
+      }
     } catch(e) {}
     return null;
   }
@@ -672,8 +695,18 @@
 
     // URL hostname as last-resort company hint
     try {
-      const host = new URL(window.location.href).hostname.replace(/^www\.|^jobs\.|^careers\.|^jobs\./, '');
-      signals.hostname = host.split('.')[0]; 
+      const url = new URL(window.location.href);
+      const host = url.hostname.toLowerCase().replace(/^www\.|^jobs\.|^careers\.|^boards\.|^app\./, '');
+      const parts = host.split('.');
+      // Handle subdomains for portals (acme.lever.co -> acme)
+      if (parts.length >= 3 && (host.includes('lever.co') || host.includes('greenhouse.io') || host.includes('workdayjobs.com'))) {
+        signals.hostname = parts[0];
+      } else if (parts.length >= 2) {
+        signals.hostname = parts[0];
+      }
+      if (signals.hostname) {
+        signals.hostname = signals.hostname.replace(/[\-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      }
     } catch(e) {}
 
     return signals;
@@ -732,13 +765,17 @@
       }
     }
 
-    // Pattern 5: "We are <Company>" / "<Company> is looking for"
+    // Pattern 5: "We are <Company>" / "<Company> is looking for" / "At <Company>..."
     if (!signals.company) {
-      for (const line of lines.slice(0, 20)) {
-        let m = line.match(/^(?:we are|we're|welcome to|join)\s+([A-Z][A-Za-z0-9&' ]{1,40?})[,!.]/);
-        if (!m) m = line.match(/^([A-Z][A-Za-z0-9&' ]{1,40?})\s+is\s+(?:looking|hiring|seeking)/);
-        if (!m) m = line.match(/^([A-Z][A-Za-z0-9&'.\- ]{1,40?})\s+is\s+a\s+(?:leading|global|fast|growing)/i);
-        if (m) { signals.company = m[1].trim(); break; }
+      for (const line of lines.slice(0, 30)) {
+        let m = line.match(/^(?:we are|we're|welcome to|join|at)\s+([A-Z][A-Za-z0-9&' ]{1,40?})[,!.]/i);
+        if (!m) m = line.match(/^([A-Z][A-Za-z0-9&' ]{1,40?})\s+is\s+(?:looking|hiring|seeking|a\s+leading|a\s+global)/i);
+        if (m) { 
+          const candidate = m[1].trim();
+          if (!/^(the|this|our|we)$/i.test(candidate)) {
+            signals.company = candidate; break; 
+          }
+        }
       }
     }
 
@@ -882,10 +919,10 @@ ${context}`;
       }
     }
 
-    // If Gemini returned a job board as the company, override with JD signals first
-    const JOB_BOARDS = /^(linkedin|indeed|glassdoor|naukri|monster|ziprecruiter|dice|simplyhired|hired\.com|wellfound|angel\.co|internshala|simplify|greenhouse|lever|workday|workable|breezy|ashby|dover)$/i;
+    // If Gemini returned a job board as the company, override with signals
+    const JOB_BOARDS = /^(linkedin|indeed|glassdoor|naukri|monster|ziprecruiter|dice|simplyhired|hired\.com|wellfound|angel\.co|internshala|simplify|greenhouse|lever|workday|ashby|lever\.co|greenhouse\.io|myworkdayjobs|breezy|ashbyhq)$/i;
     if (!parsed.company_name || JOB_BOARDS.test(parsed.company_name.trim())) {
-      parsed.company_name = jdSig.company || sig.company || sig.domCompany || sig.ogSiteName || '';
+      parsed.company_name = jdSig.company || sig.company || sig.domCompany || sig.ogSiteName || sig.hostname || '';
     }
 
     // If title is empty, use JD pre-parsed title first, then structured data

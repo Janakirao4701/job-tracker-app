@@ -366,10 +366,11 @@
     linkedin: () => {
       const jobEl = document.querySelector('.job-view-layout') || document.body;
       return {
-        company: jobEl.querySelector('.job-details-jobs-unified-top-card__company-name')?.innerText 
+        company: jobEl.querySelector('.job-details-jobs-unified-top-card__company-name a')?.innerText 
+              || jobEl.querySelector('.job-details-jobs-unified-top-card__company-name')?.innerText 
               || document.querySelector('.topcard__org-name-link')?.innerText
               || '',
-        title:   jobEl.querySelector('.job-details-jobs-unified-top-card__job-title')?.innerText
+        title:   jobEl.querySelector('.job-details-jobs-unified-top-card__job-title h1')?.innerText
               || document.querySelector('.top-card-layout__title')?.innerText
               || '',
         description: jobEl.querySelector('#job-details')?.innerText || ''
@@ -382,11 +383,29 @@
         description: document.querySelector('#content')?.innerText || ''
       };
     },
-    generic: () => {
+    lever: () => {
       return {
-        title: document.title,
+        company: document.querySelector('meta[property="og:site_name"]')?.content || document.title.split('-')?.[1]?.trim() || '',
+        title: document.querySelector('.posting-headline h2')?.innerText || '',
+        description: document.querySelector('.posting-sections')?.innerText || ''
+      };
+    },
+    workday: () => {
+      return {
+        company: document.title.split('-')?.[0]?.trim() || '',
+        title: document.querySelector('[data-automation-id="jobTitle"]')?.innerText || '',
+        description: document.querySelector('[data-automation-id="jobPostingDescription"]')?.innerText || ''
+      };
+    },
+    generic: () => {
+      const url = new URL(window.location.href);
+      const host = url.hostname.toLowerCase().replace(/^www\.|^jobs\.|^careers\.|^boards\.|^app\./, '').split('.')[0];
+      const fallbackCompany = host.replace(/[\-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      return {
+        company: fallbackCompany,
+        title: document.title.split('|')[0].split('-')[0].trim(),
         url: window.location.href,
-        selection: window.getSelection().toString()
+        description: document.body.innerText.substring(0, 3000)
       };
     }
   };
