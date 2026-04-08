@@ -71,8 +71,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
-// Also run once on install/startup
-checkInterviewsToday();
+// Safe initialization: delay check slightly to ensure CONFIG is ready and worker state is stable
+setTimeout(() => {
+  checkInterviewsToday().catch(e => console.error('[RJD SW] Init error:', e));
+}, 1000);
 
 async function checkInterviewsToday() {
   const { rjd_session } = await chrome.storage.local.get('rjd_session');

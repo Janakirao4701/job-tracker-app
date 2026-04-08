@@ -148,7 +148,8 @@ function renderLoggedIn(user, apps) {
 document.addEventListener('DOMContentLoaded', () => {
   chrome.storage.local.get(['rjd_session', 'rjd_apps_cache'], async (res) => {
     const session = res.rjd_session || null;
-    if (!session || !session.token || !session.user || !verifyTokenProject(session.token)) {
+    const sessToken = session.token || session.access_token;
+    if (!session || !sessToken || !session.user || !verifyTokenProject(sessToken)) {
       if (session) chrome.storage.local.remove('rjd_session');
       renderNotLoggedIn();
       return;
@@ -169,7 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     try {
       let r = await fetch(SUPABASE_URL + '/rest/v1/applications?select=*&username=eq.' + session.user.id + '&order=created_at.desc', {
-        headers: { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+session.token }
+        headers: { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+(session.token || session.access_token) }
       });
       
       if (r.status === 401 && session.refreshToken) {
@@ -189,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
           });
           // Retry original fetch
           r = await fetch(SUPABASE_URL + '/rest/v1/applications?select=*&username=eq.' + session.user.id + '&order=created_at.desc', {
-            headers: { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+session.token }
+            headers: { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+(session.token || session.access_token) }
           });
         }
       }

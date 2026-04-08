@@ -76,9 +76,9 @@
             date_raw: item.app.dateRaw, date_key: item.app.dateKey,
             notes: item.app.notes || '', follow_up_date: item.app.followUpDate || null,
           };
-          const res = await fetch(SUPABASE_URL + '/rest/v1/applications', {
+          const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications', {
             method: 'POST',
-            headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
+            headers: { 'Prefer': 'return=representation' },
             body: JSON.stringify(body),
           });
           if (res.ok) {
@@ -2704,9 +2704,10 @@ Return the resume content formatted clearly between these markers.
         chrome.storage.local.get('rjd_session', r => {
           if (chrome.runtime.lastError) { clearInterval(_poll); return; }
           const sess = r.rjd_session || null;
-          if (sess && sess.token && sess.user && !currentUser) {
+          const hasToken = sess && (sess.token || sess.access_token);
+          if (sess && hasToken && sess.user && !currentUser) {
             applySession(sess);
-          } else if ((!sess || !sess.token) && currentUser) {
+          } else if ((!sess || !hasToken) && currentUser) {
             applySession(null);
           }
         });
