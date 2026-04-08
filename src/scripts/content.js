@@ -905,7 +905,7 @@ CONTEXT:
 ${context}`;
 
     const res = await callGeminiBlaze(key, prompt);
-    let raw = res.trim();
+    let raw = (res || '').trim();
 
     // Strip markdown fences if Gemini wraps with ```json ... ```
     raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -1007,7 +1007,7 @@ ${context}`;
 
         if (resp.ok) {
           const data = await resp.json();
-          return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          return String(data.candidates?.[0]?.content?.parts?.[0]?.text ?? '');
         }
         
         const errData = await resp.json();
