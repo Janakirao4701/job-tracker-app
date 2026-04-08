@@ -1,4 +1,4 @@
-importScripts('../lib/config.js');
+importScripts('/src/lib/config.js');
 // ── FORWARD SESSION EVENTS & PROXY FETCHES ──
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'session_saved' || msg.action === 'session_cleared') {
