@@ -44,7 +44,7 @@ chrome.commands.onCommand.addListener(async (command) => {
       },
       args: [command]
     });
-  } catch(e) {}
+  } catch(e) { console.warn('[RJD] Command injection failed:', e.message); }
 });
 
 // ── INTERVIEW NOTIFICATIONS ──
@@ -88,7 +88,7 @@ async function checkInterviewsToday() {
   const today = new Date().toLocaleDateString('en-CA');
   try {
     const res = await fetch(
-      CONFIG.SUPABASE_URL + "/rest/v1/applications?status=eq.Interview Scheduled&select=company,job_title,follow_up_date",
+      CONFIG.SUPABASE_URL + "/rest/v1/applications?status=eq.Interview%20Scheduled&select=company,job_title,follow_up_date",
       { headers: { 'apikey': CONFIG.SUPABASE_KEY, 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' } }
     );
     if (!res.ok) return;
@@ -109,5 +109,5 @@ async function checkInterviewsToday() {
       message: names, priority: 2,
     });
     chrome.storage.local.set({ [storageKey]: true });
-  } catch(e) {}
+  } catch(e) { console.warn('[RJD SW] Interview check failed:', e.message); }
 }

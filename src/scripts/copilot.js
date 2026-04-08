@@ -251,7 +251,7 @@
   function attachListeners() {
     document.addEventListener('mouseup', handleSelection);
     document.addEventListener('mousedown', (e) => {
-      if (shadowRoot.contains(e.target)) return;
+      if (e.composedPath && e.composedPath().some(el => el === floatingToolbar)) return;
       hideToolbar();
     });
 
@@ -291,7 +291,7 @@
       <div class="modal" style="width:500px;">
         <div class="modal-title">AI Response</div>
         <div style="background:var(--bg-inset,#f1f5f9); padding:16px; border-radius:12px; font-size:14px; max-height:300px; overflow-y:auto; line-height:1.6; color:#1e293b; margin-bottom:20px;">
-          ${text.replace(/\n/g, '<br>')}
+          ${text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g, '<br>')}
         </div>
         <div style="display:flex; gap:12px;">
           <button class="btn" id="res-copy" style="flex:1; justify-content:center; border:1px solid #e2e8f0;">📋 Copy</button>

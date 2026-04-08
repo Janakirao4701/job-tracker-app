@@ -237,7 +237,8 @@
     if (res && res.status === 401 && sessionRefreshToken) {
       const ok = await refreshSession();
       if (ok) {
-        if (opts.headers) opts.headers['Authorization'] = 'Bearer ' + sessionToken;
+        if (!opts.headers) opts.headers = {};
+        opts.headers['Authorization'] = 'Bearer ' + sessionToken;
         res = await callProxy(url, opts);
       }
     }
@@ -323,10 +324,12 @@
   }
 
   async function sbSignOut() {
-    await fetch(SUPABASE_URL + '/auth/v1/logout', {
-      method: 'POST',
-      headers: sbHeaders(),
-    });
+    try {
+      await fetch(SUPABASE_URL + '/auth/v1/logout', {
+        method: 'POST',
+        headers: sbHeaders(),
+      });
+    } catch(e) { /* best-effort logout */ }
   }
 
   async function dbLoadApps() {
@@ -336,7 +339,7 @@
     // Paginate to bypass Supabase's default 1000-row cap
     while (true) {
       const res = await sbFetch(
-        SUPABASE_URL + `/rest/v1/applications?select=*&order=created_at.asc&limit=${PAGE_SIZE}&offset=${offset}`,
+        SUPABASE_URL + `/rest/v1/applications?username=eq.${currentUser.id}&select=*&order=created_at.asc&limit=${PAGE_SIZE}&offset=${offset}`,
         { headers: { ...sbHeaders(), 'Range-Unit': 'items', 'Range': `${offset}-${offset + PAGE_SIZE - 1}` } }
       );
       const data = await res.json();
@@ -514,7 +517,7 @@
     main.innerHTML = `
       <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:40px 20px;">
         <div id="rjd-spinner" style="width:36px;height:36px;border:3px solid #eef2ff;border-top-color:#4f46e5;border-radius:50%;"></div>
-        <div style="font-size:13px;color:var(--text-muted,#94a3b8);text-align:center;">${msg || 'Loading...'}</div>
+        <div style="font-size:13px;color:var(--text-muted,#94a3b8);text-align:center;">${escHtml(msg || 'Loading...')}</div>
       </div>`;
     const s = document.createElement('style');
     s.id = 'rjd-spinner-style';
@@ -638,7 +641,7 @@
                    || document.title.split('-')?.[0]?.trim();
         if (company || title) return { company: company?.trim(), jobTitle: title?.trim(), source: 'workday_dom' };
       }
-    } catch(e) {}
+    } catch(e) { console.warn('[AI Blaze] DOM extraction error:', e.message); }
     return null;
   }
 
@@ -819,7 +822,7 @@
     // Pattern 5: "We are <Company>" / "At <Company>..." / "Welcome to <Company>"
     if (!signals.company) {
       for (const line of lines.slice(0, 40)) {
-        let m = line.match(/^(?:we are|we're|welcome to|join|at|about)\s+([A-Z][A-Za-z0-9&' ]{1,40?})[,!.]/i);
+        let m = line.match(/^(?:we are|we're|welcome to|join|at|about)\s+([A-Z][A-Za-z0-9&' ]{1,40})[,!.]/i);
         if (!m) m = line.match(/^([A-Z][A-Za-z0-9&' ]{1,40?})\s+is\s+(?:looking|hiring|seeking|a\s+leading|a\s+global)/i);
         if (m) { 
           const candidate = m[1].trim().replace(/\s*(at|@).*/i, '');
@@ -1127,8 +1130,8 @@ ${context}`;
 
       document.getElementById('rjd-settings-back-btn').addEventListener('click', () => {
         // Warning fix #5: honour the returnTo parameter instead of always going to tracker
-        if (returnTo === 'tracker') renderTrackerScreen();
-        else renderTrackerScreen(); // default fallback
+        if (returnTo === 'assistant') renderAssistantScreen();
+        else renderTrackerScreen();
       });
 
       renderSection(activeSection);
@@ -1404,10 +1407,10 @@ ${context}`;
           </div>
           <div style="display:flex;flex-direction:column;gap:8px;">
             <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12px;">
-              <span style="color:#718096;">Version</span><span style="font-weight:600;color:#1a202c;">4.2.0</span>
+              <span style="color:#718096;">Version</span><span style="font-weight:600;color:#1a202c;">${typeof chrome!=='undefined'&&chrome.runtime?.getManifest?chrome.runtime.getManifest().version:'5.1.0'}</span>
             </div>
             <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12px;">
-              <span style="color:#718096;">AI Model</span><span style="font-weight:600;color:#1a202c;">Gemini 3.1 Flash Lite</span>
+              <span style="color:#718096;">AI Model</span><span style="font-weight:600;color:#1a202c;">Dynamic (Settings)</span>
             </div>
             <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12px;">
               <span style="color:#718096;">Database</span><span style="font-weight:600;color:#1a202c;">Supabase</span>
@@ -1763,6 +1766,7 @@ ${context}`;
     const main = document.getElementById('rjd-sidebar-content');
     if (!main) return;
 
+    if (!currentUser) return;
     const initials = getInitials(currentUser.name);
 
     main.innerHTML = `
@@ -2116,7 +2120,7 @@ ${context}`;
       workingDate = iso;
       const input = document.getElementById('rjd-working-date-input');
       if (input) input.value = iso;
-      chrome.storage.local.set({ rjd_working_date: iso });
+      const _s = chromeStore(); if (_s) _s.set({ rjd_working_date: iso });
       // Update stats to reflect new working date
       updateStatsBar();
     }
@@ -2198,6 +2202,8 @@ ${context}`;
       // Try to read clipboard
       try { clipText = await navigator.clipboard.readText(); } catch(e) {}
 
+      // Load Gemini key if not yet in memory
+      if (!GEMINI_KEY) await new Promise(r => loadGeminiKey(k => { GEMINI_KEY = k; r(); }));
       // Try Gemini extraction if key exists and clipboard has content
       if (GEMINI_KEY && GEMINI_KEY.trim() && clipText.trim()) {
         try {
@@ -2305,7 +2311,7 @@ ${context}`;
       if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Saving...'; }
       const app = {
         id: crypto.randomUUID(), company, jobTitle, url, jd, resume: '',
-        status, date: today(), dateRaw: new Date().toISOString(), dateKey: todayKey(), notes: ''
+        status, date: today(), dateRaw: new Date().toISOString(), dateKey: todayKey(), notes: '', followUpDate: ''
       };
       const ok = await dbSaveApp(app);
       _saving = false;
@@ -2341,10 +2347,7 @@ ${context}`;
       }
     });
 
-    document.getElementById('rjd-resume-copy-btn').addEventListener('click', () => {
-      navigator.clipboard.writeText(document.getElementById('rjd-resume-body').textContent);
-      showToast('Resume copied');
-    });
+    // (removed duplicate copy handler — correct one is bound at line 2149)
 
     // Export XLSX — inject xlsxbuilder.js on demand (fix #9: removed from content_scripts to avoid global scope pollution)
     document.getElementById('rjd-export-csv-btn').addEventListener('click', async () => {
@@ -2353,7 +2356,7 @@ ${context}`;
       if (typeof window.buildXLSX !== 'function') {
         await new Promise((resolve, reject) => {
           const s = document.createElement('script');
-          s.src = chrome.runtime.getURL('lib/xlsxbuilder.js');
+          s.src = chrome.runtime.getURL('src/lib/xlsxbuilder.js');
           s.onload = resolve;
           s.onerror = () => reject(new Error('Failed to load xlsxbuilder.js'));
           document.head.appendChild(s);
@@ -2454,9 +2457,7 @@ Return the resume content formatted clearly between these markers.
         // Call the appropriate engine
         let result = '';
         if (engine === 'ollama') {
-          const url = localStorage.getItem('rjd_ollama_url') || 'http://localhost:11434';
-          const model = localStorage.getItem('rjd_ollama_model') || 'llama3.2';
-          result = await callOllama(url, model, fullPrompt);
+          throw new Error('Ollama is no longer supported. Switch to Gemini in Settings.');
         } else {
           if (!GEMINI_KEY) {
              // Try to load if not yet available

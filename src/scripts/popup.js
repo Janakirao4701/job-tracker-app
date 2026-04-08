@@ -148,6 +148,7 @@ function renderLoggedIn(user, apps) {
 document.addEventListener('DOMContentLoaded', () => {
   chrome.storage.local.get(['rjd_session', 'rjd_apps_cache'], async (res) => {
     const session = res.rjd_session || null;
+    if (!session) { renderNotLoggedIn(); return; }
     const sessToken = session.token || session.access_token;
     if (!session || !sessToken || !session.user || !verifyTokenProject(sessToken)) {
       if (session) chrome.storage.local.remove('rjd_session');
