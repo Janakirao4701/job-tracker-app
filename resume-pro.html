@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Resume Pro - Premium Builder</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-light: #818cf8;
+            --text-dark: #1e293b;
+            --text-muted: #64748b;
+            --bg-glass: rgba(255, 255, 255, 0.85);
+            --bg-dark: #0f172a;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: radial-gradient(circle at 10% 20%, rgba(216, 241, 230, 0.46) 0.1%, rgba(233, 226, 226, 0.28) 90.1%);
+            background-color: #f8fafc;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: var(--text-dark);
+        }
+
+        /* ── HEADER ── */
+        header {
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-glass);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-weight: 800;
+            font-size: 22px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .btn-download {
+            background: var(--primary);
+            color: white;
+            padding: 10px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-download:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(79, 70, 229, 0.3);
+            background: #4338ca;
+        }
+
+        /* ── MAIN LAYOUT ── */
+        main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            padding: 20px;
+            gap: 24px;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* ── INPUT PANEL (LEFT) ── */
+        .panel-input {
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            overflow-y: auto;
+            max-height: calc(100vh - 120px);
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e2e8f0;
+        }
+
+        .grid-contact {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        input, textarea {
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+            background: #f8fafc;
+        }
+
+        input:focus, textarea:focus {
+            border-color: var(--primary);
+            background: white;
+        }
+
+        textarea {
+            resize: none;
+            flex: 1;
+            min-height: 500px;
+            line-height: 1.6;
+        }
+
+        /* ── PREVIEW PANEL (RIGHT) ── */
+        .panel-preview {
+            background: #cbd5e1;
+            border-radius: 24px;
+            padding: 40px;
+            overflow-y: auto;
+            max-height: calc(100vh - 120px);
+            display: flex;
+            justify-content: center;
+        }
+
+        #resume-mockup {
+            background: white;
+            width: 100%;
+            max-width: 800px;
+            min-height: 1050px;
+            padding: 60px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            color: #000;
+            line-height: 1.45;
+        }
+
+        /* ── MOCKUP STYLING (MATCHES ResumeEngine) ── */
+        .mock-header { text-align: center; margin-bottom: 25px; }
+        .mock-name { font-size: 28px; font-weight: 800; margin-bottom: 4px; }
+        .mock-title { font-size: 16px; font-weight: 500; font-style: italic; color: #444; margin-bottom: 12px; }
+        .mock-contact { font-size: 12px; color: #555; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+
+        .mock-section-head {
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            border-bottom: 1px solid #aaa;
+            padding-bottom: 2px;
+            margin: 20px 0 10px 0;
+            color: #000;
+        }
+
+        .mock-text { font-size: 12px; color: #222; margin-bottom: 10px; }
+        .mock-bold { font-weight: 700; color: #000; }
+        .mock-italic { font-style: italic; color: #444; }
+
+        .mock-skill-line { font-size: 12px; margin-bottom: 4px; color: #222; }
+        
+        .mock-exp-row { display: flex; justify-content: space-between; align-items: baseline; margin-top: 15px; }
+        .mock-exp-title { font-size: 12px; font-weight: 700; margin-bottom: 3px; }
+        .mock-bullet { font-size: 12px; margin-left:14px; margin-bottom: 4px; display: flex; gap: 10px; }
+        .mock-bullet::before { content: '•'; font-weight: bold; }
+
+        .tag-status {
+            font-size: 11px;
+            background: #dcfce7;
+            color: #166534;
+            padding: 4px 10px;
+            border-radius: 99px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        /* ── MOBILE WARNING ── */
+        @media (max-width: 1100px) {
+            main { grid-template-columns: 1fr; }
+            .panel-preview { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">Universal Resume Pro <span style="font-size:12px; opacity:0.6; font-weight:400; color:var(--text-muted)">v2.5 Premium</span></div>
+    <button class="btn-download" id="dl-btn">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M12 4v12m0 0l4-4m-4 4l-4-4"/></svg>
+        Download DOCX
+    </button>
+</header>
+
+<main>
+    <!-- INPUT -->
+    <div class="panel-input">
+        <div>
+            <div class="section-title">Personal Details</div>
+            <div class="grid-contact">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="p-name" placeholder="Venkata Vinay Vamsi">
+                </div>
+                <div class="form-group">
+                    <label>Job Title</label>
+                    <input type="text" id="p-title" placeholder="Senior Data Engineer">
+                </div>
+                <div class="form-group">
+                    <label>Location</label>
+                    <input type="text" id="p-loc" placeholder="Wisconsin, USA">
+                </div>
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="text" id="p-email" placeholder="vinay.vamsi@email.com">
+                </div>
+                <div class="form-group">
+                    <label>Mobile Number</label>
+                    <input type="text" id="p-mobile" placeholder="+1 (414) 895-2296">
+                </div>
+                <div class="form-group">
+                    <label>LinkedIn Profile (URL)</label>
+                    <input type="text" id="p-linkedin" placeholder="linkedin.com/in/vinay-vamsi">
+                </div>
+            </div>
+        </div>
+
+        <div style="flex:1; display:flex; flex-direction:column;">
+            <div class="section-title">Resume Content (Use Markers)</div>
+            <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
+                <textarea id="resume-text" spellcheck="false" placeholder="[professional summary]&#10;Data Engineer with 5+ years...&#10;&#10;[technical skills]&#10;Data Engineering: ETL, ELT...&#10;&#10;[professional experience]&#10;Company | Location | Title | Date"></textarea>
+                <div style="font-size:11px; color:var(--text-muted); opacity:0.8; text-align:right">Auto-saving locally...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PREVIEW -->
+    <div class="panel-preview">
+        <div id="resume-mockup">
+            <!-- Rendered by JS -->
+        </div>
+    </div>
+</main>
+
+<!-- LIBRARIES -->
+<script src="src/lib/docx-bundle.js"></script>
+<script src="src/lib/resume-engine.js"></script>
+
+<script>
+    const inputs = ['p-name','p-title','p-loc','p-email','p-mobile','p-linkedin','resume-text'];
+    
+    // 1. Initial Load from LocalStorage
+    window.onload = () => {
+        inputs.forEach(id => {
+            const val = localStorage.getItem('rjd_standalone_' + id);
+            if (val) document.getElementById(id).value = val;
+        });
+        updatePreview();
+    }
+
+    // 2. Real-time Save & Preview
+    inputs.forEach(id => {
+        document.getElementById(id).addEventListener('input', () => {
+            localStorage.setItem('rjd_standalone_' + id, document.getElementById(id).value);
+            updatePreview();
+        });
+    });
+
+    // 3. Simple Mockup Generator (Matches ResumeEngine rules)
+    function updatePreview() {
+        const mockup = document.getElementById('resume-mockup');
+        const raw = document.getElementById('resume-text').value;
+        const name = document.getElementById('p-name').value || 'NAME';
+        const title = document.getElementById('p-title').value || 'TITLE';
+        const loc = document.getElementById('p-loc').value || '';
+        const email = document.getElementById('p-email').value || '';
+        const mobile = document.getElementById('p-mobile').value || '';
+        const linkedin = document.getElementById('p-linkedin').value || '';
+
+        let html = `
+            <div class="mock-header">
+                <div class="mock-name">${name}</div>
+                <div class="mock-title">${title}</div>
+                <div class="mock-contact">
+                    ${loc ? `<span>${loc}</span>` : ''}
+                    ${mobile ? `<span>• &nbsp;Mobile: ${mobile}</span>` : ''}
+                    ${email ? `<span>• &nbsp;${email}</span>` : ''}
+                    ${linkedin ? `<span>• &nbsp;${linkedin}</span>` : ''}
+                </div>
+            </div>
+        `;
+
+        if (window.ResumeEngine) {
+            const sections = window.ResumeEngine.parseContent(raw);
+            
+            if (sections.summary) {
+                html += `<div class="mock-section-head">Professional Summary</div>`;
+                html += `<div class="mock-text">${sections.summary}</div>`;
+            }
+
+            if (sections.skills) {
+                html += `<div class="mock-section-head">Technical Skills</div>`;
+                const lines = sections.skills.split('\n').filter(l => l.trim() && !l.startsWith('['));
+                lines.forEach(line => {
+                    const idx = line.indexOf(':');
+                    if (idx > -1 && idx < 60) {
+                        html += `<div class="mock-skill-line"><span class="mock-bold">${line.substring(0, idx + 1)}</span> ${line.substring(idx + 1)}</div>`;
+                    } else if (line.length < 50 && !line.includes(',')) {
+                        html += `<div class="mock-skill-line" style="margin-top:8px;"><span class="mock-bold">${line}</span></div>`;
+                    } else {
+                        html += `<div class="mock-skill-line">${line}</div>`;
+                    }
+                });
+            }
+
+            if (sections.experience) {
+                html += `<div class="mock-section-head">Professional Experience</div>`;
+                const lines = sections.experience.split('\n');
+                lines.forEach(line => {
+                    const t = line.trim();
+                    if (!t || t.startsWith('[')) return;
+
+                    if (t.includes('|')) {
+                        const parts = t.split('|').map(p => p.trim());
+                        let co = parts[0], locFull = '', tit = '', dat = '';
+                        if (parts.length >= 4) { co = parts[0]; locFull = parts[1]; tit = parts[2]; dat = parts[3]; }
+                        else if (parts.length === 3) { co = parts[0]; tit = parts[1]; dat = parts[2]; }
+
+                        html += `
+                            <div class="mock-exp-row">
+                                <span class="mock-bold">${co.toUpperCase()}${locFull ? ', ' + locFull : ''}</span>
+                                <span class="mock-italic" style="font-size:11px">${dat}</span>
+                            </div>
+                            <div class="mock-exp-title">${tit}</div>
+                        `;
+                    } else if (t.startsWith('•') || t.startsWith('-') || t.startsWith('*')) {
+                        html += `<div class="mock-bullet">${t.replace(/^[-•*]\s*/, '')}</div>`;
+                    } else if (t.length < 50 && t.endsWith(':')) {
+                        html += `<div class="mock-bold" style="margin-top:10px; font-size:12px;">${t}</div>`;
+                    } else {
+                        html += `<div class="mock-text" style="font-size:11px">${t}</div>`;
+                    }
+                });
+            }
+        }
+
+        mockup.innerHTML = html;
+    }
+
+    // 4. Download Execution
+    document.getElementById('dl-btn').onclick = async () => {
+        const profile = {
+            name: document.getElementById('p-name').value,
+            title: document.getElementById('p-title').value,
+            location: document.getElementById('p-loc').value,
+            email: document.getElementById('p-email').value,
+            mobile: document.getElementById('p-mobile').value,
+            linkedin: document.getElementById('p-linkedin').value
+        };
+        const app = {
+            company: 'Tailored Resume',
+            jobTitle: profile.title,
+            resume: document.getElementById('resume-text').value
+        };
+
+        if (!window.ResumeEngine) {
+            alert('Resume Engine Error: Please ensure resume-engine.js and docx-bundle.js are accessible.');
+            return;
+        }
+
+        try {
+            await window.ResumeEngine.generate(app, profile);
+        } catch (e) {
+            console.error(e);
+            alert('Download failed: ' + e.message);
+        }
+    }
+</script>
+
+</body>
+</html>

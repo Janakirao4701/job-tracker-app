@@ -542,9 +542,11 @@
       if (hostname.includes('linkedin.com')) {
         let company = document.querySelector('.job-details-jobs-unified-top-card__company-name a')?.innerText
                    || document.querySelector('.job-details-jobs-unified-top-card__company-name')?.innerText
+                   || document.querySelector('.topcard__org-name-link')?.innerText
                    || document.querySelector('.job-details-top-card__company-url')?.innerText;
         let title = document.querySelector('.job-details-jobs-unified-top-card__job-title h1')?.innerText
                  || document.querySelector('h1.t-24')?.innerText
+                 || document.querySelector('.top-card-layout__title')?.innerText
                  || document.querySelector('.topcard__title')?.innerText;
         if (company && title) return { company: company.trim(), jobTitle: title.trim(), source: 'linkedin_dom' };
       }
@@ -770,73 +772,95 @@
   }
 
   async function extractWithGemini(jdText, pageUrl) {
-    if (!GEMINI_KEY || !GEMINI_KEY.trim()) throw new Error('Gemini API key not set — open Settings to add it');
+    const engine = localStorage.getItem('rjd_extraction_engine') || 'gemini';
+    if (engine === 'ollama') return extractWithOllama(jdText, pageUrl);
+
+    const key = await new Promise(res => loadGeminiKey(res));
+    if (!key) throw new Error('Gemini API key not set — open Settings to add it');
 
     const context = buildExtractionContext(jdText, pageUrl);
     const hasJD   = jdText && jdText.trim().length > 50;
 
-    const prompt = `You are a precise job-posting parser. Extract the company name and job title.
+    const prompt = `You are a precise job-posting parser and ATS expert.
+
+Your task has TWO parts:
+
+---
+
+## PART 1 — EXTRACT JOB DETAILS
+Extract the company name and job title.
 
 RULES:
-- Return ONLY valid JSON: {"company_name":"...","job_title":"..."}
-- No markdown, no explanation, no extra keys.
-- company_name: the actual HIRING COMPANY (never a job board like LinkedIn, Indeed, Glassdoor, Naukri, Internshala, Monster, Simplify, Wellfound).
-- job_title: the exact role title (e.g. "Senior Data Engineer", "Product Manager").
-- If a value truly cannot be determined, use "" — never guess randomly.
+- Return a JSON block FIRST: {"company_name":"...","job_title":"..."}
+- company_name: the actual HIRING COMPANY (never a job board like LinkedIn, Indeed, Glassdoor, Naukri, Internshala, Monster, Simplify, Wellfound)
+- job_title: the exact role title (e.g. "Senior Data Engineer", "Product Manager")
+- If a value truly cannot be determined, use "" — never guess randomly
 
 EXTRACTION PRIORITY (highest to lowest):
-${hasJD ? `1. [JD TEXT company hint] and [VERIFIED DOM COMPANY] — these are highly reliable.
-2. Read [JOB DESCRIPTION TEXT] carefully — company name and job title are typically mentioned in the first few lines.
-3. [PAGE structured data] — only reliable if the user is on the actual job posting page.
-4. [PAGE title/H1] and [PAGE hostname hint] — low reliability, use as last resort only.` :
-`1. [VERIFIED DOM COMPANY/TITLE] — extremely reliable, trust this implicitly.
-2. [PAGE structured data company/title] — highly reliable.
-3. [PAGE title/H1] — parse carefully, strip "| LinkedIn" etc.
-4. [PAGE hostname hint] — last resort for company name.`}
+1. [JD TEXT company hint] and [VERIFIED DOM COMPANY] — highly reliable
+2. Read [JOB DESCRIPTION TEXT] carefully — company name and job title are typically in the first few lines
+3. Fall back to context clues only if explicit mention is absent
 
-IMPORTANT: The user may have copied the JD from one page and is now on a DIFFERENT page. In that case, [PAGE signals] will be WRONG unless it's a [VERIFIED DOM COMPANY]. Always trust [JD TEXT] signals over general [PAGE] signals when they conflict.
+---
 
-Strip from job_title: location, salary, "Jobs", "Careers", "| LinkedIn", "at CompanyName".
-Capitalize company_name properly if it appears in all-lowercase.
+## PART 2 — ELIGIBILITY CHECK
+Evaluate the job description against the exclusion criteria below.
+
+EXCLUDE any roles from these companies:
+- KPMG, Infosys, Deloitte, Fidelity, Amazon
+- Any state/government agency
+
+EXCLUDE roles in these sectors:
+- Management & consulting
+- Government projects
+- Aerospace / defense
+- United Nations (UN) jobs
+
+EXCLUDE roles that require:
+- U.S. citizenship
+- Visa sponsorship (H-1B or any other)
+
+After evaluation, respond with:
+- "Eligibility: Eligible" or "Eligibility: Not Eligible"
+- "Reason: [one line]"
+
+---
+
+
+## OUTPUT FORMAT (always follow this structure):
+
+{"company_name":"...","job_title":"..."}
+
+Eligibility: [Eligible / Not Eligible]
+Reason: [one line]
+
+---
 
 CONTEXT:
 ${context}`;
 
-    // Priority check for extraction engine (Gemini vs Ollama)
-    const extractionEngine = localStorage.getItem('rjd_extraction_engine') || 'gemini';
-    if (extractionEngine === 'ollama') {
-      return extractWithOllama(jdText, pageUrl);
-    }
-
-    const res = await fetch(
-      'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-lite:generateContent?key=' + GEMINI_KEY,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0, maxOutputTokens: 200 },
-        }),
-      }
-    );
-    if (!res.ok) throw new Error('Gemini API error: ' + res.status);
-    const data = await res.json();
-    let raw = (data.candidates?.[0]?.content?.parts?.[0]?.text || '{}')
-      .replace(/```json|```/g, '').trim();
+    const res = await callGeminiBlaze(key, prompt);
+    let raw = res.trim();
 
     // Extract JSON object from raw string
-    const jsonStart = raw.indexOf('{');
-    const jsonEnd   = raw.lastIndexOf('}');
-    if (jsonStart !== -1 && jsonEnd !== -1) raw = raw.slice(jsonStart, jsonEnd + 1);
-
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch(e) {
-      const cn = raw.match(/"company_name"\s*:\s*"([^"]*)"/)?.[1] || '';
-      const jt = raw.match(/"job_title"\s*:\s*"([^"]*)"/)?.[1]    || '';
-      parsed = { company_name: cn, job_title: jt };
+    const jsonMatch = raw.match(/\{[\s\S]*?\}/);
+    let parsed = { company_name: "", job_title: "" };
+    if (jsonMatch) {
+      try {
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch(e) {
+        const cn = jsonMatch[0].match(/"company_name"\s*:\s*"([^"]*)"/)?.[1] || '';
+        const jt = jsonMatch[0].match(/"job_title"\s*:\s*"([^"]*)"/)?.[1]    || '';
+        parsed = { company_name: cn, job_title: jt };
+      }
     }
+
+    // Parse Eligibility
+    const eligibilityMatch = raw.match(/Eligibility:\s*(Eligible|Not Eligible)/i);
+    const reasonMatch      = raw.match(/Reason:\s*(.*)/i);
+    
+    parsed.isEligible = eligibilityMatch ? eligibilityMatch[1].toLowerCase() === 'eligible' : true;
+    parsed.eligibilityReason = reasonMatch ? reasonMatch[1].trim() : "";
 
     // ── Post-processing fallbacks ──
     const sig   = scrapePageSignals();
@@ -884,6 +908,7 @@ ${context}`;
     return parsed;
   }
 
+
   async function extractWithOllama(jdText, pageUrl) {
     const ollamaUrl = localStorage.getItem('rjd_ollama_url') || 'http://localhost:11434';
     const ollamaModel = localStorage.getItem('rjd_ollama_model') || 'llama3.2';
@@ -914,27 +939,7 @@ ${context}`;
     });
   }
 
-  async function extractWithGemini(jdText, pageUrl) {
-    const engine = localStorage.getItem('rjd_extraction_engine') || 'gemini';
-    if (engine === 'ollama') return extractWithOllama(jdText, pageUrl);
 
-    const key = await new Promise(res => loadGeminiKey(res));
-    if (!key) throw new Error('No Gemini API key found in Settings.');
-
-    const context = buildExtractionContext(jdText, pageUrl);
-    const prompt = `You are a precise job-posting parser. Extract the company name and job title from the context below. Return ONLY JSON: {"company_name":"...","job_title":"..."}\n\nCONTEXT:\n${context}`;
-
-    const res = await callGeminiBlaze(key, prompt);
-    try {
-      const cleaned = res.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(cleaned);
-      parsed.url = pageUrl;
-      return parsed;
-    } catch(e) {
-      console.error('Gemini parse error:', e, res);
-      throw new Error('Failed to parse AI response. Try again.');
-    }
-  }
 
   /**
    * Universal AI Engines for v2.0 Copilot
@@ -1020,9 +1025,14 @@ ${context}`;
 
       const gotBoth    = result.company_name && result.job_title;
       const gotPartial = result.company_name || result.job_title;
-      if (gotBoth) {
-        statusEl.textContent = '✓ Extracted — review and save';
-        statusEl.style.color = 'rgba(255,255,255,0.9)';
+      
+      if (!result.isEligible) {
+        statusEl.textContent = '✕ Not Eligible: ' + (result.eligibilityReason || 'Exclusion criteria met');
+        statusEl.style.color = '#fca5a5';
+        statusEl.style.fontWeight = '700';
+      } else if (gotBoth) {
+        statusEl.textContent = '✓ Eligible & Extracted — review and save';
+        statusEl.style.color = '#34d399';
       } else if (gotPartial) {
         statusEl.textContent = '⚠ Partially extracted — fill missing field';
         statusEl.style.color = '#fde68a';
@@ -1030,8 +1040,11 @@ ${context}`;
         statusEl.textContent = 'Could not extract — fill in manually';
         statusEl.style.color = '#fca5a5';
       }
+      
       if (extractBtn) { extractBtn.disabled = false; extractBtn.style.opacity = '1'; extractBtn.innerHTML = '<span style="font-size:16px;">✦</span> Extract from Clipboard + Page URL'; }
-      setTimeout(() => { statusEl.textContent = ''; statusEl.style.color = ''; }, 5000);
+      if (result.isEligible) {
+        setTimeout(() => { statusEl.textContent = ''; statusEl.style.color = ''; }, 5000);
+      }
     } catch(err) {
       statusEl.textContent = '✕ ' + (err.message || 'Extraction failed');
       statusEl.style.color = '#fca5a5';

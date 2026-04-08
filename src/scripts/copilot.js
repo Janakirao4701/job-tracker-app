@@ -366,8 +366,12 @@
     linkedin: () => {
       const jobEl = document.querySelector('.job-view-layout') || document.body;
       return {
-        company: jobEl.querySelector('.job-details-jobs-unified-top-card__company-name')?.innerText || '',
-        title: jobEl.querySelector('.job-details-jobs-unified-top-card__job-title')?.innerText || '',
+        company: jobEl.querySelector('.job-details-jobs-unified-top-card__company-name')?.innerText 
+              || document.querySelector('.topcard__org-name-link')?.innerText
+              || '',
+        title:   jobEl.querySelector('.job-details-jobs-unified-top-card__job-title')?.innerText
+              || document.querySelector('.top-card-layout__title')?.innerText
+              || '',
         description: jobEl.querySelector('#job-details')?.innerText || ''
       };
     },
