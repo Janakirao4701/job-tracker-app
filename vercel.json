@@ -1,9 +1,8 @@
 {
   "version": 2,
   "name": "job-tracker-app",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/$1" }
-  ],
+  "buildCommand": "",
+  "outputDirectory": ".",
   "headers": [
     {
       "source": "/sw.js",
