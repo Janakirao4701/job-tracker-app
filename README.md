@@ -2,7 +2,7 @@
 
 > Premium AI-powered job application tracker with cloud sync, Gemini extraction, inline copilot, and resume generation.
 
-![Version](https://img.shields.io/badge/version-5.1.4-blue)
+![Version](https://img.shields.io/badge/version-1.0.1-blue)
 ![Manifest](https://img.shields.io/badge/Manifest-V3-green)
 ![AI](https://img.shields.io/badge/AI-Gemini%202.0-orange)
 ![Database](https://img.shields.io/badge/DB-Supabase-purple)
