@@ -444,6 +444,44 @@ async function loadResumeProfileDB() {
   try { return JSON.parse(localStorage.getItem('rjd_resume_profile') || '{}'); } catch(e) { return {}; }
 }
 
+// ── BLAZE SHORTCUTS DB SYNC ──
+async function saveBlazeShortcutsDB(shortcuts) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/user_settings?on_conflict=username`, {
+      method: 'POST',
+      headers: headers({'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+      body: JSON.stringify({
+        username: currentUser.id,
+        blaze_shortcuts: shortcuts 
+      })
+    });
+    if (res.ok) {
+      localStorage.setItem('rjd_blaze_shortcuts', JSON.stringify(shortcuts));
+      return true;
+    }
+  } catch(e) { console.error('Blaze save error:', e); }
+  localStorage.setItem('rjd_blaze_shortcuts', JSON.stringify(shortcuts));
+  return false;
+}
+
+async function loadBlazeShortcutsDB() {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/user_settings?username=eq.${currentUser.id}&select=blaze_shortcuts`,
+      { headers: headers() }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data[0] && data[0].blaze_shortcuts) {
+        const s = data[0].blaze_shortcuts;
+        localStorage.setItem('rjd_blaze_shortcuts', JSON.stringify(s));
+        return s;
+      }
+    }
+  } catch(e) { console.error('Blaze load error:', e); }
+  try { return JSON.parse(localStorage.getItem('rjd_blaze_shortcuts') || 'null'); } catch(e) { return null; }
+}
+
 function saveSession(data) {
   const payload = {
     token: data.access_token,
@@ -809,6 +847,7 @@ function renderPage(page) {
   else if (page === 'settings') renderSettings();
   else if (page === 'export')  renderExport();
   else if (page === 'privacy') renderPrivacy();
+  else if (page === 'about')   renderAbout();
 }
 
 function updateBadge() {
@@ -883,8 +922,8 @@ async function renderAiBlaze() {
   if (!content) return;
   content.innerHTML = '<div style="padding:60px;text-align:center"><div class="spinner"></div></div>';
 
-  const stored = localStorage.getItem('rjd_blaze_shortcuts');
-  if (stored) { try { blazeTemplates = JSON.parse(stored); } catch(e) {} }
+  const dbTemplates = await loadBlazeShortcutsDB();
+  if (dbTemplates) blazeTemplates = dbTemplates;
 
   if (!blazeSelectedAppId && apps.length > 0) blazeSelectedAppId = apps[apps.length-1].id;
 
@@ -1550,7 +1589,7 @@ function renderSettings() {
   document.getElementById('page-content').innerHTML = `
     <div class="settings-layout">
       <div class="settings-nav-card">
-        ${[['apikey','🔑','API Key'],['blaze_shortcuts','🔥','Blaze Shortcuts'],['resumeprofile','📄','Resume Profile'],['account','👤','Account'],['shortcuts','⌨️','Shortcuts'],['logs','📜','System Logs'],['privacy-s','🛡️','Privacy'],['about','ℹ️','About']].map(([id,icon,label]) =>
+        ${[['apikey','🔑','AI Config'],['blaze_shortcuts','🔥','Blaze Shortcuts'],['resumeprofile','📄','Resume Profile'],['account','👤','Account'],['shortcuts','⌨️','Shortcuts'],['logs','📜','System Logs']].map(([id,icon,label]) =>
           `<div class="settings-nav-item ${settingsSection===id?'active':''}" data-sec="${id}">${icon} ${label}</div>`
         ).join('')}
       </div>
@@ -1596,17 +1635,22 @@ function renderSettingsSection(sec) {
             </div>
           </div>
 
-          <div>
-            <label style="display:block; font-size:11px; font-weight:700; margin-bottom:6px; color:var(--text-muted);">MODEL ID</label>
-            <input type="text" class="settings-input" id="google-model-input" value="${esc(googleModel)}" placeholder="e.g. gemini-1.5-flash" style="width:100%;" list="gemini-models-list"/>
+          <div style="margin-bottom:8px;">
+            <label style="display:block; font-size:11px; font-weight:700; margin-bottom:6px; color:var(--text-muted);">MODEL ID (LLM ENGINE)</label>
+            <div style="position:relative;">
+              <input type="text" class="settings-input" id="google-model-input" value="${esc(googleModel)}" placeholder="e.g. gemini-1.5-flash" style="width:100%; padding-right:30px;" list="gemini-models-list" autocomplete="off"/>
+              <span style="position:absolute; right:10px; top:50%; transform:translateY(-50%); font-size:10px; color:var(--text-muted); pointer-events:none;">▼</span>
+            </div>
             <datalist id="gemini-models-list">
               <option value="gemini-1.5-flash">
               <option value="gemini-1.5-pro">
               <option value="gemini-2.0-flash">
-              <option value="gemini-2.5-flash-lite">
-              <option value="gemini-3.1-flash-lite">
+              <option value="gemini-2.0-flash-lite-preview-02-05">
+              <option value="gemini-2.0-pro-exp-02-05">
             </datalist>
-            <div style="font-size:10px; color:var(--text-muted); margin-top:6px;">Pro-tip: Use <strong>gemini-1.5-flash</strong> for best speed/stability fallback.</div>
+            <div style="font-size:10px; color:var(--text-muted); margin-top:8px; line-height:1.4;">
+              ✨ <strong>Model Suggestion:</strong> Use <code>gemini-1.5-flash</code> for maximum speed or <code>gemini-2.0-flash</code> for latest performance.
+            </div>
           </div>
         </div>
 
@@ -1673,19 +1717,19 @@ function renderSettingsSection(sec) {
       `).join('');
 
       document.querySelectorAll('.shortcut-label, .shortcut-prompt').forEach(el => {
-        el.onchange = () => {
+        el.onchange = async () => {
           const idx = el.dataset.idx;
           if (el.classList.contains('shortcut-label')) blazeTemplates[idx].label = el.value.trim();
           else blazeTemplates[idx].prompt = el.value.trim();
-          localStorage.setItem('rjd_blaze_shortcuts', JSON.stringify(blazeTemplates));
+          await saveBlazeShortcutsDB(blazeTemplates);
           showToast('Updated ✓');
         };
       });
 
       document.querySelectorAll('.remove-shortcut-btn').forEach(btn => {
-        btn.onclick = () => {
+        btn.onclick = async () => {
           blazeTemplates.splice(btn.dataset.idx, 1);
-          localStorage.setItem('rjd_blaze_shortcuts', JSON.stringify(blazeTemplates));
+          await saveBlazeShortcutsDB(blazeTemplates);
           updateList();
         };
       });
@@ -1693,10 +1737,10 @@ function renderSettingsSection(sec) {
 
     updateList();
 
-    document.getElementById('add-shortcut-btn').onclick = () => {
+    document.getElementById('add-shortcut-btn').onclick = async () => {
       const key = '-' + Math.random().toString(36).substring(7);
       blazeTemplates.push({ key, label: 'New Shortcut', prompt: 'Enter prompt here...' });
-      localStorage.setItem('rjd_blaze_shortcuts', JSON.stringify(blazeTemplates));
+      await saveBlazeShortcutsDB(blazeTemplates);
       updateList();
     };
 
@@ -2167,61 +2211,89 @@ function renderExport() {
   });
 }
 
-// ── PRIVACY PAGE ──
+// ── PRIVACY PAGE (RE-DESIGNED) ──
 function renderPrivacy() {
   document.getElementById('page-content').innerHTML = `
-    <div style="max-width:800px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px;">
-      
-      <div class="settings-content-card">
-        <div class="settings-section-title">Privacy Policy</div>
-        <div class="settings-section-sub">Last updated: March 2026 · Effective immediately</div>
-        
-        <div class="settings-info-box" style="margin-top:20px;">
-          <strong>Privacy-first design:</strong> We do not sell your data. We do not show ads. Your job applications are entirely private to you.
+    <div class="premium-page-container">
+      <header class="premium-header">
+        <h1 class="premium-title">Privacy Protocol</h1>
+        <p class="premium-subtitle">Your data encryption and security standards. Last updated March 2026.</p>
+      </header>
+
+      <div class="premium-grid">
+        <div class="premium-card glass">
+          <div class="card-icon">🔐</div>
+          <h3>Local First Policy</h3>
+          <p>Your Gemini API keys are never uploaded to our servers. They reside exclusively in your browser's secure local storage.</p>
+        </div>
+        <div class="premium-card glass">
+          <div class="card-icon">🛡️</div>
+          <h3>Data Ownership</h3>
+          <p>We do not sell or monetize your job applications. Every entry is protected by Row Level Security (RLS) in Supabase.</p>
+        </div>
+        <div class="premium-card glass">
+          <div class="card-icon">✨</div>
+          <h3>No Tracking</h3>
+          <p>We do not use analytics or user tracking. Your career journey is private, as it should be.</p>
         </div>
       </div>
 
-      <div class="settings-content-card">
-        <div class="settings-section-title">Data We Collect</div>
-        <div class="settings-section-sub">What information is stored when you use the app.</div>
-        
-        <div class="privacy-block">
-          <strong>Account Information:</strong> When you create an account, we store your email address and an encrypted password (handled securely by Supabase Auth — we never see your password).
+      <div class="premium-info-section glass">
+        <div style="display:flex; gap:24px; align-items:flex-start;">
+          <div style="flex:1;">
+            <h4 style="margin-bottom:8px; color:var(--text); font-weight:700;">Infrastructure</h4>
+            <div class="privacy-bullet"><strong>Supabase Cloud:</strong> Encrypted storage for applications.</div>
+            <div class="privacy-bullet"><strong>End-to-End SSL:</strong> Secure transit for all API calls.</div>
+            <div class="privacy-bullet"><strong>Row Security:</strong> Hardened isolation between users.</div>
+          </div>
+          <div style="flex:1;">
+            <h4 style="margin-bottom:8px; color:var(--text); font-weight:700;">Your Rights</h4>
+            <div class="privacy-bullet"><strong>Full Export:</strong> Download all data as Excel/CSV anytime.</div>
+            <div class="privacy-bullet"><strong>Immediate Purge:</strong> Delete all data with one click.</div>
+            <div class="privacy-bullet"><strong>Account Closure:</strong> Permanent account deletion on request.</div>
+          </div>
         </div>
-        <div class="privacy-block">
-          <strong>Job Application Data:</strong> When you save an application, we store the company name, job title, posting URL, job description text, resume text, status, notes, and dates. This allows you to track your progress across devices.
-        </div>
-        <div class="privacy-block">
-          <strong>What We Do NOT Collect:</strong> We do not collect browsing history, personal financial information, location data, or any analytics/usage tracking. Your Gemini API key is stored <strong>only in your browser's local storage</strong>.
-        </div>
+      </div>
+    </div>`;
+}
+
+// ── ABOUT PAGE (PREMIUM DESIGN) ──
+function renderAbout() {
+  document.getElementById('page-content').innerHTML = `
+    <div class="premium-page-container">
+      <div class="about-hero glass">
+        <div class="about-logo">🚀</div>
+        <h1 class="premium-title">Job Application Tracker</h1>
+        <div class="version-badge">v5.2.0 Professional</div>
+        <p class="premium-subtitle" style="max-width:500px; margin: 0 auto;">Empowering thousands of job seekers with cutting-edge AI automation and professional document orchestration.</p>
       </div>
 
-      <div class="settings-content-card">
-        <div class="settings-section-title">Third-Party Services</div>
-        <div class="settings-section-sub">External services required to run the extension.</div>
-        
-        <div class="privacy-block">
-          <strong>Supabase:</strong> Your account and data are securely stored in Supabase, a PostgreSQL cloud database. Data is encrypted in transit and at rest. Row Level Security ensures only you can access your own data.
+      <div style="display:grid; grid-template-columns: 2fr 1fr; gap:20px; margin-top:24px;">
+        <div class="premium-card glass" style="text-align:left;">
+          <h3 style="margin-bottom:12px;">Technical Architecture</h3>
+          <div class="tech-stack-list">
+            ${[
+              ['Frontend', 'Vanilla JS, CSS Variables, Glassmorphism'],
+              ['Intelligence', 'Google Gemini 1.5/2.0 Engines'],
+              ['Cloud Backend', 'Supabase Realtime & PostgreSQL'],
+              ['Auth Engine', 'GoTrue / Supabase Identity'],
+              ['Document Engine', 'Docx.js Professional'],
+              ['Package', 'Chrome Extension Manifest V3'],
+            ].map(([k,v]) => `
+              <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-light);">
+                <span style="font-size:12px; color:var(--text-muted); font-weight:600;">${k}</span>
+                <span style="font-size:12px; color:var(--text); font-weight:700;">${v}</span>
+              </div>
+            `).join('')}
+          </div>
         </div>
-        <div class="privacy-block">
-          <strong>Google Gemini API:</strong> The Extract & Save feature sends the job description text to Google's Gemini API to extract the company and job title. This uses your personal API key directly from your browser.
+        <div class="premium-card glass" style="background: linear-gradient(135deg, rgba(79, 70, 229, 0.1), rgba(124, 58, 237, 0.1));">
+          <h3 style="margin-bottom:12px;">Our Mission</h3>
+          <p style="font-size:13px; line-height:1.6; color:var(--text2);">We believe that finding a job should be about your talent, not your ability to manage spreadsheets. We build tools that handle the grind, so you can focus on the interview.</p>
+          <div style="margin-top:20px; text-align:center;">
+             <div style="font-size:11px; color:#1F4E79; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Built for Action</div>
+          </div>
         </div>
-      </div>
-
-      <div class="settings-content-card">
-        <div class="settings-section-title">Your Rights</div>
-        <div class="settings-section-sub">Managing and deleting your information.</div>
-        
-        <div class="privacy-block">
-          <strong>Access your data:</strong> You can export all your data at any time using the Export page to generate Excel or CSV files.
-        </div>
-        <div class="privacy-block">
-          <strong>Delete your data:</strong> You can permanently delete all your applications directly from the Settings page.
-        </div>
-      </div>
-      
-      <div style="text-align: center; margin-top: 20px; color: var(--text-muted); font-size: 12px;">
-        Job Application Tracker v5.0 · This extension is free and open. Your data belongs to you.
       </div>
     </div>`;
 }
