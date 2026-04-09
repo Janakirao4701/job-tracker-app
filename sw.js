@@ -1,9 +1,10 @@
 // sw.js - Service Worker
-const CACHE_NAME = 'job-tracker-v5';
+const CACHE_NAME = 'job-tracker-v6';
 const ASSETS = [
   '/',
   '/index.html',
   '/dashboard.html',
+  '/dashboard',
   '/src/pages/app.html',
   '/src/pages/landing.html',
   '/src/lib/config.js',
@@ -21,7 +22,7 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', event => {
-  self.skipWaiting();
+  self.skipWaiting(); // Force the waiting service worker to become the active service worker
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       // Adding assets individually so one failure does not break the whole installation
@@ -43,10 +44,25 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // Simple cache-first policy
-  event.respondWith(
-    caches.match(event.request).then(response => {
-      return response || fetch(event.request);
-    }).catch(() => fetch(event.request))
-  );
+  // Network-First policy for HTML and Scripts to ensure users receive updates
+  if (event.request.mode === 'navigate' || event.request.url.includes('.js') || event.request.url.includes('.html')) {
+    event.respondWith(
+      fetch(event.request).then(response => {
+        const resClone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, resClone));
+        return response;
+      }).catch(() => caches.match(event.request))
+    );
+  } else {
+    // Cache-First for images and static assets
+    event.respondWith(
+      caches.match(event.request).then(response => {
+        return response || fetch(event.request).then(netResponse => {
+          const resClone = netResponse.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, resClone));
+          return netResponse;
+        });
+      }).catch(() => fetch(event.request))
+    );
+  }
 });

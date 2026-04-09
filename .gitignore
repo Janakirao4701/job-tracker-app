@@ -49,3 +49,4 @@ production.zip
 # Data & Documents
 public/assets/resumes/
 docs/*.docx
+.vercel

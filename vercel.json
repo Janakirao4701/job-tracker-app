@@ -1,6 +1,8 @@
 {
   "version": 2,
   "name": "job-tracker-app",
+  "buildCommand": "",
+  "outputDirectory": ".",
   "cleanUrls": true,
   "headers": [
     {
