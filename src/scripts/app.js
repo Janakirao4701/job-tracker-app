@@ -32,6 +32,10 @@ let currentUser = null;
 let apps        = [];
 let currentPage = 'dashboard';
 let authMode    = 'signin';
+let jobQuery = '';
+let jobLocation = '';
+let jobSearchProvider = localStorage.getItem('rjd_job_provider') || 'arbeitnow';
+let jobSearchResults = [];
 
 // ── THEME LOGIC ──
 let isDarkMode = localStorage.getItem('rjd_theme') === 'dark';
@@ -1137,6 +1141,45 @@ async function fetchWithRetry(url, opts, retries = 3, delay = 2000) {
       delay *= 2;
     }
   }
+}
+
+async function callGemini(prompt) {
+  const key = await loadAIKeyDB('google');
+  if (!key) throw new Error('Gemini API key missing. Please set it in Settings.');
+  
+  const model = await loadAIModelDB('google');
+  const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${key}`;
+
+  const resp = await fetchWithRetry(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 2048 }
+    })
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json();
+    if (resp.status === 404) {
+       const altUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+       const altResp = await fetchWithRetry(altUrl, {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           contents: [{ parts: [{ text: prompt }] }],
+           generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 2048 }
+         })
+       });
+       if (altResp.ok) {
+         const altData = await altResp.json();
+         return altData.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
+       }
+    }
+    throw new Error(err.error?.message || 'Gemini API failure');
+  }
+  const data = await resp.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
 }
 
 async function callGeminiBlaze(query, context, key, modelSelection) {
