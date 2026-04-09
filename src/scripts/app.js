@@ -164,26 +164,48 @@ async function signOut() {
 }
 
 // ── SUPABASE DB ──
-async function loadApps() {
+let totalAppCount = 0;
+let hasFullHistory = false;
+
+async function fetchTotalCount() {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/applications?select=count&username=eq.${currentUser.id}`,
+      { headers: headers({ 'Prefer': 'count=exact', 'Range-Unit': 'items', 'Range': '0-0' }) }
+    );
+    const countRange = r.headers.get('content-range');
+    if (countRange && countRange.includes('/')) {
+      totalAppCount = parseInt(countRange.split('/')[1]) || 0;
+    }
+  } catch(e) { console.error('Count fetch failed', e); }
+}
+
+async function loadApps(days = 30) {
   const PAGE_SIZE = 1000;
   let allRows = [];
   let offset  = 0;
-  // Fix #7: filter by current user so users never see each other's data
-  // Fix #14: paginate to bypass Supabase's default 1000-row cap
   let fetchSuccess = false;
   const LIST_FIELDS = 'id,company,job_title,url,status,date,date_raw,date_key,notes,follow_up_date';
+  
+  // First, get the total count for the badges
+  await fetchTotalCount();
+
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  const sinceISO = since.toISOString().split('T')[0];
+
   while (true) {
-    let r = await fetch(
-      `${SUPABASE_URL}/rest/v1/applications?select=${LIST_FIELDS}&username=eq.${currentUser.id}&order=created_at.asc&limit=${PAGE_SIZE}&offset=${offset}`,
-      { headers: headers({ 'Range-Unit': 'items', 'Range': `${offset}-${offset + PAGE_SIZE - 1}` }) }
-    );
+    let url = `${SUPABASE_URL}/rest/v1/applications?select=${LIST_FIELDS}&username=eq.${currentUser.id}&order=created_at.desc&limit=${PAGE_SIZE}&offset=${offset}`;
+    if (days !== 'all') {
+      url += `&created_at=gte.${sinceISO}`;
+    }
+
+    let r = await fetch(url, { headers: headers({ 'Range-Unit': 'items', 'Range': `${offset}-${offset + PAGE_SIZE - 1}` }) });
+    
     if (r.status === 401 && session?.refresh_token && offset === 0) {
       const refreshed = await refreshToken();
       if (refreshed) {
-        r = await fetch(
-          `${SUPABASE_URL}/rest/v1/applications?select=${LIST_FIELDS}&username=eq.${currentUser.id}&order=created_at.asc&limit=${PAGE_SIZE}&offset=${offset}`,
-          { headers: headers({ 'Range-Unit': 'items', 'Range': `${offset}-${offset + PAGE_SIZE - 1}` }) }
-        );
+        r = await fetch(url, { headers: headers({ 'Range-Unit': 'items', 'Range': `${offset}-${offset + PAGE_SIZE - 1}` }) });
       } else {
         clearStoredSession();
         session = null; currentUser = null; apps = [];
@@ -199,6 +221,8 @@ async function loadApps() {
     if (data.length < PAGE_SIZE) break;
     offset += PAGE_SIZE;
   }
+  
+  hasFullHistory = (days === 'all');
   
   if (allRows.length === 0) {
     try {
@@ -276,8 +300,13 @@ async function dbLoadAppDetails(id) {
 async function dbCheckForChanges() {
   if (!currentUser) return [];
   try {
-    // Light fetch of just id and status for change detection
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/applications?username=eq.${currentUser.id}&select=id,status&order=created_at.asc`, { headers: headers() });
+    let url = `${SUPABASE_URL}/rest/v1/applications?username=eq.${currentUser.id}&select=id,status&order=created_at.asc`;
+    if (!hasFullHistory) {
+      const since = new Date();
+      since.setDate(since.getDate() - 30);
+      url += `&created_at=gte.${since.toISOString().split('T')[0]}`;
+    }
+    const res = await fetch(url, { headers: headers() });
     const data = await res.json();
     return Array.isArray(data) ? data : [];
   } catch(e) { return []; }
@@ -782,160 +811,51 @@ function renderPage(page) {
 }
 
 function updateBadge() {
-  document.getElementById('total-badge').textContent = apps.length + ' application' + (apps.length !== 1 ? 's' : '') + ' tracked';
+  const count = (hasFullHistory || totalAppCount > apps.length) ? totalAppCount : apps.length;
+  document.getElementById('total-badge').textContent = count + ' application' + (count !== 1 ? 's' : '') + ' tracked';
 }
 
 // ── DASHBOARD ──
 function renderDashboard() {
-  document.getElementById('page-content').innerHTML = '<div style="padding:60px;text-align:center"><div class="spinner"></div></div>';
-  const now   = new Date();
-  const today = apps.filter(a => a.dateRaw && getWorkDayISO(a.dateRaw) === workTodayISO()).length;
-  const week  = apps.filter(a => a.dateRaw && (now - new Date(a.dateRaw)) <= 7*86400000).length;
-  const ints  = apps.filter(a => a.status==='Interview Scheduled'||a.status==='Interview Done').length;
-  const offers= apps.filter(a => a.status==='Offer').length;
-  const rejected = apps.filter(a => a.status==='Rejected').length;
-  const rate  = apps.length > 0 ? Math.round((offers/apps.length)*100) : 0;
-
-  const statusCounts = {};
-  STATUSES.forEach(s => { statusCounts[s] = apps.filter(a => a.status === s).length; });
-
-  // Build calendar day lookup
-  const calendarData = {};
-  apps.forEach(a => { if (a.dateRaw) { const k = getWorkDayISO(a.dateRaw); calendarData[k] = (calendarData[k]||0)+1; } });
-
-  // Build weekly progress data (last 6 weeks)
-  const weeklyData = [];
-  for (let i = 5; i >= 0; i--) {
-    const start = new Date(now); start.setDate(now.getDate() - i*7 - now.getDay());
-    const end   = new Date(start); end.setDate(start.getDate() + 6);
-    const label = start.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-    const count = apps.filter(a => { if (!a.dateRaw) return false; const d = new Date(a.dateRaw); return d >= start && d <= end; }).length;
-    weeklyData.push({ label, count });
-  }
-  // Build calendar (current month)
-  const calYear = now.getFullYear(), calMonth = now.getMonth();
-  const firstDay = new Date(calYear, calMonth, 1).getDay();
-  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
-  const monthName = now.toLocaleDateString('en-US',{month:'long',year:'numeric'});
-
   const dashHTML = `
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-card-label">Total Applications</div>
-        <div class="stat-card-value">${apps.length}</div>
-        <div class="stat-card-sub">${week} this week</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card-label">Today</div>
-        <div class="stat-card-value blue">${today}</div>
-        <div class="stat-card-sub">applied today</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card-label">Interviews</div>
-        <div class="stat-card-value orange">${ints}</div>
-        <div class="stat-card-sub">${offers} offers received</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card-label">Success Rate</div>
-        <div class="stat-card-value green">${rate}%</div>
-        <div class="stat-card-sub">${rejected} rejected</div>
-      </div>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
-
-      <div class="section-card">
-        <div class="section-card-header"><div class="section-card-title">📅 Application Calendar</div></div>
-        <div style="padding:12px 16px 16px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-            <span style="font-size:13px;font-weight:600;color:var(--text);">${monthName}</span>
-            <span style="font-size:12px;color:var(--text-muted);">${apps.filter(a=>a.dateRaw&&new Date(a.dateRaw).getMonth()===calMonth&&new Date(a.dateRaw).getFullYear()===calYear).length} applied this month</span>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(7,32px);gap:2px;justify-content:space-between;">
-            ${['S','M','T','W','T','F','S'].map(d=>`<div style="width:32px;height:20px;font-size:10px;color:#a0aec0;font-weight:600;text-align:center;line-height:20px;">${d}</div>`).join('')}
-            ${Array(firstDay).fill(`<div style="width:32px;height:32px;"></div>`).join('')}
-            ${Array.from({length:daysInMonth},(_,i)=>{
-              const d = i+1;
-              const key = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-              const count = calendarData[key]||0;
-              const isToday = key === todayISO();
-              let bg = 'transparent', color = 'var(--text2)', fontWeight = '400', border = 'none';
-              if (count > 0) { bg = 'linear-gradient(135deg,#4f46e5,#7c3aed)'; color = '#fff'; fontWeight = '600'; }
-              else if (isToday) { bg = '#eef2ff'; color = '#4f46e5'; fontWeight = '600'; border = '1.5px solid #4f46e5'; }
-              return `<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${bg};color:${color};font-size:11px;font-weight:${fontWeight};border:${border};" title="${count>0?count+' application'+(count>1?'s':''):''}">${d}</div>`;
-            }).join('')}
-          </div>
-          <div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid #f1f5f9;">
-            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted,#94a3b8);"><span style="width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:inline-block;"></span>Applied</div>
-            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted,#94a3b8);"><span style="width:8px;height:8px;border-radius:50%;background:#eef2ff;border:1.5px solid #4f46e5;display:inline-block;"></span>Today</div>
-          </div>
+    <div style="max-width: 800px; margin: 0 auto; padding-top: 20px;">
+      <div class="stats-grid" style="grid-template-columns: 1fr; margin-bottom: 32px;">
+        <div class="stat-card" style="text-align: center; padding: 40px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; border: none;">
+          <div class="stat-card-label" style="color: rgba(255,255,255,0.8); font-size: 14px;">Total Applications Tracked</div>
+          <div class="stat-card-value" style="color: #fff; font-size: 64px; margin: 12px 0;">${totalAppCount}</div>
+          <div class="stat-card-sub" style="color: rgba(255,255,255,0.7); font-size: 13px;">Manage your career journey with precision</div>
         </div>
       </div>
 
-      <div class="section-card">
-        <div class="section-card-header"><div class="section-card-title">📊 Weekly Progress</div></div>
-        <div style="padding:12px 16px 16px;">
-          <div style="display:flex;gap:12px;margin-bottom:14px;">
-            <div style="flex:1;background:var(--bg);border-radius:8px;padding:10px 12px;">
-              <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">This week</div>
-              <div style="font-size:22px;font-weight:700;color:var(--accent);">${weeklyData[weeklyData.length-1].count}</div>
-            </div>
-            <div style="flex:1;background:var(--bg);border-radius:8px;padding:10px 12px;">
-              <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">Last week</div>
-              <div style="font-size:22px;font-weight:700;color:var(--text2);">${weeklyData[weeklyData.length-2].count}</div>
-            </div>
-            <div style="flex:1;background:var(--bg);border-radius:8px;padding:10px 12px;">
-              <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">6-week total</div>
-              <div style="font-size:22px;font-weight:700;color:var(--text2);">${weeklyData.reduce((s,w)=>s+w.count,0)}</div>
-            </div>
+      <div class="section-card" style="padding: 32px; border-radius: 20px; box-shadow: var(--shadow-md);">
+        <h2 style="font-size: 24px; font-weight: 800; color: var(--text); margin-bottom: 16px; letter-spacing: -0.5px;">Welcome to Job Tracker</h2>
+        <p style="font-size: 15px; color: var(--text2); line-height: 1.7; margin-bottom: 20px;">
+          Job Tracker is your premium AI-powered career assistant. We help you stay organized during your job search by extracting details from job postings, tailored resumes, and tracking every step of your application process.
+        </p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
+          <div style="background: var(--bg-inset); padding: 16px; border-radius: 12px;">
+            <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px; color: var(--accent);">🚀 Fast Selection</div>
+            <div style="font-size: 12px; color: var(--text-muted);">Use the extension sidebar to track jobs in 1-click.</div>
           </div>
-          <div style="position:relative;height:120px;" id="weekly-chart-wrap">
-            <canvas id="weekly-chart"></canvas>
+          <div style="background: var(--bg-inset); padding: 16px; border-radius: 12px;">
+            <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px; color: var(--success);">📄 AI Tailoring</div>
+            <div style="font-size: 12px; color: var(--text-muted);">Generate resumes that match exact job descriptions.</div>
           </div>
         </div>
-      </div>
-
-    </div>
-
-    <div style="margin-bottom:24px">
-      <div class="section-card">
-        <div class="section-card-header"><div class="section-card-title">Recent Applications</div></div>
-        <table>
-          <tbody>
-            ${apps.slice(0,6).map(a => `
-              <tr>
-                <td><div style="font-size:13px;font-weight:600;color:var(--text);">${esc(a.company||'—')}</div>
-                    <div style="font-size:11px;color:var(--text-muted);">${esc(a.jobTitle||'—')}</div></td>
-                <td><span class="status-badge ${STATUS_COLORS[a.status]||'s-applied'}">${esc(a.status)}</span></td>
-                <td style="font-size:11px;color:var(--text-faint);text-align:right;">${esc(a.date||'—')}</td>
-              </tr>`).join('') || '<tr><td colspan="3" class="empty-row">No applications yet</td></tr>'}
-          </tbody>
-        </table>
-        ${apps.length > 6 ? `<div style="padding:10px 16px;border-top:1px solid #f1f5f9;text-align:center;"><button class="auth-link" id="view-all-btn">View all ${apps.length} →</button></div>` : ''}
+        
+        <div style="border-top: 1px solid var(--border); padding-top: 24px; display: flex; align-items: center; justify-content: space-between;">
+          <div style="font-size: 13px; color: var(--text-muted);">Signed in as <strong>${currentUser.name || currentUser.email}</strong></div>
+          <button class="signout-btn" id="dash-signout-btn" style="width: auto; padding: 10px 24px; font-weight: 700;">Sign Out</button>
+        </div>
       </div>
     </div>
+  `;
 
-    ${apps.filter(a=>a.followUpDate && a.followUpDate >= todayISO()).length > 0 ? `
-    <div class="section-card">
-      <div class="section-card-header"><div class="section-card-title">📅 Upcoming Follow-ups</div></div>
-      <table>
-        <thead><tr><th>Company</th><th>Job Title</th><th>Status</th><th>Follow-up Date</th></tr></thead>
-        <tbody>
-          ${apps.filter(a=>a.followUpDate && a.followUpDate >= todayISO())
-            .sort((a,b) => a.followUpDate.localeCompare(b.followUpDate))
-            .slice(0,5).map(a => `
-            <tr>
-              <td style="font-weight:600">${esc(a.company||'—')}</td>
-              <td>${esc(a.jobTitle||'—')}</td>
-              <td><span class="status-badge ${STATUS_COLORS[a.status]||'s-applied'}">${esc(a.status)}</span></td>
-              <td style="color:${a.followUpDate===todayISO()?'#c53030':'#276749'};font-weight:600;">${a.followUpDate===todayISO()?'⚠ Today':esc(a.followUpDate)}</td>
-            </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>` : ''}`;
-
-  // Critical fix: render chart after innerHTML is set — scripts inside innerHTML don't execute
   document.getElementById('page-content').innerHTML = dashHTML;
+  document.getElementById('dash-signout-btn').addEventListener('click', () => {
+    document.getElementById('signout-btn').click();
+  });
+}
 
   // Build weekly chart — pure canvas, no Chart.js dependency
   function buildWeeklyChart() {
@@ -1294,65 +1214,31 @@ function renderApplications() {
       <button id="bulk-reassign-btn" style="padding:7px 18px;background:rgba(255,255,255,0.2);backdrop-filter:blur(8px);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Reassign</button>
     </div>
 
-    <div class="section-card">
-      <div class="section-card-header">
-        <div class="section-card-title">All Applications (${filtered.length})</div>
-        <div class="filters-row">
-          <input class="filter-input" id="app-search" placeholder="Search..." value="${esc(filterSearch)}" style="width:140px"/>
-          <select class="filter-select" id="app-status-filter" style="width:130px">
-            <option value="all" ${filterStatus==='all'?'selected':''}>All Statuses</option>
-            ${STATUSES.map(s=>`<option value="${s}" ${filterStatus===s?'selected':''}>${s}</option>`).join('')}
-          </select>
-          <div style="display:flex;gap:6px;align-items:center;background:var(--bg-inset);padding:4px;border-radius:10px;border:1px solid var(--border);">
-            <button class="export-date-btn ${filterDate===workTodayISO()?'active':''}" id="filter-today-btn" style="padding:6px 12px;border:none;">Today</button>
-            <button class="export-date-btn ${filterDate===''?'active':''}" id="filter-all-btn" style="padding:6px 12px;border:none;">All</button>
-            <div style="position:relative;display:flex;align-items:center;">
-              <input class="filter-input ${filterDate!=='' && filterDate!==workTodayISO()?'active':''}" type="date" id="app-date-filter" value="${filterDate}" max="${todayISO()}" style="width:130px;padding:5px 10px;border-radius:6px;${filterDate!=='' && filterDate!==workTodayISO()?'background:var(--accent);color:#fff;border-color:var(--accent);':''}"/>
-            </div>
-          </div>
-          <button class="btn-new" id="toggle-bulk-mode-btn" style="padding:8px 12px;margin-left:auto;">${isBulkMode ? 'Cancel Select' : '≡ Select'}</button>
-        </div>
+    </div>
+    ${(!hasFullHistory && totalAppCount > apps.length) ? `
+      <div style="text-align:center; padding: 20px 0;">
+        <button class="settings-btn" id="load-history-btn" style="width: auto; padding: 10px 24px; font-weight: 700;">
+          Load Full History (${totalAppCount} total)
+        </button>
+        <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+          Showing latest 30 days to save bandwidth. Click to fetch all.
+        </p>
       </div>
-      <div style="overflow-x:auto">
-      <table>
-        <thead><tr>
-          <th class="bulk-col" style="width:36px;display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" id="select-all-chk" title="Select all"/></th>
-          <th>#</th><th>Company</th><th>Job Title</th><th>URL</th><th>Status</th><th>Session Date</th><th>Resume Content</th><th>Download</th><th>Actions</th>
-        </tr></thead>
-        <tbody>
-          ${filtered.length === 0
-            ? `<tr><td colspan="${isBulkMode ? 9 : 8}" class="empty-row">No applications match your filters</td></tr>`
-            : filtered.map((a,i) => `
-              <tr data-id="${a.id}" class="app-row" style="cursor:pointer;transition:background 0.2s;">
-                <td class="bulk-col" style="display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" class="app-chk" data-id="${a.id}"/></td>
-                <td style="color:var(--text-faint);font-size:12px;">${i+1}</td>
-                <td><div style="font-weight:600;font-size:13px;color:var(--text);">${esc(a.company||'—')}</div></td>
-                <td style="font-size:13px;color:var(--text2);">${esc(a.jobTitle||'—')}</td>
-                <td>${a.url?`<a href="${esc(a.url)}" target="_blank" class="url-link">Open ↗</a>`:'—'}</td>
-                <td>
-                  <select class="status-select" data-id="${a.id}" style="background:${(STATUS_BG[a.status]||STATUS_BG.Applied).bg};color:${(STATUS_BG[a.status]||STATUS_BG.Applied).color};">
-                    ${STATUSES.map(s=>`<option value="${s}" ${a.status===s?'selected':''}>${s}</option>`).join('')}
-                  </select>
-                </td>
-                <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${esc(a.dateKey||a.date||'—')}</td>
-                <td>
-                  <button class="auth-link add-resume-btn" data-id="${a.id}" style="font-size:12px;font-weight:600;color:${a.resume?'#059669':'var(--accent)'};">
-                    ${a.resume ? '📝 Update' : '➕ Add Content'}
-                  </button>
-                </td>
-                <td>
-                  <button class="btn-new dl-resume-btn" data-id="${a.id}" style="padding:4px 10px;font-size:11px;${!a.resume ? 'opacity:0.4;pointer-events:none;' : ''}">
-                    📥 Download
-                  </button>
-                </td>
-                <td style="white-space:nowrap;">
-                  <button class="auth-link del-btn" data-id="${a.id}" style="color:var(--danger);font-size:12px;">Delete</button>
-                </td>
-              </tr>`).join('')}
-        </tbody>
-      </table>
-      </div>
-    </div>`;
+    ` : ''}
+  `;
+
+  if (document.getElementById('load-history-btn')) {
+    document.getElementById('load-history-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('load-history-btn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Fetching Data...';
+      const fullApps = await loadApps('all'); // Fetch all history
+      apps = fullApps;
+      renderApplications();
+      updateBadge();
+    });
+  }
+`;
 
   // Mobile FAB button
   if (window.innerWidth <= 768) {
