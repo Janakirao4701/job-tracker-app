@@ -712,6 +712,189 @@ body::before {
 }
 
 /* ═══════════════════════════════════════
+   EXTENSION DEMO
+   ═══════════════════════════════════════ */
+.demo-section {
+  padding: 120px 24px;
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.demo-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 60px;
+}
+
+.demo-content {
+  flex: 1;
+}
+
+.demo-visual {
+  flex: 1;
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.ext-mockup {
+  width: 320px;
+  border-radius: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 30px 60px rgba(0,0,0,0.6), 0 0 40px var(--glow-violet);
+  overflow: hidden;
+  position: relative;
+  animation: float-ext 6s ease-in-out infinite;
+}
+
+@keyframes float-ext {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-15px); }
+}
+
+.ext-header {
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.1));
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ext-logo {
+  width: 24px; height: 24px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  display: flex; align-items: center; justify-content: center;
+}
+
+.ext-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ext-body {
+  padding: 20px;
+}
+
+.ext-field {
+  margin-bottom: 16px;
+}
+
+.ext-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ext-input {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  width: 100%;
+}
+
+.ext-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  border: none;
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* ═══════════════════════════════════════
+   TESTIMONIALS
+   ═══════════════════════════════════════ */
+.testimonials-section {
+  padding: 120px 24px;
+  position: relative;
+  z-index: 2;
+}
+
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.testimonial-card {
+  background: linear-gradient(180deg, var(--bg-card), rgba(15,15,35,0.2));
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 32px;
+  transition: all 0.3s ease;
+}
+
+.testimonial-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(99,102,241,0.3);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.test-stars {
+  color: #fbbf24;
+  font-size: 16px;
+  margin-bottom: 16px;
+  letter-spacing: 2px;
+}
+
+.test-quote {
+  font-size: 15px;
+  color: var(--text-primary);
+  line-height: 1.6;
+  margin-bottom: 24px;
+  font-style: italic;
+}
+
+.test-author {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.test-avatar {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.test-name {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.test-role {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════
    CTA SECTION
    ═══════════════════════════════════════ */
 .cta-section {
@@ -831,6 +1014,12 @@ body::before {
 
   .bento-grid { grid-template-columns: 1fr; }
   .bento-card.featured { grid-column: span 1; }
+
+  .demo-container { flex-direction: column; text-align: center; }
+  .demo-content .section-label, .demo-content .section-heading, .demo-content .section-sub { text-align: center !important; }
+  .demo-content .section-sub { margin-left: auto !important; margin-right: auto !important; }
+
+  .testimonials-grid { grid-template-columns: 1fr; }
 
   .steps-row { grid-template-columns: 1fr; gap: 48px; }
   .steps-row::before { display: none; }
@@ -1007,6 +1196,100 @@ body::before {
         <div class="step-number">3</div>
         <div class="step-title">Track & Land</div>
         <div class="step-desc">View all applications in your dashboard. Update statuses, generate resumes, and chat with AI Blaze to prep for interviews.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- EXTENSION DEMO -->
+<section class="demo-section">
+  <div class="demo-container">
+    <div class="demo-content reveal">
+      <div class="section-label" style="text-align:left;">Zero Data Entry</div>
+      <h2 class="section-heading" style="text-align:left;">Capture Jobs Without Leaving the Board</h2>
+      <p class="section-sub" style="text-align:left; margin-left:0; max-width:440px;">
+        No more keeping an Excel spreadsheet updated in another tab. Job Tracker lives directly in your Chrome browser. 
+        When you find a job you like, click the extension. Our AI reads the page and extracts all the relevant information instantly.
+      </p>
+      <ul style="list-style:none; margin-bottom: 32px; display:flex; flex-direction:column; gap:12px;">
+        <li style="display:flex; align-items:center; gap:12px; font-size:15px; color:var(--text-secondary);"><span style="color:var(--accent-1);">✓</span> Extracts title, company, and location</li>
+        <li style="display:flex; align-items:center; gap:12px; font-size:15px; color:var(--text-secondary);"><span style="color:var(--accent-1);">✓</span> Saves the original job description</li>
+        <li style="display:flex; align-items:center; gap:12px; font-size:15px; color:var(--text-secondary);"><span style="color:var(--accent-1);">✓</span> Checks ATS eligibility on the fly</li>
+      </ul>
+      <a href="#" class="btn-primary">Add to Chrome — It's Free</a>
+    </div>
+    
+    <div class="demo-visual reveal">
+      <div class="ext-mockup">
+        <div class="ext-header">
+          <div class="ext-logo">✨</div>
+          <div class="ext-title">Job Tracker</div>
+        </div>
+        <div class="ext-body">
+          <div class="ext-field">
+            <div class="ext-label">Job Title</div>
+            <div class="ext-input">Senior React Developer</div>
+          </div>
+          <div class="ext-field">
+            <div class="ext-label">Company</div>
+            <div class="ext-input">Netflix</div>
+          </div>
+          <div class="ext-field">
+            <div class="ext-label">Match Score</div>
+            <div class="ext-input" style="color:#34d399; font-weight:600; border-color:rgba(16,185,129,0.3); background:rgba(16,185,129,0.05);">Highly Eligible (92%)</div>
+          </div>
+          <button class="ext-btn">Capture Application ✨</button>
+        </div>
+      </div>
+      
+      <!-- Blob behind mockup -->
+      <div style="position:absolute; width: 300px; height:300px; background:radial-gradient(circle, var(--glow-violet), transparent 70%); z-index:-1; filter:blur(40px); top:50%; left:50%; transform:translate(-50%, -50%);"></div>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="testimonials-section">
+  <div class="landing-container">
+    <div class="section-label reveal">Success Stories</div>
+    <h2 class="section-heading reveal">Loved by Job Seekers</h2>
+    <p class="section-sub reveal">See how people are using Job Tracker to organize their search and land roles.</p>
+    
+    <div class="testimonials-grid">
+      <div class="testimonial-card reveal">
+        <div class="test-stars">★★★★★</div>
+        <div class="test-quote">"Finally, a tool that keeps all my applications in one place. I went from scattered spreadsheets to landing 3 interviews in my first month of using it."</div>
+        <div class="test-author">
+          <div class="test-avatar">👩</div>
+          <div>
+            <div class="test-name">Sarah K.</div>
+            <div class="test-role">Recent Graduate</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="testimonial-card reveal" style="transition-delay: 0.1s;">
+        <div class="test-stars">★★★★★</div>
+        <div class="test-quote">"Managing a job search while employed full-time is tough. Job Tracker helps me stay organized without missing any opportunities or follow-up deadlines."</div>
+        <div class="test-author">
+          <div class="test-avatar">👨🏽</div>
+          <div>
+            <div class="test-name">Mike T.</div>
+            <div class="test-role">Career Switcher</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="testimonial-card reveal" style="transition-delay: 0.2s;">
+        <div class="test-stars">★★★★★</div>
+        <div class="test-quote">"The Chrome Extension is a game-changer. I don't have to copy-paste anything anymore. It just grabs the job details and I move on to the next one."</div>
+        <div class="test-author">
+          <div class="test-avatar">🧑🏻</div>
+          <div>
+            <div class="test-name">Alex P.</div>
+            <div class="test-role">Software Engineer</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
