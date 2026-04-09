@@ -9,7 +9,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           chrome.tabs.sendMessage(tab.id, msg).catch(e => {
             if (!e.message.includes('Receiving end does not exist') &&
                 !e.message.includes('Could not establish connection')) {
-              console.warn('[RJD] sendMessage error on tab', tab.id, e.message);
+              AppLogger.warn('[RJD] sendMessage error on tab ' + tab.id, { message: e.message });
             }
           });
         });
@@ -39,11 +39,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         });
       return true; // Keep channel open for async sendResponse
     }
+    } else {
+      // Unknown action - but still respond to close channel
+      sendResponse({ ok: false, error: 'Unknown action: ' + msg.action });
+    }
   } catch (err) {
-    console.error('[RJD SW] Listener error:', err);
-    sendResponse({ ok: false, error: err.message });
+    AppLogger.error('[RJD SW] Listener error', { message: err.message, stack: err.stack });
+    try {
+      sendResponse({ ok: false, error: err.message });
+    } catch (e) { /* ignore if already closed */ }
   }
-  return false;
+  return true; // Keep channel open for safety, as we might send a late response
 });
 
 // ── KEYBOARD COMMANDS ──
@@ -58,7 +64,7 @@ chrome.commands.onCommand.addListener(async (command) => {
       },
       args: [command]
     });
-  } catch(e) { console.warn('[RJD] Command injection failed:', e.message); }
+  } catch(e) { AppLogger.warn('[RJD] Command injection failed', { message: e.message }); }
 });
 
 // ── INTERVIEW NOTIFICATIONS ──
@@ -87,7 +93,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 // Safe initialization: delay check slightly to ensure CONFIG is ready and worker state is stable
 setTimeout(() => {
-  checkInterviewsToday().catch(e => console.error('[RJD SW] Init error:', e));
+  checkInterviewsToday().catch(e => AppLogger.error('[RJD SW] Init error', { message: e.message }));
 }, 1000);
 
 async function checkInterviewsToday() {
@@ -123,5 +129,5 @@ async function checkInterviewsToday() {
       message: names, priority: 2,
     });
     chrome.storage.local.set({ [storageKey]: true });
-  } catch(e) { console.warn('[RJD SW] Interview check failed:', e.message); }
+  } catch(e) { AppLogger.warn('[RJD] Interview check failed', { message: e.message }); }
 }

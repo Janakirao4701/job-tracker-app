@@ -112,7 +112,7 @@
       // The 'ref' or 'iss' usually contains the project identifier
       const projectRef = payload.ref || (payload.iss && payload.iss.includes('supabase') ? payload.iss.split('/')[2].split('.')[0] : null);
       if (projectRef && !SUPABASE_URL.includes(projectRef)) {
-        console.warn('AI Blaze: Session token project mismatch detected!', { tokenProj: projectRef, currentProj: SUPABASE_URL });
+        AppLogger.warn('Session token project mismatch detected!', { tokenProj: projectRef, currentProj: SUPABASE_URL });
         return false;
       }
     } catch (e) { return false; }
@@ -134,7 +134,7 @@
         console.log(`[AI Blaze Bridge] Background response for ${id}:`, response);
         window.postMessage({ type: 'RJD_PROXY_RESPONSE', payload: { id, response } }, '*');
       } catch (err) {
-        console.error(`[AI Blaze Bridge] Bridge error for ${id}:`, err);
+        AppLogger.error(`Bridge error for ${id}`, { message: err.message });
         window.postMessage({ type: 'RJD_PROXY_RESPONSE', payload: { id, error: err.message } }, '*');
       }
     }
@@ -147,7 +147,7 @@
 
   function chromeStore() {
     if (!isContextValid()) {
-      console.warn('AI Blaze: Extension context invalidated — please refresh the page.');
+      AppLogger.warn('Extension context invalidated — please refresh the page.');
       return null;
     }
     return chrome.storage.local;
@@ -163,13 +163,16 @@
         chrome.runtime.sendMessage(message, response => {
           if (chrome.runtime.lastError) {
             const err = chrome.runtime.lastError.message;
-            if (!err.includes('No SW') && 
-                !err.includes('context invalidated') && 
-                !err.includes('message channel closed') &&
-                !err.includes('asynchronous response')) {
-              console.warn('[AI Blaze] sendMessage error:', err);
+            if (err.includes('No SW') || 
+                err.includes('context invalidated') || 
+                err.includes('message channel closed') ||
+                err.includes('Receiving end does not exist')) {
+              // Gracefully handle common extension lifecycle errors
+              resolve(null);
+            } else {
+              AppLogger.warn('[AI Blaze] sendMessage error', { err });
+              resolve(null);
             }
-            resolve(null);
           } else {
             resolve(response);
           }
@@ -998,6 +1001,25 @@ ${context}`;
    */
 
 
+  async function fetchWithRetry(url, opts, retries = 3, delay = 2000) {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const resp = await fetch(url, opts);
+        if (resp.status === 429) {
+          AppLogger.warn(`Gemini Rate Limited (429). Retry ${i + 1}/${retries} in ${delay}ms...`);
+          await new Promise(res => setTimeout(res, delay));
+          delay *= 2; // Exponential backoff
+          continue;
+        }
+        return resp;
+      } catch (e) {
+        if (i === retries - 1) throw e;
+        await new Promise(res => setTimeout(res, delay));
+        delay *= 2;
+      }
+    }
+  }
+
   async function callGeminiBlaze(key, prompt) {
     const DEFAULT_MODEL = 'gemini-2.0-flash';
     const DEPRECATED = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-3.1-flash-lite'];
@@ -1022,7 +1044,7 @@ ${context}`;
     let lastErr = null;
     for (const url of endpoints) {
       try {
-        const resp = await fetch(url, {
+        const resp = await fetchWithRetry(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1038,7 +1060,7 @@ ${context}`;
         
         const errData = await resp.json();
         lastErr = errData.error?.message || `HTTP ${resp.status}`;
-        if (resp.status !== 404 && resp.status !== 400) break; 
+        if (resp.status !== 404 && resp.status !== 400 && resp.status !== 429) break; 
       } catch (e) {
         lastErr = e.message;
       }

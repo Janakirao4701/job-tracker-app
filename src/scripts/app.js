@@ -1151,6 +1151,25 @@ async function callAIBlaze(query, context, key, provider, model) {
 }
 
 
+async function fetchWithRetry(url, opts, retries = 3, delay = 2000) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const resp = await fetch(url, opts);
+      if (resp.status === 429) {
+        console.warn(`[AI Blaze] Gemini Rate Limited (429). Retry ${i + 1}/${retries} in ${delay}ms...`);
+        await new Promise(res => setTimeout(res, delay));
+        delay *= 2; // Exponential backoff
+        continue;
+      }
+      return resp;
+    } catch (e) {
+      if (i === retries - 1) throw e;
+      await new Promise(res => setTimeout(res, delay));
+      delay *= 2;
+    }
+  }
+}
+
 async function callGeminiBlaze(query, context, key, modelSelection) {
   const model = "gemini-3.1-flash-lite"; 
   const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${key}`;
@@ -1179,7 +1198,7 @@ ${query}
 
 Response:`;
 
-  const resp = await fetch(url, {
+  const resp = await fetchWithRetry(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -1193,7 +1212,7 @@ Response:`;
     // Fallback to v1beta if v1 is not available for this specific model/key
     if (resp.status === 404) {
        const altUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-       const altResp = await fetch(altUrl, {
+       const altResp = await fetchWithRetry(altUrl, {
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify({
@@ -1565,7 +1584,7 @@ function renderSettings() {
   document.getElementById('page-content').innerHTML = `
     <div class="settings-layout">
       <div class="settings-nav-card">
-        ${[['apikey','🔑','API Key'],['blaze_shortcuts','🔥','Blaze Shortcuts'],['resumeprofile','📄','Resume Profile'],['account','👤','Account'],['shortcuts','⌨️','Shortcuts'],['privacy-s','🛡️','Privacy'],['about','ℹ️','About']].map(([id,icon,label]) =>
+        ${[['apikey','🔑','API Key'],['blaze_shortcuts','🔥','Blaze Shortcuts'],['resumeprofile','📄','Resume Profile'],['account','👤','Account'],['shortcuts','⌨️','Shortcuts'],['logs','📜','System Logs'],['privacy-s','🛡️','Privacy'],['about','ℹ️','About']].map(([id,icon,label]) =>
           `<div class="settings-nav-item ${settingsSection===id?'active':''}" data-sec="${id}">${icon} ${label}</div>`
         ).join('')}
       </div>
@@ -1977,6 +1996,47 @@ function renderSettingsSection(sec) {
       <div style="margin-top:20px;background:#f8fafc;border-radius:8px;padding:14px;font-size:13px;color:#718096;text-align:center;">
         Built for job seekers who mean business · <strong style="color:#1F4E79;">Free forever</strong>
       </div>`;
+  } else if (sec === 'logs') {
+    panel.innerHTML = `
+      <div class="settings-section-title">System Error Logs</div>
+      <div class="settings-section-sub">Capture and debug application errors locally.</div>
+      <div style="display:flex; gap:10px; margin-bottom:20px;">
+        <button class="settings-btn" id="dl-logs-btn">Download Log File</button>
+        <button class="settings-danger-btn" id="clear-logs-btn">Clear Logs</button>
+      </div>
+      <div id="logs-list-container" style="background:var(--bg-inset); border:1px solid var(--border); border-radius:12px; height:400px; overflow-y:auto; padding:12px; font-family:'SF Mono', monospace; font-size:11px; color:var(--text2);">
+        <div style="text-align:center; padding:40px; color:var(--text-muted);">Loading logs...</div>
+      </div>`;
+
+    const loadLogs = async () => {
+      const logs = await AppLogger.getLogs();
+      const container = document.getElementById('logs-list-container');
+      if (!logs.length) {
+        container.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">No logs recorded. Everything looks good!</div>';
+        return;
+      }
+      container.innerHTML = logs.reverse().map(l => `
+        <div style="margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid var(--border-light);">
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <strong style="color:${l.level==='ERROR'?'var(--danger)':'var(--warning)'};">${l.level}</strong>
+            <span style="color:var(--text-muted);">${new Date(l.timestamp).toLocaleString()}</span>
+          </div>
+          <div style="word-break:break-all;"><strong>Msg:</strong> ${esc(l.message)}</div>
+          ${l.url ? `<div style="color:var(--text-muted); font-size:10px;">URL: ${esc(l.url)}</div>` : ''}
+        </div>
+      `).join('');
+    };
+
+    loadLogs();
+
+    document.getElementById('dl-logs-btn').onclick = () => AppLogger.download();
+    document.getElementById('clear-logs-btn').onclick = async () => {
+      if (confirm('Clear all local logs?')) {
+        await AppLogger.clear();
+        loadLogs();
+        showToast('Logs cleared');
+      }
+    };
   }
 }
 
