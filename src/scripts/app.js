@@ -2700,51 +2700,63 @@ async function renderJobSearch() {
     </div>
   `;
 
-  document.getElementById('btn-job-search').onclick = async () => {
-    jobQuery = document.getElementById('job-q').value.trim();
-    jobLocation = document.getElementById('job-l').value.trim();
-    jobSearchProvider = document.getElementById('job-p').value;
-    localStorage.setItem('rjd_job_provider', jobSearchProvider);
+  const btnJobSearch = document.getElementById('btn-job-search');
+  if (btnJobSearch) {
+    btnJobSearch.onclick = async () => {
+      jobQuery = document.getElementById('job-q').value.trim();
+      jobLocation = document.getElementById('job-l').value.trim();
+      jobSearchProvider = document.getElementById('job-p').value;
+      localStorage.setItem('rjd_job_provider', jobSearchProvider);
 
-    if (!jobQuery) { showToast('Please enter keywords', true); return; }
+      if (!jobQuery) { showToast('Please enter keywords', true); return; }
 
-    const btn = document.getElementById('btn-job-search');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="ai-scan-loading" style="display:inline-block; width:16px; height:16px;"></span> Searching...';
-    
-    // Show skeletons
-    document.getElementById('job-results-container').innerHTML = `
-      <div class="job-results-grid">
-        ${Array(6).fill(0).map(() => `
-          <div class="skeleton-card">
-            <div style="display:flex; gap:12px; margin-bottom:16px;">
-              <div class="skeleton-rect" style="width:48px; height:48px; border-radius:12px;"></div>
-              <div style="flex:1">
-                <div class="skeleton-rect" style="width:70%; height:16px; margin-bottom:8px;"></div>
-                <div class="skeleton-rect" style="width:40%; height:12px;"></div>
+      btnJobSearch.disabled = true;
+      const originalText = btnJobSearch.textContent;
+      btnJobSearch.innerHTML = '<span class="ai-scan-loading" style="display:inline-block; width:16px; height:16px;"></span> Searching...';
+      
+      // Show skeletons
+      const resultsContainer = document.getElementById('job-results-container');
+      if (resultsContainer) {
+        resultsContainer.innerHTML = `
+          <div class="job-results-grid">
+            ${Array(6).fill(0).map(() => `
+              <div class="skeleton-card">
+                <div style="display:flex; gap:12px; margin-bottom:16px;">
+                  <div class="skeleton-rect" style="width:48px; height:48px; border-radius:12px;"></div>
+                  <div style="flex:1">
+                    <div class="skeleton-rect" style="width:70%; height:16px; margin-bottom:8px;"></div>
+                    <div class="skeleton-rect" style="width:40%; height:12px;"></div>
+                  </div>
+                </div>
+                <div class="skeleton-rect" style="width:100%; height:40px; margin-bottom:16px;"></div>
+                <div style="display:flex; gap:8px;">
+                  <div class="skeleton-rect" style="flex:1; height:32px; border-radius:10px;"></div>
+                  <div class="skeleton-rect" style="flex:1; height:32px; border-radius:10px;"></div>
+                </div>
               </div>
-            </div>
-            <div class="skeleton-rect" style="width:100%; height:40px; margin-bottom:16px;"></div>
-            <div style="display:flex; gap:8px;">
-              <div class="skeleton-rect" style="flex:1; height:32px; border-radius:10px;"></div>
-              <div class="skeleton-rect" style="flex:1; height:32px; border-radius:10px;"></div>
-            </div>
+            `).join('')}
           </div>
-        `).join('')}
-      </div>
-    `;
+        `;
+      }
 
-    try {
-      jobSearchResults = await fetchJobs(jobQuery, jobLocation, jobSearchProvider);
-      document.getElementById('job-results-container').innerHTML = renderJobResults(jobSearchResults);
-    } catch (err) {
-      console.error(err);
-      document.getElementById('job-results-container').innerHTML = `<div style="text-align:center; padding:40px; color:var(--danger);">${esc(err.message)}</div>`;
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Search';
-    }
-  };
+      try {
+        jobSearchResults = await fetchJobs(jobQuery, jobLocation, jobSearchProvider);
+        if (resultsContainer) resultsContainer.innerHTML = renderJobResults(jobSearchResults);
+      } catch (err) {
+        console.error('Job Search Error:', err);
+        if (resultsContainer) resultsContainer.innerHTML = `
+          <div style="text-align:center; padding:40px;">
+            <div style="color:var(--danger); font-weight:700; margin-bottom:8px;">Search Failed</div>
+            <div style="color:var(--text-muted); font-size:12px;">${esc(err.message)}</div>
+            ${err.message.includes('CORS') ? '<div style="margin-top:12px; font-size:11px; color:var(--accent);">Tip: This provider may require a proxy or browser extension to work on Vercel.</div>' : ''}
+          </div>
+        `;
+      } finally {
+        btnJobSearch.disabled = false;
+        btnJobSearch.textContent = 'Search';
+      }
+    };
+  }
 }
 
 function renderJobResults(results) {
