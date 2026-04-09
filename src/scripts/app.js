@@ -1674,9 +1674,6 @@ function renderSettingsSection(sec) {
             </div>
           </div>
         </div>
-      `;
-        <div style="margin-top:16px; font-size:12px; color:var(--text-muted); text-align:center;">
-          <strong>Security Protocol:</strong> Your private API keys are stored only in your local browser storage and never uploaded to any cloud server or Supabase.
         </div>
       `;
 
