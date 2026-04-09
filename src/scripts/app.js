@@ -1499,17 +1499,20 @@ function renderApplications() {
   }
 
   // Select all checkbox
-  document.getElementById('select-all-chk').addEventListener('change', e => {
-    document.querySelectorAll('.app-chk').forEach(c => c.checked = e.target.checked);
-    updateBulkBar();
-  });
+  const selectAllChk = document.getElementById('select-all-chk');
+  if (selectAllChk) {
+    selectAllChk.addEventListener('change', e => {
+      document.querySelectorAll('.app-chk').forEach(c => c.checked = e.target.checked);
+      updateBulkBar();
+    });
+  }
 
   // Individual checkboxes
   document.querySelectorAll('.app-chk').forEach(chk => {
     chk.addEventListener('change', () => {
       const all = document.querySelectorAll('.app-chk');
       const allChk = document.getElementById('select-all-chk');
-      if (allChk) allChk.checked = [...all].every(c => c.checked);
+      if (allChk) allChk.checked = [...all].length > 0 && [...all].every(c => c.checked);
       updateBulkBar();
     });
   });
@@ -1517,32 +1520,34 @@ function renderApplications() {
 
 
   // Bulk reassign to session date
-  document.getElementById('bulk-reassign-btn').addEventListener('click', async () => {
-    const ids = getSelectedIds();
-    const newDate = document.getElementById('bulk-session-date').value;
-    if (!newDate) { showToast('Pick a session date first', true); return; }
-    if (!ids.length) { showToast('No apps selected', true); return; }
-    const d = new Date(newDate + 'T12:00:00');
-    const displayDate = d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
-    const btn = document.getElementById('bulk-reassign-btn');
-    btn.textContent = 'Saving...'; btn.disabled = true;
-    let successCount = 0;
-    await Promise.all(ids.map(async id => {
-      const app = apps.find(a => String(a.id) === String(id));
-      if (app) {
-        app.dateKey = newDate;
-        app.date    = displayDate;
-        const ok = await updateApp(app);
-        if (ok) successCount++;
-      }
-    }));
-    btn.textContent = '✓ Reassign'; btn.disabled = false;
-    showToast(successCount + ' apps moved to ' + newDate + ' ✓');
-    document.querySelectorAll('.app-chk').forEach(c => c.checked = false);
-    isBulkMode = false;
-    renderApplications();
-    updateBadge();
-  });
+  const bulkReassignBtn = document.getElementById('bulk-reassign-btn');
+  if (bulkReassignBtn) {
+    bulkReassignBtn.addEventListener('click', async () => {
+      const ids = getSelectedIds();
+      const newDate = document.getElementById('bulk-session-date').value;
+      if (!newDate) { showToast('Pick a session date first', true); return; }
+      if (!ids.length) { showToast('No apps selected', true); return; }
+      const d = new Date(newDate + 'T12:00:00');
+      const displayDate = d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+      bulkReassignBtn.textContent = 'Saving...'; bulkReassignBtn.disabled = true;
+      let successCount = 0;
+      await Promise.all(ids.map(async id => {
+        const app = apps.find(a => String(a.id) === String(id));
+        if (app) {
+          app.dateKey = newDate;
+          app.date    = displayDate;
+          const ok = await updateApp(app);
+          if (ok) successCount++;
+        }
+      }));
+      bulkReassignBtn.textContent = '✓ Reassign'; bulkReassignBtn.disabled = false;
+      showToast(successCount + ' apps moved to ' + newDate + ' ✓');
+      document.querySelectorAll('.app-chk').forEach(c => c.checked = false);
+      isBulkMode = false;
+      renderApplications();
+      updateBadge();
+    });
+  }
   
   // Row Click for Details (excluding interactive elements)
   document.querySelectorAll('.app-row').forEach(row => {
