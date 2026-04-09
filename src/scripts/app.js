@@ -203,8 +203,11 @@ async function loadApps(days = 30) {
 
     let r = await fetch(url, { headers: headers({ 'Range-Unit': 'items', 'Range': `${offset}-${offset + PAGE_SIZE - 1}` }) });
     
-    if (r.status === 401 && session?.refresh_token && offset === 0) {
-      const refreshed = await refreshToken();
+    if (r.status === 401) {
+      let refreshed = false;
+      if (session?.refresh_token && offset === 0) {
+        refreshed = await refreshToken();
+      }
       if (refreshed) {
         r = await fetch(url, { headers: headers({ 'Range-Unit': 'items', 'Range': `${offset}-${offset + PAGE_SIZE - 1}` }) });
       } else {
