@@ -2,7 +2,7 @@
 
 > Premium AI-powered job application tracker with cloud sync, Gemini extraction, inline copilot, and resume generation.
 
-![Version](https://img.shields.io/badge/version-5.1.0-blue)
+![Version](https://img.shields.io/badge/version-5.1.4-blue)
 ![Manifest](https://img.shields.io/badge/Manifest-V3-green)
 ![AI](https://img.shields.io/badge/AI-Gemini%202.0-orange)
 ![Database](https://img.shields.io/badge/DB-Supabase-purple)
@@ -274,9 +274,9 @@ Runs build + deploy in one command.
 > **If you encounter any errors after future changes, rollback to this stable commit:**
 >
 > ```
-> Commit: 48263181b518394d7a384c7f6a4acaa55a52fbef
+> Commit: 8fd815e
 > Date:   2026-04-09
-> Message: fix(blaze): switch to stable v1 API and add model selector
+> Message: fix(blaze): harden extension messaging and fix port-closed errors
 > ```
 >
 > **To rollback:**
@@ -298,6 +298,9 @@ Runs build + deploy in one command.
 - ✅ XLSX export path corrected
 - ✅ Clipboard `undefined` handling
 - ✅ Background service worker `importScripts` path fixed
+- ✅ Message channel "port closed" fixed with explicit responses in `background.js`
+- ✅ Service worker lifecycle warnings suppressed to reduce console noise
+- ✅ Background message listener hardened with global try-catch boundaries
 - ✅ Silent failures replaced with diagnostic logging
 
 ---
