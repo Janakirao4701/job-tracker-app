@@ -1589,15 +1589,19 @@ function renderSettings() {
   document.getElementById('page-content').innerHTML = `
     <div class="settings-layout">
       <div class="settings-nav-card">
+        <div style="padding:16px 20px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); border-bottom:1px solid var(--border-light); margin-bottom:8px;">Configuration</div>
         ${[['apikey','🔑','AI Config'],['blaze_shortcuts','🔥','Blaze Shortcuts'],['resumeprofile','📄','Resume Profile'],['account','👤','Account'],['shortcuts','⌨️','Shortcuts'],['logs','📜','System Logs']].map(([id,icon,label]) =>
           `<div class="settings-nav-item ${settingsSection===id?'active':''}" data-sec="${id}">${icon} ${label}</div>`
         ).join('')}
       </div>
-      <div class="settings-content-card" id="settings-panel"></div>
+      <div class="settings-content-card animate-entrance" id="settings-panel"></div>
     </div>`;
 
   document.querySelectorAll('.settings-nav-item').forEach(item => {
-    item.addEventListener('click', () => { settingsSection = item.dataset.sec; renderSettings(); });
+    item.addEventListener('click', () => { 
+      settingsSection = item.dataset.sec; 
+      renderSettings(); 
+    });
   });
   renderSettingsSection(settingsSection);
 }
@@ -1612,49 +1616,65 @@ function renderSettingsSection(sec) {
     loadAIKeyDB('google').then(async googleKey => {
       const googleModel = await loadAIModelDB('google');
       panel.innerHTML = `
-        <div class="settings-section-title">AI Provider Configuration</div>
-        <div class="settings-section-sub">Configure your Gemini engine for extraction and AI-Blaze assistance.</div>
+        <div class="settings-section-title">Intelligence Engine</div>
+        <div class="settings-section-sub">Configure your Gemini models for automated job extraction and assistance.</div>
         
         <div id="settings-msg" style="margin-bottom:20px;"></div>
 
-        <div class="provider-config-card" style="margin-bottom:24px; background:var(--bg-inset); padding:20px; border-radius:16px; border:1px solid var(--border);">
-          <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
-            <div style="width:40px; height:40px; background:#4285f4; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:20px;">💎</div>
+        <div class="action-card" style="margin-bottom:24px; cursor:default; border-color:var(--accent-border); background:linear-gradient(to bottom right, var(--bg-card), var(--bg-inset));">
+          <div style="display:flex; align-items:center; gap:16px; margin-bottom:24px;">
+            <div style="width:48px; height:48px; background:linear-gradient(135deg, #4285f4, #7c3aed); border-radius:14px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:24px; box-shadow:0 8px 16px rgba(66, 133, 244, 0.2);">💎</div>
             <div>
-              <div style="font-weight:700; color:var(--text);">Google Gemini</div>
-              <div style="font-size:11px; color:var(--text-muted);">Consolidated extraction engine for all AI features.</div>
+              <div style="font-weight:800; color:var(--text); font-family:'Outfit'; font-size:18px;">Google Gemini Pro</div>
+              <div style="font-size:11px; color:var(--text-muted); font-weight:700; text-transform:uppercase; letter-spacing:1px;">Cloud Intelligence API</div>
             </div>
-            <a href="https://aistudio.google.com" target="_blank" style="margin-left:auto; font-size:11px; color:var(--accent); font-weight:700;">Get Free Key ↗</a>
+            <a href="https://aistudio.google.com" target="_blank" style="margin-left:auto; font-size:11px; color:var(--accent); font-weight:800; background:var(--accent-light); padding:6px 14px; border-radius:100px; text-decoration:none; border:1px solid var(--accent-border);">GET API KEY ↗</a>
           </div>
           
-          <div style="margin-bottom:16px;">
-            <label style="display:block; font-size:11px; font-weight:700; margin-bottom:6px; color:var(--text-muted);">API KEY</label>
-            <div style="display:flex; gap:8px;">
-              <input type="password" class="settings-input" id="google-key-input" value="${esc(googleKey)}" placeholder="AIzaSy..." style="flex:1;"/>
-              <button class="btn-new" data-toggle-password="google-key-input" style="width:70px;">Show</button>
+          <div style="display:grid; grid-template-columns:1.5fr 1fr; gap:16px;">
+            <div class="field-group">
+              <label style="font-size:10px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Gemini API Key</label>
+              <div style="display:flex; gap:8px;">
+                <input type="password" class="settings-input" id="google-key-input" value="${esc(googleKey)}" placeholder="AIzaSy..." style="flex:1; border-radius:10px; padding:12px;"/>
+                <button class="btn-new" data-toggle-password="google-key-input" style="width:70px; font-weight:700; font-size:11px;">SHOW</button>
+              </div>
+            </div>
+
+            <div class="field-group">
+              <label style="font-size:10px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Active Model ID</label>
+              <div style="position:relative;">
+                <input type="text" class="settings-input" id="google-model-input" value="${esc(googleModel)}" placeholder="e.g. gemini-1.5-flash" style="width:100%; padding-right:32px; border-radius:10px; padding:12px;" list="gemini-models-list" autocomplete="off"/>
+                <span style="position:absolute; right:12px; top:50%; transform:translateY(-50%); font-size:10px; color:var(--text-muted); pointer-events:none;">▼</span>
+              </div>
+              <datalist id="gemini-models-list">
+                <option value="gemini-1.5-flash">
+                <option value="gemini-1.5-pro">
+                <option value="gemini-2.0-flash">
+                <option value="gemini-2.0-flash-lite-preview-02-05">
+                <option value="gemini-2.0-pro-exp-02-05">
+              </datalist>
             </div>
           </div>
-
-          <div style="margin-bottom:8px;">
-            <label style="display:block; font-size:11px; font-weight:700; margin-bottom:6px; color:var(--text-muted);">MODEL ID (LLM ENGINE)</label>
-            <div style="position:relative;">
-              <input type="text" class="settings-input" id="google-model-input" value="${esc(googleModel)}" placeholder="e.g. gemini-1.5-flash" style="width:100%; padding-right:30px;" list="gemini-models-list" autocomplete="off"/>
-              <span style="position:absolute; right:10px; top:50%; transform:translateY(-50%); font-size:10px; color:var(--text-muted); pointer-events:none;">▼</span>
-            </div>
-            <datalist id="gemini-models-list">
-              <option value="gemini-1.5-flash">
-              <option value="gemini-1.5-pro">
-              <option value="gemini-2.0-flash">
-              <option value="gemini-2.0-flash-lite-preview-02-05">
-              <option value="gemini-2.0-pro-exp-02-05">
-            </datalist>
-            <div style="font-size:10px; color:var(--text-muted); margin-top:8px; line-height:1.4;">
-              ✨ <strong>Model Suggestion:</strong> Use <code>gemini-1.5-flash</code> for maximum speed or <code>gemini-2.0-flash</code> for latest performance.
-            </div>
+          
+          <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--border-light); display:flex; gap:12px; align-items:center;">
+             <div style="font-size:18px;">⚡</div>
+             <div style="font-size:12px; color:var(--text2); line-height:1.5;">
+               <strong>Performance Hint:</strong> Use <code>gemini-1.5-flash</code> for 3x faster extraction speed, or <code>gemini-2.0-flash</code> for improved accuracy.
+             </div>
           </div>
         </div>
 
-        <button class="settings-btn" id="save-all-keys-btn" style="padding:12px 32px; width:100%; font-weight:800; background:var(--accent);">Save Configuration ✓</button>
+        <button class="btn-export" id="save-all-keys-btn" style="width:100%; padding:14px; font-weight:800; font-size:14px; letter-spacing:0.5px; border-radius:12px;">SAVE INTELLIGENCE CONFIG</button>
+        
+        <div class="premium-info-section glass" style="margin-top:24px; padding:20px; border-style:dashed; background:transparent;">
+          <div style="display:flex; gap:12px; align-items:start;">
+            <span style="font-size:16px;">🔒</span>
+            <div style="font-size:11px; color:var(--text-muted); line-height:1.6;">
+              <strong>End-to-End Privacy:</strong> Your keys are stored locally in your browser sandbox. We never see, log, or transmit your API keys to our servers.
+            </div>
+          </div>
+        </div>
+      `;
         <div style="margin-top:16px; font-size:12px; color:var(--text-muted); text-align:center;">
           <strong>Security Protocol:</strong> Your private API keys are stored only in your local browser storage and never uploaded to any cloud server or Supabase.
         </div>
@@ -1883,38 +1903,42 @@ function renderSettingsSection(sec) {
     });
   } else if (sec === 'account') {
     panel.innerHTML = `
-      <div class="settings-section-title">Account</div>
-      <div class="settings-section-sub">Your profile and login details.</div>
-      <div style="display:flex;align-items:center;gap:14px;background:#f8fafc;border-radius:10px;padding:16px;margin-bottom:20px;border:1px solid #e2e8f0;">
-        <div style="width:48px;height:48px;border-radius:50%;background:#1F4E79;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0;">${esc(initials(currentUser.name))}</div>
-        <div>
-          <div style="font-size:15px;font-weight:700;color:#1a202c;">${esc(currentUser.name)}</div>
-          <div style="font-size:12px;color:#718096;">${esc(currentUser.email)}</div>
+      <div class="settings-section-title">Account Security</div>
+      <div class="settings-section-sub">Manage your profile authentication and global application rules.</div>
+      
+      <div class="action-card glass" style="margin-bottom:24px; display:flex; align-items:center; gap:16px; border-color:var(--accent-border);">
+        <div style="width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg, var(--accent), var(--accent2)); color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:800; box-shadow:0 8px 16px var(--accent-light);">${esc(initials(currentUser.name))}</div>
+        <div style="flex:1;">
+          <div style="font-size:16px; font-weight:800; color:var(--text); font-family:'Outfit';">${esc(currentUser.name)}</div>
+          <div style="font-size:12px; color:var(--text-muted); font-weight:600;">${esc(currentUser.email)}</div>
         </div>
+        <div style="background:var(--success); color:#fff; font-size:10px; font-weight:800; padding:4px 10px; border-radius:100px; text-transform:uppercase; letter-spacing:0.5px;">Verified</div>
       </div>
-      <div style="border-top:1px solid #f1f5f9;padding-top:20px;margin-top:20px;">
-        <div style="font-size:13px;font-weight:700;color:#1F4E79;margin-bottom:4px;">🔑 Change Password</div>
-        <div style="font-size:12px;color:#718096;margin-bottom:12px;">Update your Supabase authentication password.</div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <input type="password" id="new-pwd-input" class="settings-input" placeholder="New password (min 6 chars)" style="max-width:280px;"/>
-          <button class="settings-btn" id="update-pwd-btn" style="padding:10px 24px;">Update</button>
+
+      <div class="premium-grid" style="grid-template-columns:1fr 1fr; gap:20px;">
+        <div class="premium-card" style="padding:20px; text-align:left;">
+          <div style="font-size:13px; font-weight:800; color:var(--text); margin-bottom:4px;">🔑 Authentication</div>
+          <p style="font-size:11px; color:var(--text-muted); margin-bottom:16px;">Update your master secure password for Supabase Auth.</p>
+          <input type="password" id="new-pwd-input" class="settings-input" placeholder="New master password" style="width:100%; margin-bottom:12px; border-radius:10px;"/>
+          <button class="btn-primary" id="update-pwd-btn" style="width:100%; font-size:12px; padding:10px;">Update Secure Key</button>
+          <div id="pwd-msg" style="margin-top:10px;"></div>
         </div>
-        <div id="pwd-msg" style="margin-top:10px;"></div>
-      </div>
-      <div style="border-top:1px solid #f1f5f9;padding-top:20px;margin-top:4px;">
-        <div style="font-size:13px;font-weight:700;color:#1a202c;margin-bottom:4px;">🌙 Night Shift Cutoff</div>
-        <div style="font-size:12px;color:#718096;margin-bottom:10px;">If you work past midnight, applications before this hour are counted as the <strong>previous day</strong>. Affects Today count, calendar, and date export filters.</div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <select id="cutoff-select" class="settings-input" style="width:160px;">
-            ${[0,1,2,3,4,5,6].map(h => `<option value="${h}" ${getWorkDayCutoff()===h?'selected':''}>${h===0?'Disabled (midnight)':h+':00 AM'}</option>`).join('')}
+
+        <div class="premium-card" style="padding:20px; text-align:left;">
+          <div style="font-size:13px; font-weight:800; color:var(--text); margin-bottom:4px;">🌙 Night Shift Window</div>
+          <p style="font-size:11px; color:var(--text-muted); margin-bottom:16px;">Redefine when your workday ends for reporting and export.</p>
+          <select id="cutoff-select" class="settings-input" style="width:100%; margin-bottom:12px; border-radius:10px;">
+            ${[0,1,2,3,4,5,6].map(h => `<option value="${h}" ${getWorkDayCutoff()===h?'selected':''}>${h===0?'Disabled (Midnight)':h+':00 AM Threshold'}</option>`).join('')}
           </select>
-          <button class="settings-btn" id="save-cutoff-btn" style="padding:8px 20px;">Save</button>
-          <span id="cutoff-msg" style="font-size:12px;color:#276749;"></span>
+          <button class="btn-new" id="save-cutoff-btn" style="width:100%; font-size:12px; padding:10px;">Save Threshold</button>
+          <div id="cutoff-msg" style="margin-top:10px; font-size:11px; text-align:center;"></div>
         </div>
       </div>
-      <div style="border-top:1px solid #f1f5f9;padding-top:20px;margin-top:20px;">
-        <div style="font-size:13px;font-weight:700;color:#c53030;margin-bottom:10px;">Danger Zone</div>
-        <button class="settings-danger-btn" id="delete-all-btn">Delete all my applications</button>
+
+      <div style="margin-top:32px; padding-top:24px; border-top:1px solid var(--border-light); text-align:center;">
+        <div style="font-size:12px; font-weight:700; color:var(--danger); margin-bottom:12px; text-transform:uppercase; letter-spacing:1px;">Critical Actions</div>
+        <button class="btn-new" id="delete-all-btn" style="border-color:var(--danger); color:var(--danger); background:transparent; font-size:12px; padding:10px 24px;">Purge All Application Data</button>
+        <p style="font-size:10px; color:var(--text-muted); margin-top:12px;">This action is irreversible. All career entries will be permanently deleted from the cloud.</p>
       </div>`;
 
     document.getElementById('save-cutoff-btn').addEventListener('click', () => {
@@ -2008,14 +2032,27 @@ function renderSettingsSection(sec) {
       </div>`;
   } else if (sec === 'logs') {
     panel.innerHTML = `
-      <div class="settings-section-title">System Error Logs</div>
-      <div class="settings-section-sub">Capture and debug application errors locally.</div>
-      <div style="display:flex; gap:10px; margin-bottom:20px;">
-        <button class="settings-btn" id="dl-logs-btn">Download Log File</button>
-        <button class="settings-danger-btn" id="clear-logs-btn">Clear Logs</button>
+      <div class="settings-section-title">System Intelligence Logs</div>
+      <div class="settings-section-sub">Diagnostic records and localized error tracking for technical audit.</div>
+      
+      <div class="action-card" style="margin-bottom:24px; cursor:default; border-style:dashed;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+          <div style="font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px;">Session Stream</div>
+          <div style="display:flex; gap:8px;">
+            <button class="chip" id="dl-logs-btn">Download Archive</button>
+            <button class="chip" id="clear-logs-btn" style="color:var(--danger); border-color:var(--danger);">Clear Buffer</button>
+          </div>
+        </div>
+        
+        <div id="logs-list-container" style="background:var(--bg-inset); border:1px solid var(--border); border-radius:12px; height:360px; overflow-y:auto; padding:16px; font-family:'JetBrains Mono', 'SF Mono', monospace; font-size:11px; line-height:1.5;">
+          <div style="text-align:center; padding:60px; color:var(--text-muted);">Initializing log stream...</div>
+        </div>
       </div>
-      <div id="logs-list-container" style="background:var(--bg-inset); border:1px solid var(--border); border-radius:12px; height:400px; overflow-y:auto; padding:12px; font-family:'SF Mono', monospace; font-size:11px; color:var(--text2);">
-        <div style="text-align:center; padding:40px; color:var(--text-muted);">Loading logs...</div>
+      
+      <div class="premium-info-section glass" style="background:transparent; padding:16px;">
+        <p style="font-size:11px; color:var(--text-muted); margin:0;">
+          <strong>Debug Mode:</strong> Logs are stored in transient browser memory and are cleared upon signing out or manual purge.
+        </p>
       </div>`;
 
     const loadLogs = async () => {
@@ -2052,53 +2089,76 @@ function renderSettingsSection(sec) {
 
 // ── EXPORT PAGE ──
 function renderExport() {
-  // Build list of unique WORK-DAY dates that have applications
-  // Use dateKey (working date chosen in extension) if available, else fallback to workday from dateRaw
   const dateCounts = {};
   apps.forEach(a => {
-    // dateKey is YYYY-MM-DD (zero-padded) — use directly
     const k = a.dateKey || (a.dateRaw ? getWorkDayISO(a.dateRaw) : '');
     if (k) dateCounts[k] = (dateCounts[k]||0)+1;
   });
-  const uniqueDates = Object.keys(dateCounts).sort().reverse().slice(0, 7);
+  const uniqueDates = Object.keys(dateCounts).sort().reverse().slice(0, 10);
   const wToday = workTodayISO();
 
   document.getElementById('page-content').innerHTML = `
-    <!-- Filter bar -->
-    <div class="section-card" style="padding:20px;max-width:700px;margin-bottom:20px;">
-      <div style="font-size:14px;font-weight:700;color:#1a202c;margin-bottom:12px;">📅 Filter by Date</div>
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <button class="export-date-btn active" data-date="" style="">All (${apps.length})</button>
-        <button class="export-date-btn" data-date="${wToday}">Today (${dateCounts[wToday]||0})</button>
-        ${uniqueDates.filter(d => d !== wToday).map(d => `
-          <button class="export-date-btn" data-date="${d}">${d} (${dateCounts[d]})</button>
-        `).join('')}
-        <input type="date" id="export-custom-date" class="filter-input" max="${todayISO()}" style="height:34px;" title="Pick a custom date"/>
-      </div>
-      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #f1f5f9;font-size:13px;color:#718096;">
-        Exporting: <strong id="export-count-label" style="color:#1F4E79;">${apps.length} applications</strong>
-      </div>
-    </div>
+    <div class="premium-page-container animate-entrance">
+      <header class="premium-header">
+        <h1 class="premium-title">Data Orchestration</h1>
+        <p class="premium-subtitle">Export your career journey to high-quality formats for analysis and archival.</p>
+      </header>
 
-    <!-- Export buttons -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:700px;">
-      <div class="section-card" style="padding:24px;">
-        <div style="font-size:32px;margin-bottom:12px;">📊</div>
-        <div style="font-size:15px;font-weight:700;color:#1a202c;margin-bottom:6px;">Excel Report (.xlsx)</div>
-        <div style="font-size:13px;color:#718096;margin-bottom:20px;line-height:1.6;">Color-coded spreadsheet with Applications sheet and Summary Dashboard.</div>
-        <button class="btn-export" id="export-xlsx-btn" style="width:100%;padding:10px;">Download Excel</button>
+      <!-- Filter bar Chips -->
+      <div class="premium-card glass" style="padding:24px; margin-bottom:32px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+          <div>
+            <div style="font-size:14px; font-weight:800; color:var(--text); letter-spacing:0.5px;">📅 DATE SELECTION</div>
+            <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Filter applications by submission window</div>
+          </div>
+          <div style="text-align:right;">
+             <div style="font-size:10px; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Applications Selected</div>
+             <div id="export-count-label" style="font-size:18px; font-weight:800; color:var(--accent); font-family:'Outfit';">${apps.length}</div>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <div class="chip active" data-date="">All Time</div>
+          <div class="chip" data-date="${wToday}">Today</div>
+          ${uniqueDates.filter(d => d !== wToday).map(d => `
+            <div class="chip" data-date="${d}">${new Date(d).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</div>
+          `).join('')}
+          <div style="height:32px; width:1px; background:var(--border); margin:0 4px;"></div>
+          <input type="date" id="export-custom-date" class="filter-input" max="${todayISO()}" style="height:32px; padding:0 12px; border-radius:100px; font-size:12px; width:140px;" title="Pick custom date"/>
+        </div>
       </div>
-      <div class="section-card" style="padding:24px;">
-        <div style="font-size:32px;margin-bottom:12px;">📄</div>
-        <div style="font-size:15px;font-weight:700;color:#1a202c;margin-bottom:6px;">CSV File (.csv)</div>
-        <div style="font-size:13px;color:#718096;margin-bottom:20px;line-height:1.6;">Simple comma-separated file. Open in Excel, Google Sheets, or any spreadsheet app.</div>
-        <button class="btn-new" id="export-csv-btn" style="width:100%;padding:10px;">Download CSV</button>
+
+      <!-- Export Action Cards -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:32px;">
+        <div class="action-card" id="export-xlsx-btn">
+          <div class="action-card-icon">📊</div>
+          <div style="font-size:16px; font-weight:800; color:var(--text); margin-bottom:8px;">Professional Excel</div>
+          <p style="font-size:13px; color:var(--text2); margin-bottom:20px; line-height:1.5;">Direct export to .xlsx with color-coded sheets, smart summaries, and trend dashboards.</p>
+          <div style="display:flex; align-items:center; color:var(--accent); font-size:12px; font-weight:700; margin-top:auto;">
+             Download Report <span style="margin-left:6px; font-size:14px;">→</span>
+          </div>
+        </div>
+        
+        <div class="action-card" id="export-csv-btn">
+          <div class="action-card-icon">📄</div>
+          <div style="font-size:16px; font-weight:800; color:var(--text); margin-bottom:8px;">Portable CSV</div>
+          <p style="font-size:13px; color:var(--text2); margin-bottom:20px; line-height:1.5;">Clean, minimal comma-separated file for universal spreadsheet compatibility and data processing.</p>
+          <div style="display:flex; align-items:center; color:var(--text2); font-size:12px; font-weight:700; margin-top:auto;">
+             Download Simple CSV <span style="margin-left:6px; font-size:14px;">→</span>
+          </div>
+        </div>
       </div>
-    </div>
-    <div style="margin-top:16px;background:#ebf4ff;border-radius:10px;border:1px solid #bee3f8;padding:16px;max-width:700px;">
-      <div style="font-size:13px;font-weight:700;color:#2E75B6;margin-bottom:4px;">💡 Daily Target Tip</div>
-      <div style="font-size:12px;color:#4a5568;line-height:1.6;">
-        Applied 30 today? Click <strong>Today</strong> above then download — you'll get only today's applications in the sheet.
+
+      <div class="premium-info-section glass" style="padding:24px; border-style:dashed;">
+        <div style="display:flex; gap:16px; align-items:center;">
+          <div style="width:48px; height:48px; border-radius:12px; background:var(--accent-light); display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;">💡</div>
+          <div>
+            <div style="font-weight:700; color:var(--text); font-size:14px;">Analyst Tip</div>
+            <div style="font-size:12px; color:var(--text2); line-height:1.6; margin-top:4px;">
+              Applying to 30+ jobs per day? Select <strong>Today</strong> before exporting to get a focused sheet for your immediate follow-up ritual.
+            </div>
+          </div>
+        </div>
       </div>
     </div>`;
 
@@ -2116,25 +2176,30 @@ function renderExport() {
 
   function updateExportLabel() {
     const filtered = getFilteredApps();
-    document.getElementById('export-count-label').textContent = filtered.length + ' application' + (filtered.length !== 1 ? 's' : '');
+    const el = document.getElementById('export-count-label');
+    if (el) {
+       el.style.transform = 'scale(1.1)';
+       el.style.transition = 'transform 0.2s';
+       el.textContent = filtered.length;
+       setTimeout(() => el.style.transform = 'scale(1)', 200);
+    }
   }
 
   function setExportDate(date) {
     exportDate = date;
-    document.querySelectorAll('.export-date-btn').forEach(b => b.classList.toggle('active', b.dataset.date === date));
+    document.querySelectorAll('.chip').forEach(b => b.classList.toggle('active', b.dataset.date === date));
     if (date) document.getElementById('export-custom-date').value = date;
     else document.getElementById('export-custom-date').value = '';
     updateExportLabel();
   }
 
-  document.querySelectorAll('.export-date-btn').forEach(btn => {
+  document.querySelectorAll('.chip').forEach(btn => {
     btn.addEventListener('click', () => setExportDate(btn.dataset.date));
   });
 
   document.getElementById('export-custom-date').addEventListener('change', e => {
     setExportDate(e.target.value);
-    // Deselect all quick buttons since custom date is picked
-    document.querySelectorAll('.export-date-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.chip').forEach(b => b.classList.remove('active'));
   });
 
   // ── CSV Export ──
@@ -2214,7 +2279,7 @@ function renderExport() {
 // ── PRIVACY PAGE (RE-DESIGNED) ──
 function renderPrivacy() {
   document.getElementById('page-content').innerHTML = `
-    <div class="premium-page-container">
+    <div class="premium-page-container animate-entrance">
       <header class="premium-header">
         <h1 class="premium-title">Privacy Protocol</h1>
         <p class="premium-subtitle">Your data encryption and security standards. Last updated March 2026.</p>
@@ -2260,7 +2325,7 @@ function renderPrivacy() {
 // ── ABOUT PAGE (PREMIUM DESIGN) ──
 function renderAbout() {
   document.getElementById('page-content').innerHTML = `
-    <div class="premium-page-container">
+    <div class="premium-page-container animate-entrance">
       <div class="about-hero glass">
         <div class="about-logo">🚀</div>
         <h1 class="premium-title">Job Application Tracker</h1>
