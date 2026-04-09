@@ -1,6 +1,41 @@
-# 🗄️ Supabase Database Schema
+# 🚀 AI Blaze: Project Build Journey
 
-This file contains all the SQL queries required to set up the database for the **Job Application Tracker (AI Blaze)** application. 
+This document serves as both a development log and a technical setup guide for the **Job Application Tracker (AI Blaze)**. It outlines the process of building this project from scratch to a production-ready Chrome Extension.
+
+---
+
+## 🏗️ The Build Process
+
+The development of AI Blaze followed a structured path from a messy prototype to a secure, professional SaaS-style application.
+
+### Phase 1: The Core Invention (AI Extraction)
+*   **The Problem:** Manually copying job data from LinkedIn/Indeed into spreadsheets is slow and error-prone.
+*   **The Solution:** We built a Content Script (`content.js`) that translates the visual mess of job boards into structured data.
+*   **The Secret Sauce:** We integrated the **Google Gemini AI API** to intelligently identify "Company" and "Job Title" from raw text, making the extraction far smarter than basic scrapers.
+
+### Phase 2: The Infrastructure (Supabase & Dashboard)
+*   **Cloud Sync:** We integrated **Supabase** as our backend-as-a-service to enable real-time synchronization between the extension sidebar and a web dashboard.
+*   **Dynamic Dashboard:** Created a high-performance, vanilla JS dashboard (`index.html`) that allows users to manage their entire career search in one place.
+
+### Phase 3: Security Hardening (The "Stealth" Audit)
+*   **Credential Safety:** Moved sensitive Supabase keys out of Git tracking and created `config.example.js` for public safety.
+*   **Data Isolation (RLS):** Implemented **Row Level Security** on the database to ensure that "User A" can never see "User B's" data, even with the same public API keys.
+*   **Auth Privacy:** Hardened the login/signup flows with generic error messages to prevent "User Enumeration" (protecting your users' privacy).
+
+### Phase 4: Release Automation
+*   **The Build Script:** Created `local-deploy.ps1`, a PowerShell automation engine that builds the extension, packages it for the Chrome Web Store, and syncs the GitHub repository in seconds.
+
+---
+
+## 🛠️ Tools & Technologies
+- **Core:** HTML5, CSS3, Vanilla JavaScript (No heavy frameworks for maximum speed).
+- **Backend:** Supabase (PostgreSQL, Auth, Realtime).
+- **AI:** Google Gemini 1.5 Flash (via REST API).
+- **DevOps:** PowerShell, Git, Chrome Extension Manifest V3.
+
+---
+
+## 🗄️ Supabase Database Schema
 
 You can run these queries in the **Supabase SQL Editor** to recreate the tables and security policies.
 
