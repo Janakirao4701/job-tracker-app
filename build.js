@@ -34,15 +34,15 @@ function build() {
             let content = fs.readFileSync(page.src, 'utf8');
 
             // Path replacements for root deployment:
-            // 1. ../../public/ -> /public/
-            // 2. ../(lib|scripts|styles)/ -> /src/$1/
-            // 3. href="app.html" -> /dashboard
-            // 4. href="landing.html" -> /index.html
+            // 1. ../../public/ -> public/
+            // 2. ../(lib|scripts|styles)/ -> src/$1/
+            // 3. href="app.html" -> dashboard.html
+            // 4. href="landing.html" -> index.html
             content = content
-                .replace(/\.\.\/\.\.\/public\//g, '/public/')
-                .replace(/\.\.\/(lib|scripts|styles)\//g, '/src/$1/')
-                .replace(/href="app\.html"/g, 'href="/dashboard"')
-                .replace(/href="landing\.html"/g, 'href="/index.html"');
+                .replace(/\.\.\/\.\.\/public\//g, 'public/')
+                .replace(/\.\.\/(lib|scripts|styles)\//g, 'src/$1/')
+                .replace(/href="app\.html"/g, 'href="dashboard.html"')
+                .replace(/href="landing\.html"/g, 'href="index.html"');
 
             fs.writeFileSync(page.dest, content, 'utf8');
             console.log(`Success: ${page.name} updated.`);

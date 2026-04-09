@@ -2,12 +2,6 @@
   "version": 2,
   "name": "job-tracker-app",
   "cleanUrls": true,
-  "rewrites": [
-    { "source": "/dashboard", "destination": "/dashboard.html" },
-    { "source": "/app", "destination": "/dashboard.html" },
-    { "source": "/app.html", "destination": "/dashboard.html" },
-    { "source": "/login", "destination": "/dashboard.html" }
-  ],
   "headers": [
     {
       "source": "/sw.js",
