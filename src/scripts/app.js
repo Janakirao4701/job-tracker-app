@@ -171,16 +171,17 @@ async function loadApps() {
   // Fix #7: filter by current user so users never see each other's data
   // Fix #14: paginate to bypass Supabase's default 1000-row cap
   let fetchSuccess = false;
+  const LIST_FIELDS = 'id,company,job_title,url,status,date,date_raw,date_key,notes,follow_up_date';
   while (true) {
     let r = await fetch(
-      `${SUPABASE_URL}/rest/v1/applications?select=*&username=eq.${currentUser.id}&order=created_at.asc&limit=${PAGE_SIZE}&offset=${offset}`,
+      `${SUPABASE_URL}/rest/v1/applications?select=${LIST_FIELDS}&username=eq.${currentUser.id}&order=created_at.asc&limit=${PAGE_SIZE}&offset=${offset}`,
       { headers: headers({ 'Range-Unit': 'items', 'Range': `${offset}-${offset + PAGE_SIZE - 1}` }) }
     );
     if (r.status === 401 && session?.refresh_token && offset === 0) {
       const refreshed = await refreshToken();
       if (refreshed) {
         r = await fetch(
-          `${SUPABASE_URL}/rest/v1/applications?select=*&username=eq.${currentUser.id}&order=created_at.asc&limit=${PAGE_SIZE}&offset=${offset}`,
+          `${SUPABASE_URL}/rest/v1/applications?select=${LIST_FIELDS}&username=eq.${currentUser.id}&order=created_at.asc&limit=${PAGE_SIZE}&offset=${offset}`,
           { headers: headers({ 'Range-Unit': 'items', 'Range': `${offset}-${offset + PAGE_SIZE - 1}` }) }
         );
       } else {
@@ -264,9 +265,26 @@ function mapRow(r) {
     date:r.date||'', dateRaw:r.date_raw||'', dateKey:r.date_key||'', notes:r.notes||'',
     followUpDate:r.follow_up_date||'' };
 }
+async function dbLoadAppDetails(id) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/applications?username=eq.${currentUser.id}&id=eq.${id}&select=jd,resume`, { headers: headers() });
+    const data = await res.json();
+    if (Array.isArray(data) && data[0]) return data[0];
+  } catch(e) {}
+  return null;
+}
+async function dbCheckForChanges() {
+  if (!currentUser) return [];
+  try {
+    // Light fetch of just id and status for change detection
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/applications?username=eq.${currentUser.id}&select=id,status&order=created_at.asc`, { headers: headers() });
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch(e) { return []; }
+}
 async function saveApp(app) {
   const r = await fetch(SUPABASE_URL+'/rest/v1/applications', {
-    method:'POST', headers:headers({'Prefer':'return=representation'}),
+    method:'POST', headers:headers({'Prefer':'return=minimal'}),
     body: JSON.stringify({
       id:app.id, username:currentUser.id,
       company:app.company, job_title:app.jobTitle, url:app.url,
@@ -279,7 +297,7 @@ async function saveApp(app) {
 }
 async function updateApp(app) {
   const r = await fetch(SUPABASE_URL+'/rest/v1/applications?id=eq.'+app.id, {
-    method:'PATCH', headers:headers({'Prefer':'return=representation'}),
+    method:'PATCH', headers:headers({'Prefer':'return=minimal'}),
     body: JSON.stringify({
       company:app.company, job_title:app.jobTitle, url:app.url,
       jd:app.jd, resume:app.resume||'', status:app.status,
@@ -351,7 +369,7 @@ async function saveResumeProfileDB(profile) {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/user_settings?on_conflict=username`, {
       method: 'POST',
-      headers: headers({'Prefer': 'resolution=merge-duplicates,return=representation'}),
+      headers: headers({'Prefer': 'resolution=merge-duplicates,return=minimal'}),
       body: JSON.stringify({
         username: currentUser.id,
         resume_profile: profile 
@@ -653,19 +671,22 @@ async function showApp() {
   // ── BACKGROUND SYNC: poll for changes from other browsers/sessions ──
   if (!window._appSyncTimer) {
     window._appSyncTimer = setInterval(async () => {
-      if (!session || !currentUser || document.hidden) return; // Don't poll if tab is hidden
+      if (!session || !currentUser || document.hidden) return; 
       try {
-        const fresh = await loadApps();
-        // Fast signature check to see if anything meaningful changed
-        const newSig = fresh.length + '|' + fresh.map(a => a.id + a.status).join('|');
+        const lightApps = await dbCheckForChanges();
+        if (!lightApps.length && apps.length) return; // ignore if empty/fail
+
+        // Fast signature check on ID and Status only
+        const newSig = lightApps.length + '|' + lightApps.map(a => a.id + a.status).join('|');
         if (window._lastAppSig !== newSig) {
           window._lastAppSig = newSig;
-          apps = fresh;
+          // If something changed, do a full lightweight load (still excludes JD/Resume)
+          apps = await loadApps();
           updateBadge();
           renderPage(currentPage);
         }
       } catch(e) {}
-    }, 15000); // Polling every 15 seconds for 'instant' feel
+    }, 60000); 
   }
   // Load and sync Gemini key to extension (non-blocking)
   loadGeminiKeyDB().then(key => {
@@ -1514,13 +1535,40 @@ function openDetailModal(app) {
   const jdEl = document.getElementById('detail-jd-text');
   jdEl.value = app.jd || '';
   jdEl.style.color = app.jd ? 'var(--text)' : 'var(--text-muted)';
-  if (!app.jd) jdEl.placeholder = 'No job description saved.';
+  if (!app.jd) {
+    jdEl.placeholder = '⏳ Loading job description...';
+    jdEl.value = '';
+  }
 
   // Resume tab
   const resumeEl = document.getElementById('detail-resume-text');
   resumeEl.value = app.resume || '';
   resumeEl.style.color = app.resume ? 'var(--text)' : 'var(--text-muted)';
-  if (!app.resume) resumeEl.placeholder = 'No tailored resume saved.';
+  if (!app.resume) {
+    resumeEl.placeholder = '⏳ Loading tailored resume...';
+    resumeEl.value = '';
+  }
+
+  // Lazy load if JD is missing
+  if (!app.jd) {
+    dbLoadAppDetails(app.id).then(details => {
+      if (details) {
+        app.jd = details.jd || 'No job description saved.';
+        app.resume = details.resume || '';
+        // If still on the same app modal, update fields
+        const currTitle = document.getElementById('detail-modal-title')?.value;
+        if (currTitle === app.company) {
+          jdEl.value = app.jd;
+          jdEl.style.color = 'var(--text)';
+          resumeEl.value = app.resume;
+          resumeEl.style.color = 'var(--text)';
+        }
+      } else {
+        jdEl.placeholder = 'Could not load details.';
+        resumeEl.placeholder = 'Could not load details.';
+      }
+    });
+  }
 
   // Notes tab
   document.getElementById('detail-notes-input').value    = app.notes || '';

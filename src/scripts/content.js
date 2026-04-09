@@ -78,7 +78,7 @@
           };
           const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications', {
             method: 'POST',
-            headers: { 'Prefer': 'return=representation' },
+            headers: { 'Prefer': 'return=minimal' },
             body: JSON.stringify(body),
           });
           if (res.ok) {
@@ -291,7 +291,7 @@
           'apikey': SUPABASE_KEY, 
           'Authorization': 'Bearer ' + sessionToken,
           'Content-Type': 'application/json',
-          'Prefer': 'resolution=merge-duplicates,return=representation'
+          'Prefer': 'resolution=merge-duplicates,return=minimal'
         },
         body: JSON.stringify({ username: currentUser.id, resume_profile: profile })
       });
@@ -353,36 +353,72 @@
     } catch(e) { /* best-effort logout */ }
   }
 
-  async function dbLoadApps() {
+  async function dbLoadApps(searchText = '', isInitial = false) {
+    if (!currentUser) return [];
     const PAGE_SIZE = 1000;
     let allRows = [];
     let offset  = 0;
-    // Paginate to bypass Supabase's default 1000-row cap
-    while (true) {
-      const res = await sbFetch(
-        SUPABASE_URL + `/rest/v1/applications?username=eq.${currentUser.id}&select=*&order=created_at.asc&limit=${PAGE_SIZE}&offset=${offset}`,
-        { headers: { ...sbHeaders(), 'Range-Unit': 'items', 'Range': `${offset}-${offset + PAGE_SIZE - 1}` } }
-      );
-      const data = await res.json();
-      if (!Array.isArray(data) || data.length === 0) break;
-      allRows = allRows.concat(data);
-      if (data.length < PAGE_SIZE) break;
-      offset += PAGE_SIZE;
+
+    const LIST_FIELDS = 'id,company,job_title,url,status,date,date_raw,date_key,notes,follow_up_date';
+    let query = `?username=eq.${currentUser.id}&select=${LIST_FIELDS}&order=created_at.desc&limit=${PAGE_SIZE}&offset=${offset}`;
+
+    if (isInitial) {
+      // Limit to last 3 days for initial sidebar view
+      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+      query += `&created_at=gt.${threeDaysAgo}`;
     }
+
+    if (searchText) {
+      // Remote search across company and job title
+      const q = encodeURIComponent(`*${searchText}*`);
+      query += `&or=(company.ilike.${q},job_title.ilike.${q})`;
+    }
+
+    while (true) {
+      try {
+        const res = await sbFetch(
+          SUPABASE_URL + `/rest/v1/applications${query}`,
+          { headers: { ...sbHeaders(), 'Range-Unit': 'items', 'Range': `${offset}-${offset + PAGE_SIZE - 1}` } }
+        );
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) break;
+        allRows = allRows.concat(data);
+        if (data.length < PAGE_SIZE) break;
+        offset += PAGE_SIZE;
+        // Update query with new offset for next page
+        query = query.replace(`offset=${offset - PAGE_SIZE}`, `offset=${offset}`);
+      } catch (e) { break; }
+    }
+
     return allRows.map(r => ({
       id:       r.id,
       company:  r.company,
       jobTitle: r.job_title,
       url:      r.url,
-      jd:       r.jd,
-      resume:   r.resume,
+      jd:       '', // Not loaded by default
+      resume:   '', // Not loaded by default
       status:   r.status,
       date:     r.date,
       dateRaw:  r.date_raw,
       dateKey:  r.date_key,
-      notes:       r.notes,
+      notes:    r.notes,
       followUpDate: r.follow_up_date || '',
     }));
+  }
+
+  async function dbLoadAppDetails(id) {
+    if (!currentUser) return null;
+    try {
+      const res = await sbFetch(
+        SUPABASE_URL + `/rest/v1/applications?username=eq.${currentUser.id}&id=eq.${id}&select=jd,resume`,
+        { headers: sbHeaders() }
+      );
+      const data = await res.json();
+      if (Array.isArray(data) && data[0]) {
+        return data[0];
+      }
+    } catch (e) {}
+    return null;
   }
 
   async function dbSaveApp(app) {
@@ -414,7 +450,7 @@
     try {
       const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications', {
         method: 'POST',
-        headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
+        headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
         body: JSON.stringify(body),
       });
       return res.ok;
@@ -439,7 +475,7 @@
     try {
       const res = await sbFetch(SUPABASE_URL + '/rest/v1/applications?id=eq.' + app.id, {
         method: 'PATCH',
-        headers: { ...sbHeaders(), 'Prefer': 'return=representation' },
+        headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
         body: JSON.stringify(body),
       });
       return res.ok;
@@ -1734,26 +1770,52 @@ ${context}`;
     if (urlInput) { urlInput.removeEventListener('input', syncDetailUrlLink); urlInput.addEventListener('input', syncDetailUrlLink); }
     document.getElementById('rjd-detail-date').textContent   = app.date   || '—';
     document.getElementById('rjd-detail-status').textContent = app.status || '—';
-    document.getElementById('rjd-detail-jd').textContent     = app.jd     || 'No JD saved.';
+    
+    const jdEl = document.getElementById('rjd-detail-jd');
+    if (app.jd) {
+      jdEl.textContent = app.jd;
+    } else {
+      jdEl.textContent = '⏳ Loading details...';
+      dbLoadAppDetails(app.id).then(details => {
+        if (details) {
+          app.jd = details.jd || 'No JD saved.';
+          app.resume = details.resume || '';
+          if (currentDetailId === app.id) {
+            jdEl.textContent = app.jd;
+            renderDetailResumeSection(app);
+          }
+        } else {
+          jdEl.textContent = 'Could not load details.';
+        }
+      });
+    }
+
     document.getElementById('rjd-detail-notes').value        = app.notes  || '';
     document.getElementById('rjd-detail-followup').value     = app.followUpDate || '';
-    const resumeSection = document.getElementById('rjd-detail-resume-section');
-    if (app.resume) {
-      resumeSection.innerHTML = `
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button id="rjd-view-resume-detail" class="rjd-action-btn">View Resume</button>
-          <button id="rjd-copy-resume-btn" class="rjd-action-btn rjd-secondary-btn">Copy Resume</button>
-          <button id="rjd-update-resume-btn" class="rjd-action-btn rjd-secondary-btn">Update Resume</button>
-        </div>`;
-      document.getElementById('rjd-view-resume-detail').addEventListener('click', () => showResumeDetail(app));
-      document.getElementById('rjd-copy-resume-btn').addEventListener('click', () => {
-        navigator.clipboard.writeText(app.resume).then(() => showToast('Resume copied')).catch(() => showToast('Copy failed', true));
-      });
-      document.getElementById('rjd-update-resume-btn').addEventListener('click',  () => saveResumeFromClipboard(app.id));
-    } else {
-      resumeSection.innerHTML = `<button id="rjd-add-resume-btn" class="rjd-action-btn">+ Add Resume from Clipboard</button>`;
-      document.getElementById('rjd-add-resume-btn').addEventListener('click', () => saveResumeFromClipboard(app.id));
+
+    function renderDetailResumeSection(app) {
+      const resumeSection = document.getElementById('rjd-detail-resume-section');
+      if (app.resume) {
+        resumeSection.innerHTML = `
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button id="rjd-view-resume-detail" class="rjd-action-btn">View Resume</button>
+            <button id="rjd-copy-resume-btn" class="rjd-action-btn rjd-secondary-btn">Copy Resume</button>
+            <button id="rjd-update-resume-btn" class="rjd-action-btn rjd-secondary-btn">Update Resume</button>
+          </div>`;
+        document.getElementById('rjd-view-resume-detail').addEventListener('click', () => showResumeDetail(app));
+        document.getElementById('rjd-copy-resume-btn').addEventListener('click', () => {
+          navigator.clipboard.writeText(app.resume).then(() => showToast('Resume copied')).catch(() => showToast('Copy failed', true));
+        });
+        document.getElementById('rjd-update-resume-btn').addEventListener('click',  () => saveResumeFromClipboard(app.id));
+      } else if (app.jd || !jdEl.textContent.includes('Loading')) {
+        // Only show Add Resume if we have loaded the record (or it's not currently loading)
+        resumeSection.innerHTML = `<button id="rjd-add-resume-btn" class="rjd-action-btn">+ Add Resume from Clipboard</button>`;
+        document.getElementById('rjd-add-resume-btn').addEventListener('click', () => saveResumeFromClipboard(app.id));
+      } else {
+        resumeSection.innerHTML = `<span style="font-size:11px;color:#94a3b8;">Loading...</span>`;
+      }
     }
+    renderDetailResumeSection(app);
     // Copy JD button
     const copyJdBtn = document.getElementById('rjd-copy-jd-btn');
     if (copyJdBtn) copyJdBtn.addEventListener('click', () => {
@@ -2168,9 +2230,9 @@ ${context}`;
       btn.style.opacity = '0.5';
       btn.disabled = true;
       try {
-        applications = await dbLoadApps();
+        applications = await dbLoadApps('', true); // Force recent only refresh
         renderTable();
-        showToast('Refreshed ✓');
+        showToast('Refreshed ✓ (Last 3 days)');
       } catch(e) {
         showToast('Refresh failed', true);
       }
@@ -2182,7 +2244,27 @@ ${context}`;
     document.getElementById('rjd-detail-back').addEventListener('click', hideAppDetail);
     document.getElementById('rjd-resume-back').addEventListener('click', hideResumeDetail);
 
-    document.getElementById('rjd-search-input').addEventListener('input', (e) => { filterSearch = e.target.value; renderTable(); });
+    let searchTimeout = null;
+    document.getElementById('rjd-search-input').addEventListener('input', (e) => { 
+      filterSearch = e.target.value; 
+      renderTable(); 
+      
+      // Remote search debounce
+      clearTimeout(searchTimeout);
+      if (filterSearch.length >= 2) {
+        searchTimeout = setTimeout(async () => {
+          const results = await dbLoadApps(filterSearch);
+          // Merge results: only add if not already in local تطبيقات (which only has recent ones)
+          results.forEach(res => {
+            if (!applications.find(a => a.id === res.id)) applications.push(res);
+          });
+          renderTable();
+        }, 500);
+      } else if (filterSearch === '') {
+        // Clear search: reload recent apps to reset local list if needed
+        dbLoadApps('', true).then(res => { applications = res; renderTable(); });
+      }
+    });
     document.getElementById('rjd-status-filter').addEventListener('change', (e) => { filterStatus = e.target.value; renderTable(); });
     document.getElementById('rjd-date-filter').addEventListener('change', (e) => { filterDate = e.target.value; renderTable(); });
 
@@ -2751,7 +2833,7 @@ Return the resume content formatted clearly between these markers.
       if (tog) tog.classList.add('rjd-visible');
       updateTrackBadge();
       // Preload apps silently
-      dbLoadApps().then(apps => { applications = apps; updateTrackBadge(); }).catch(() => {});
+      dbLoadApps('', true).then(apps => { applications = apps; updateTrackBadge(); }).catch(() => {});
       // Proactive refresh every 50m
       if (!window._rjdRefreshTimer) {
         window._rjdRefreshTimer = setInterval(() => refreshSession(), 50 * 60 * 1000);

@@ -126,7 +126,29 @@ USING (auth.uid()::text = username);
 
 ---
 
-## 3. Maintenance Queries
+## 3. Auth Security Settings
+
+These settings are configured in the **Supabase Dashboard**, not via SQL.
+
+### 🔐 Leaked Password Protection
+Prevents users from signing up with passwords found in known data breaches (via [HaveIBeenPwned.org](https://haveibeenpwned.com/)).
+
+**To enable:**
+1. Go to **Authentication → Settings** in the Supabase Dashboard.
+2. Under the **Security** section, toggle **Leaked password protection** to **ON**.
+
+> ⚠️ This feature requires the **Pro Plan** ($25/mo).
+
+### 🔑 Password Strength Requirements
+Set a minimum password length and character requirements for all new signups.
+
+**Recommended settings:**
+- Minimum password length: **12 characters**
+- Require: uppercase, lowercase, digits, and symbols
+
+---
+
+## 4. Maintenance Queries
 
 ### Find rows that will be hidden by RLS
 ```sql

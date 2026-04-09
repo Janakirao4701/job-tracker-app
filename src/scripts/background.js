@@ -1,4 +1,15 @@
 importScripts('../lib/config.js');
+
+// ── SECURITY LOGGING ──
+const AppLogger = {
+  warn(msg, details = {}) {
+    console.warn(`[AI Blaze] ${msg}`, { timestamp: new Date().toISOString(), ...details });
+  },
+  error(msg, details = {}) {
+    console.error(`[AI Blaze ERROR] ${msg}`, { timestamp: new Date().toISOString(), ...details });
+  }
+};
+
 // ── FORWARD SESSION EVENTS & PROXY FETCHES ──
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   try {
@@ -15,7 +26,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         });
       });
       sendResponse({ ok: true });
-      return false; // synchronous
+      return false; 
     } 
     
     if (msg.action === 'sb_proxy_fetch') {
@@ -39,17 +50,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         });
       return true; // Keep channel open for async sendResponse
     }
-    } else {
-      // Unknown action - but still respond to close channel
-      sendResponse({ ok: false, error: 'Unknown action: ' + msg.action });
-    }
+    
+    // Unknown action - but still respond to close channel
+    sendResponse({ ok: false, error: 'Unknown action: ' + msg.action });
+    return false;
   } catch (err) {
     AppLogger.error('[RJD SW] Listener error', { message: err.message, stack: err.stack });
     try {
       sendResponse({ ok: false, error: err.message });
     } catch (e) { /* ignore if already closed */ }
+    return false;
   }
-  return true; // Keep channel open for safety, as we might send a late response
 });
 
 // ── KEYBOARD COMMANDS ──
