@@ -368,5 +368,59 @@ window.ResumeEngine = {
     const blob = await Packer.toBlob(finalDoc);
     const safeName = (profile.name || "Resume").replace(/[^a-z0-9]/gi, '_');
     window.saveAs(blob, `${safeName}_Resume.docx`);
+  },
+
+  // ── JD GENERATOR (Plain Text Export) ──
+  generateJD: async function (app) {
+    const docx = window.docx;
+    const { Document, Packer, Paragraph, TextRun, AlignmentType } = docx;
+
+    const FONT = 'Calibri';
+    const SZ_NAME = 30; // Slightly smaller than resume name
+    const SZ_TITLE = 22;
+    const SZ_BODY = 20;
+    const COLOR_HEAD = '000000';
+    const COLOR_DARK = '222222';
+
+    const docChildren = [
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 200, after: 100 },
+        children: [new TextRun({ text: app.company || 'Job Application', bold: true, font: FONT, size: SZ_NAME, color: COLOR_HEAD })]
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: 400 },
+        children: [new TextRun({ text: app.jobTitle || 'Job Description', bold: true, italics: true, font: FONT, size: SZ_TITLE, color: COLOR_DARK })]
+      })
+    ];
+
+    // Handle JD text with basic paragraph/bullet splitting
+    const jdText = app.jd || 'No job description provided.';
+    const lines = jdText.split('\n').filter(l => l.trim());
+    
+    for (const line of lines) {
+      const t = line.trim();
+      if (t.startsWith('-') || t.startsWith('•') || t.startsWith('*') || t.startsWith('·')) {
+        docChildren.push(this.makeBullet(t.replace(/^[-•*·]\s*/, ''), docx, FONT, SZ_BODY, COLOR_DARK));
+      } else {
+        docChildren.push(new Paragraph({ 
+          spacing: { before: 120, after: 120 }, 
+          children: [new TextRun({ text: t, font: FONT, size: SZ_BODY, color: COLOR_DARK })] 
+        }));
+      }
+    }
+
+    const finalDoc = new Document({
+      styles: { default: { document: { run: { font: FONT, size: SZ_BODY, color: COLOR_DARK } } } },
+      sections: [{
+        properties: { page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
+        children: docChildren
+      }]
+    });
+
+    const blob = await Packer.toBlob(finalDoc);
+    const safeName = (app.company || "Job").replace(/[^a-z0-9]/gi, '_');
+    window.saveAs(blob, `${safeName}_JD.docx`);
   }
 };

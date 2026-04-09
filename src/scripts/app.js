@@ -50,6 +50,7 @@ let filterStatus = 'all';
 let filterSearch = '';
 let filterDate   = workTodayISO();
 let isBulkMode   = false;
+let currentDetailApp = null;
 
 // ── UTILS ──
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -1192,11 +1193,11 @@ function renderApplications() {
       <table>
         <thead><tr>
           <th class="bulk-col" style="width:36px;display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" id="select-all-chk" title="Select all"/></th>
-          <th>#</th><th>Company</th><th>Job Title</th><th>URL</th><th>Status</th><th>Session Date</th><th>Resume Content</th><th>Download</th><th>Actions</th>
+          <th>#</th><th>Company</th><th>Job Title</th><th>URL</th><th>Status</th><th>Session Date</th><th>Actions</th>
         </tr></thead>
         <tbody>
           ${filtered.length === 0
-            ? `<tr><td colspan="${isBulkMode ? 9 : 8}" class="empty-row">No applications match your filters</td></tr>`
+            ? `<tr><td colspan="${isBulkMode ? 8 : 7}" class="empty-row">No applications match your filters</td></tr>`
             : filtered.map((a,i) => `
               <tr data-id="${a.id}" class="app-row" style="cursor:pointer;transition:background 0.2s;">
                 <td class="bulk-col" style="display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" class="app-chk" data-id="${a.id}"/></td>
@@ -1210,16 +1211,6 @@ function renderApplications() {
                   </select>
                 </td>
                 <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${esc(a.dateKey||a.date||'—')}</td>
-                <td>
-                  <button class="auth-link add-resume-btn" data-id="${a.id}" style="font-size:12px;font-weight:600;color:${a.resume?'#059669':'var(--accent)'};">
-                    ${a.resume ? '📝 Update' : '➕ Add Content'}
-                  </button>
-                </td>
-                <td>
-                  <button class="btn-new dl-resume-btn" data-id="${a.id}" style="padding:4px 10px;font-size:11px;${!a.resume ? 'opacity:0.4;pointer-events:none;' : ''}">
-                    📥 Download
-                  </button>
-                </td>
                 <td style="white-space:nowrap;">
                   <button class="auth-link del-btn" data-id="${a.id}" style="color:var(--danger);font-size:12px;">Delete</button>
                 </td>
@@ -1274,54 +1265,6 @@ function renderApplications() {
     sel.addEventListener('change', async () => {
       const app = apps.find(a => String(a.id) === String(sel.dataset.id));
       if (app) { app.status = sel.value; await updateApp(app); sel.style.background=(STATUS_BG[sel.value]||STATUS_BG.Applied).bg; sel.style.color=(STATUS_BG[sel.value]||STATUS_BG.Applied).color; showToast('Status updated'); }
-    });
-  });
-
-  document.querySelectorAll('.add-resume-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const id = btn.dataset.id;
-      const app = apps.find(a => String(a.id) === String(id));
-      if (!app) return;
-      try {
-        const text = await navigator.clipboard.readText();
-        if (!text || text.trim().length < 10) {
-          showToast('Clipboard is empty or too short. Copy the tailored resume first!', true);
-          return;
-        }
-        app.resume = text.trim();
-        const ok = await updateApp(app);
-        if (ok) {
-          showToast('Resume content saved ✓');
-          renderApplications();
-        } else {
-          showToast('Failed to save content', true);
-        }
-      } catch (err) {
-        showToast('Clipboard access denied. Please click the button to allow.', true);
-      }
-    });
-  });
-
-  document.querySelectorAll('.dl-resume-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const id = btn.dataset.id;
-      const app = apps.find(a => String(a.id) === String(id));
-      if (app && app.resume) {
-        btn.disabled = true;
-        btn.textContent = '⏳ Preparing...';
-        try {
-          await generateIntegratedResume(app);
-          showToast('Resume downloaded ✓');
-        } catch (err) {
-          console.error(err);
-          showToast('Download failed: ' + err.message, true);
-        } finally {
-          btn.disabled = false;
-          btn.textContent = '📥 Download';
-        }
-      }
     });
   });
 
@@ -1423,6 +1366,7 @@ function renderApplications() {
 
 // ── DETAIL MODAL ──
 function openDetailModal(app) {
+  currentDetailApp = app;
   // Company & Job Title (now inputs)
   const titleInput = document.getElementById('detail-modal-title');
   const subInput   = document.getElementById('detail-modal-sub');
@@ -1537,11 +1481,63 @@ function openDetailModal(app) {
 function switchDetailTab(tab) {
   document.querySelectorAll('.detail-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.querySelectorAll('.detail-tab-panel').forEach(p => p.classList.toggle('hidden', p.id !== 'detail-tab-' + tab));
+
+  const dlBtn = document.getElementById('detail-modal-download');
+  if (!dlBtn) return;
+
+  if (tab === 'notes') {
+    dlBtn.classList.add('hidden');
+  } else {
+    dlBtn.classList.remove('hidden');
+    dlBtn.textContent = (tab === 'jd') ? '📥 Download JD' : '📥 Download Resume';
+    // If resume tab but no resume content, we can either hide or disable. 
+    // The user said "if opening resume we click download, it will download", so we'll let it be.
+  }
 }
 
 // Tab clicks
 document.addEventListener('click', e => {
   if (e.target.classList.contains('detail-tab')) switchDetailTab(e.target.dataset.tab);
+});
+
+// Download button click handler
+document.getElementById('detail-modal-download').addEventListener('click', async () => {
+  if (!currentDetailApp) return;
+  const tab = document.querySelector('.detail-tab.active')?.dataset.tab;
+  const btn = document.getElementById('detail-modal-download');
+  
+  if (tab === 'jd') {
+    btn.textContent = '⏳ Preparing...'; btn.disabled = true;
+    try {
+      await ResumeEngine.generateJD(currentDetailApp);
+      showToast('JD downloaded ✓');
+    } catch (err) {
+      console.error(err);
+      showToast('Download failed: ' + err.message, true);
+    } finally {
+      btn.textContent = '📥 Download JD'; btn.disabled = false;
+    }
+  } else if (tab === 'resume') {
+    if (!currentDetailApp.resume) {
+      showToast('No tailored resume content found for this application.', true);
+      return;
+    }
+    btn.textContent = '⏳ Preparing...'; btn.disabled = true;
+    try {
+      const profile = await loadProfileDB();
+      if (!profile) {
+        showToast('Please set up your Resume Profile in Settings first!', true);
+        return;
+      }
+      await ResumeEngine.generate(currentDetailApp, profile);
+      showToast('Resume downloaded ✓');
+    } catch (err) {
+      console.error(err);
+      showToast('Download failed: ' + err.message, true);
+    } finally {
+      btn.textContent = '📥 Download Resume'; btn.disabled = false;
+    }
+  }
 });
 
 // Close detail modal
