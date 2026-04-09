@@ -396,6 +396,7 @@ async function loadAIModelDB(provider) {
 
 // ── RESUME PROFILE DB SYNC ──
 async function saveResumeProfileDB(profile) {
+  try {
     // 1. Attempt PATCH (Update only specific column)
     const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/user_settings?username=eq.${currentUser.id}`, {
       method: 'PATCH',
