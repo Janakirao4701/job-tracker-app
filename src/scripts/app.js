@@ -1998,10 +1998,7 @@ function renderSettingsSection(sec) {
               <div style="font-size:15px; font-weight:700; color:var(--text);">v2.0 Copilot Beta</div>
               <div style="font-size:12px; color:var(--text-muted);">Enable Highlight-to-Prompt and Shortcut Triggers across all sites.</div>
             </div>
-            <label class="switch">
-              <input type="checkbox" id="v2-copilot-toggle-web">
-              <span class="slider round"></span>
-            </label>
+            <button id="v2-copilot-toggle-web" style="min-width:56px; height:30px; border-radius:100px; border:2px solid var(--border); background:var(--bg-inset); color:var(--text-muted); font-size:11px; font-weight:800; cursor:pointer; transition:all 0.2s; font-family:inherit;">OFF</button>
           </div>
         </div>
 
@@ -2067,13 +2064,23 @@ function renderSettingsSection(sec) {
 
       const v2Toggle = document.getElementById('v2-copilot-toggle-web');
       if (v2Toggle) {
-        v2Toggle.checked = localStorage.getItem('rjd_v2_enabled') === 'true';
-        v2Toggle.onchange = () => {
-          localStorage.setItem('rjd_v2_enabled', v2Toggle.checked);
+        let isEnabled = localStorage.getItem('rjd_v2_enabled') === 'true';
+        const updateBtn = (en) => {
+          v2Toggle.textContent = en ? 'ON' : 'OFF';
+          v2Toggle.style.background = en ? 'var(--success)' : 'var(--bg-inset)';
+          v2Toggle.style.color = en ? '#fff' : 'var(--text-muted)';
+          v2Toggle.style.borderColor = en ? 'var(--success)' : 'var(--border)';
+        };
+        updateBtn(isEnabled);
+        
+        v2Toggle.onclick = () => {
+          isEnabled = !isEnabled;
+          localStorage.setItem('rjd_v2_enabled', isEnabled);
           if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-            chrome.storage.local.set({ rjd_v2_enabled: v2Toggle.checked });
+            chrome.storage.local.set({ rjd_v2_enabled: isEnabled });
           }
-          showToast('Copilot Updated ✓');
+          updateBtn(isEnabled);
+          showToast('Copilot ' + (isEnabled ? 'Enabled' : 'Disabled') + ' ✓');
         };
       }
 
