@@ -1,9 +1,11 @@
 // sw.js - Service Worker
-const CACHE_NAME = 'job-tracker-v4';
+const CACHE_NAME = 'job-tracker-v5';
 const ASSETS = [
   '/',
   '/index.html',
+  '/dashboard.html',
   '/src/pages/app.html',
+  '/src/pages/landing.html',
   '/src/lib/config.js',
   '/src/lib/xlsxbuilder.js',
   '/src/lib/resume-engine.js',
