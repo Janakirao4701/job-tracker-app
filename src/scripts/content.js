@@ -163,7 +163,10 @@
         chrome.runtime.sendMessage(message, response => {
           if (chrome.runtime.lastError) {
             const err = chrome.runtime.lastError.message;
-            if (!err.includes('No SW') && !err.includes('context invalidated')) {
+            if (!err.includes('No SW') && 
+                !err.includes('context invalidated') && 
+                !err.includes('message channel closed') &&
+                !err.includes('asynchronous response')) {
               console.warn('[AI Blaze] sendMessage error:', err);
             }
             resolve(null);
