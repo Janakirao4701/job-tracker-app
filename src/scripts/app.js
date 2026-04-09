@@ -953,96 +953,75 @@ async function renderAiBlaze() {
   const provider = BLAZE_PROVIDERS[blazeSelectedProvider] || BLAZE_PROVIDERS.google;
 
   content.innerHTML = `
-    <div class="blaze-premium-container">
-      <div class="blaze-glass-layout">
-        
-        <!-- Dashboard Sidebar: Context & Actions -->
-        <aside class="blaze-glass-sidebar">
-          <div class="blaze-sidebar-header">
-            <span class="blaze-fire-icon">🔥</span>
-            <div>
-              <div class="blaze-brand">AI-Blaze</div>
+    <div class="blaze-animated-page">
+      <!-- Animated Gradient Orbs -->
+      <div class="blaze-orb blaze-orb-1"></div>
+      <div class="blaze-orb blaze-orb-2"></div>
+      <div class="blaze-orb blaze-orb-3"></div>
+
+      <div class="blaze-center-col">
+        <!-- Gradient Heading -->
+        <div style="text-align:center; margin-bottom:8px;">
+          <h1 class="blaze-gradient-heading">How can AI Blaze help?</h1>
+          <div class="blaze-header-line"></div>
+          <p class="blaze-chat-subtitle">
+            ${selectedApp
+              ? `Context: <strong>${esc(selectedApp.company || '—')}</strong> — ${esc(selectedApp.jobTitle || 'Role')}`
+              : 'Select an application or ask a general question'}
+          </p>
+        </div>
+
+        <!-- Compact App Selector -->
+        <div class="blaze-compact-selector">
+          <select class="blaze-select-mini" id="blaze-app-select">
+            <option value="">No specific app (Profile only)</option>
+            ${apps.slice().reverse().map(a => `
+              <option value="${a.id}" ${blazeSelectedAppId === a.id ? 'selected' : ''}>
+                ${esc(a.company || '—')} — ${esc(a.jobTitle || '')}
+              </option>
+            `).join('')}
+          </select>
+        </div>
+
+        <!-- Glass Input Card -->
+        <div class="blaze-glass-card">
+          <div class="blaze-input-area">
+            <textarea id="blaze-query" class="blaze-textarea-new" placeholder="Ask AI Blaze a question..." rows="3"></textarea>
+          </div>
+          <div class="blaze-input-toolbar">
+            <div class="blaze-toolbar-left">
               <div class="blaze-status-pill" id="blaze-status">Ready</div>
             </div>
-          </div>
-
-          <div class="blaze-group">
-            <label class="blaze-label">TARGET APPLICATION</label>
-            <div class="blaze-select-wrap">
-              <select class="blaze-select" id="blaze-app-select">
-                <option value="">No specific app (Profile only)</option>
-                ${apps.slice().reverse().map(a => `
-                  <option value="${a.id}" ${blazeSelectedAppId === a.id ? 'selected' : ''}>
-                    ${esc(a.company || '—')}
-                  </option>
-                `).join('')}
-              </select>
-            </div>
-            ${selectedApp ? `
-              <div class="blaze-context-card">
-                <div class="blaze-context-title">${esc(selectedApp.jobTitle || 'Role')}</div>
-                <div class="blaze-context-tags">
-                  <span class="blaze-tag ${selectedApp.jd ? 'active' : ''}">${selectedApp.jd ? '✓ JD' : 'No JD'}</span>
-                  <span class="blaze-tag ${selectedApp.resume ? 'active' : ''}">${selectedApp.resume ? '✓ Resume' : 'No Resume'}</span>
-                </div>
-              </div>
-            ` : ''}
-          </div>
-
-          <div class="blaze-group">
-            <label class="blaze-label">QUICK ACTIONS</label>
-            <div class="blaze-shortcuts-grid">
-              ${blazeTemplates.map(t => `
-                <div class="blaze-shortcut-card" data-key="${t.key}">
-                  <span class="blaze-shortcut-icon">${t.icon || '⚡'}</span>
-                  <span class="blaze-shortcut-label">${esc(t.label)}</span>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-
-          <div class="blaze-group">
-            <label class="blaze-label">ENGINE & MODEL</label>
-            <div class="blaze-config-row">
-              <div class="blaze-status-pill blue">Gemini 3.1 Flash Lite</div>
-            </div>
-            <div style="font-size:10px; color:var(--text-muted); margin-top:8px;">Manage your API key in <a href="#" onclick="navigateTo('settings'); settingsSection='apikey'; renderSettings(); return false;" style="color:var(--accent); text-decoration:none;">Settings</a>.</div>
-          </div>
-        </aside>
-
-        <!-- Main Generation Area -->
-        <main class="blaze-glass-main">
-          <div class="blaze-chat-container">
-            <div class="rjd-chat-greeting" style="margin: 40px 0 20px;">
-              <h1>How can I help you today?</h1>
-            </div>
-
-
-            <div id="blaze-history"></div>
-
-            <div class="blaze-response-area hidden" id="blaze-result-wrap">
-              <div class="blaze-response-header">
-                <span class="blaze-ai-label">✨ BLAZE AI</span>
-                <button class="blaze-copy-btn" id="blaze-copy-btn">📋 Copy Result</button>
-              </div>
-              <div class="blaze-response-content" id="blaze-result-text"></div>
-            </div>
-          </div>
-
-          <div class="blaze-input-footer">
-            <div class="blaze-input-container">
-              <textarea class="blaze-textarea" id="blaze-query" placeholder="How can I help you today?"></textarea>
-              <button class="blaze-submit-btn" id="blaze-go-btn" title="Send Message">
-                <span class="blaze-btn-arrow">→</span>
+            <div class="blaze-toolbar-right">
+              <button class="blaze-icon-btn" id="blaze-clear-btn" title="Clear">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+              </button>
+              <button class="blaze-send-modern active" id="blaze-go-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                <span>Send</span>
               </button>
             </div>
-            <div class="blaze-input-hints">
-              <span>Press <b>Shift + Enter</b> for new line</span>
-              <button id="blaze-clear-btn" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:11px;">Clear Workspace</button>
-            </div>
           </div>
-        </main>
+        </div>
 
+        <!-- Quick Action Pills -->
+        <div class="blaze-quick-actions">
+          ${blazeTemplates.map((t, i) => `
+            <button class="blaze-action-pill blaze-shortcut-card" data-key="${t.key}" style="animation-delay: ${i * 0.08}s">
+              <span class="blaze-pill-icon">${t.icon || '⚡'}</span>
+              <span>${esc(t.label)}</span>
+            </button>
+          `).join('')}
+        </div>
+
+        <!-- Response Area -->
+        <div class="blaze-response-glass hidden" id="blaze-result-wrap">
+          <div class="blaze-response-top">
+            <span class="blaze-ai-tag">✨ AI BLAZE</span>
+            <button class="blaze-copy-pill" id="blaze-copy-btn">Copy</button>
+          </div>
+          <div class="blaze-response-body" id="blaze-result-text"></div>
+        </div>
       </div>
     </div>
   `;

@@ -1519,63 +1519,170 @@ tbody tr:nth-child(n+11) { animation-delay: 0.22s; }
 .main.full-page .content { padding: 0; }
 
 /* ══════════════════════════════════════
-   AI BLAZE PREMIUM
+   AI BLAZE — ANIMATED CHAT (Template)
    ══════════════════════════════════════ */
-.blaze-premium-container {
-  height: 100vh;
-  padding: 20px;
+
+/* ── Full-Page Container ── */
+.blaze-animated-page {
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg);
+  background: #09090b;
   position: relative;
-  z-index: 10;
-}
-.blaze-glass-layout {
-  width: 100%;
-  max-width: 1300px;
-  max-height: 90vh;
-  display: flex;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 24px;
-  box-shadow: var(--shadow-xl);
   overflow: hidden;
-  backdrop-filter: blur(12px);
-}
-.blaze-glass-sidebar {
-  width: 310px;
-  border-right: 1px solid var(--border);
-  background: var(--bg-inset);
   padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  overflow-y: auto;
 }
-.blaze-sidebar-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
+
+/* ── Pulsing Gradient Orbs ── */
+.blaze-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  pointer-events: none;
+  animation: blaze-orb-pulse 6s ease-in-out infinite;
 }
-.blaze-fire-icon {
-  font-size: 24px;
-  padding: 8px;
-  background: linear-gradient(135deg, #ff4d00, #ff8c00);
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(255, 77, 0, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.blaze-orb-1 {
+  width: 380px; height: 380px;
+  background: rgba(139, 92, 246, 0.12);
+  top: -10%; left: 20%;
 }
-.blaze-brand {
+.blaze-orb-2 {
+  width: 380px; height: 380px;
+  background: rgba(99, 102, 241, 0.12);
+  bottom: -10%; right: 20%;
+  animation-delay: 0.7s;
+}
+.blaze-orb-3 {
+  width: 260px; height: 260px;
+  background: rgba(217, 70, 239, 0.1);
+  top: 20%; right: 30%;
+  animation-delay: 1s;
+}
+@keyframes blaze-orb-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.08); }
+}
+
+/* ── Center Column ── */
+.blaze-center-col {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── Gradient Heading ── */
+.blaze-gradient-heading {
   font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  color: var(--text);
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -1px;
+  background: linear-gradient(to right, rgba(255,255,255,0.92), rgba(255,255,255,0.4));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-align: center;
+  margin-bottom: 6px;
+  animation: fadeInUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.1s backwards;
 }
+.blaze-header-line {
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255,255,255,0.2), transparent);
+  margin: 10px auto 14px;
+  max-width: 280px;
+  animation: blaze-line-reveal 0.8s ease 0.4s backwards;
+}
+@keyframes blaze-line-reveal {
+  from { max-width: 0; opacity: 0; }
+  to   { max-width: 280px; opacity: 1; }
+}
+.blaze-chat-subtitle {
+  text-align: center;
+  font-size: 13px;
+  color: rgba(255,255,255,0.35);
+  margin-bottom: 32px;
+  animation: fadeInUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.2s backwards;
+}
+.blaze-chat-subtitle strong { color: rgba(255,255,255,0.6); }
+
+/* ── Compact App Selector ── */
+.blaze-compact-selector {
+  margin-bottom: 20px;
+  text-align: center;
+  animation: fadeInUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.25s backwards;
+}
+.blaze-select-mini {
+  padding: 8px 20px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  color: rgba(255,255,255,0.7);
+  font-size: 12px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  appearance: none;
+  cursor: pointer;
+  min-width: 260px;
+  outline: none;
+  transition: all 0.25s;
+}
+.blaze-select-mini:hover,
+.blaze-select-mini:focus {
+  border-color: rgba(139,92,246,0.3);
+  box-shadow: 0 0 0 3px rgba(139,92,246,0.08);
+}
+.blaze-select-mini option {
+  background: #18181b;
+  color: #fafafa;
+}
+
+/* ── Glass Input Card ── */
+.blaze-glass-card {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  background: rgba(255,255,255,0.02);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  overflow: hidden;
+  margin-bottom: 20px;
+  animation: fadeInUp 0.5s cubic-bezier(0.16,1,0.3,1) 0.3s backwards;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.blaze-glass-card:focus-within {
+  border-color: rgba(139,92,246,0.2);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(139,92,246,0.1);
+}
+.blaze-input-area { padding: 18px 20px 8px; }
+.blaze-textarea-new {
+  width: 100%;
+  min-height: 64px;
+  max-height: 200px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: rgba(255,255,255,0.9);
+  font-size: 14px;
+  font-family: var(--font-body);
+  line-height: 1.6;
+  resize: none;
+  padding: 0;
+}
+.blaze-textarea-new::placeholder { color: rgba(255,255,255,0.18); }
+.blaze-input-toolbar {
+  padding: 14px 20px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.blaze-toolbar-left { display: flex; align-items: center; gap: 10px; }
+.blaze-toolbar-right { display: flex; align-items: center; gap: 8px; }
+
+/* Status Pill (inside toolbar) */
 .blaze-status-pill {
   font-size: 10px;
   font-weight: 700;
@@ -1599,215 +1706,203 @@ tbody tr:nth-child(n+11) { animation-delay: 0.22s; }
   color: #f59e0b;
   animation: pulse-op 1.5s infinite;
 }
-.blaze-group { display: flex; flex-direction: column; gap: 8px; }
-.blaze-label {
-  font-size: 10px;
-  font-weight: 800;
-  color: var(--text-muted);
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  font-family: var(--font-mono);
+
+/* Icon Buttons */
+.blaze-icon-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.35);
+  padding: 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.blaze-select {
-  width: 100%;
-  padding: 11px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  color: var(--text);
+.blaze-icon-btn:hover {
+  color: rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.05);
+}
+
+/* Send Button */
+.blaze-send-modern {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 20px;
+  border-radius: 10px;
   font-size: 13px;
   font-weight: 600;
-  appearance: none;
+  font-family: var(--font-body);
+  border: none;
   cursor: pointer;
   transition: all 0.25s;
-  font-family: var(--font-body);
 }
-.blaze-select:hover { border-color: var(--accent); }
-.blaze-config-row { display: flex; gap: 6px; }
-.blaze-context-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px;
+.blaze-send-modern.active {
+  background: #fff;
+  color: #09090b;
+  box-shadow: 0 4px 16px rgba(255,255,255,0.12);
 }
-.blaze-context-title {
-  font-size: 12px;
-  font-weight: 700;
-  margin-bottom: 10px;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.blaze-send-modern.active:hover {
+  transform: scale(1.03);
+  box-shadow: 0 6px 20px rgba(255,255,255,0.18);
 }
-.blaze-context-tags { display: flex; gap: 6px; }
-.blaze-tag {
-  font-size: 9px;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: var(--bg-inset);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  font-family: var(--font-mono);
+.blaze-send-modern.inactive {
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.35);
 }
-.blaze-tag.active {
-  background: rgba(16, 185, 129, 0.1);
-  color: #10b981;
-  border-color: rgba(16, 185, 129, 0.2);
+.blaze-send-modern.blazing {
+  background: linear-gradient(90deg, #6366f1, #8b5cf6, #6366f1);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s linear infinite;
+  color: #fff;
 }
-.blaze-shortcuts-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+
+/* ── Quick Action Pills ── */
+.blaze-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  justify-content: center;
+  margin-bottom: 24px;
 }
-.blaze-shortcut-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  padding: 12px;
-  border-radius: 14px;
+.blaze-action-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  color: rgba(255,255,255,0.55);
+  font-size: 13px;
+  font-family: var(--font-body);
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  transition: all 0.25s cubic-bezier(0.16,1,0.3,1);
+  animation: fadeInUp 0.4s cubic-bezier(0.16,1,0.3,1) backwards;
 }
-.blaze-shortcut-card:hover {
-  transform: translateY(-3px);
+.blaze-action-pill:hover {
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.9);
+  transform: translateY(-2px);
+  border-color: rgba(255,255,255,0.1);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+.blaze-action-pill.pulse-active {
   border-color: #ff8c00;
-  box-shadow: 0 6px 16px rgba(255, 140, 0, 0.12);
+  background: rgba(255,140,0,0.08);
+  color: #ff8c00;
 }
-.blaze-shortcut-icon { font-size: 16px; }
-.blaze-shortcut-label {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text);
-  font-family: var(--font-body);
-}
-.blaze-glass-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: #09090b !important;
-  position: relative;
-  min-width: 0;
-  font-family: var(--font-body);
-}
-.blaze-chat-container {
-  flex: 1;
-  overflow-y: auto;
-  padding: 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-.blaze-welcome {
-  text-align: center;
-  max-width: 440px;
-  margin: 40px auto;
-}
-.blaze-welcome h2 {
-  font-family: var(--font-display);
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -1px;
-  margin-bottom: 10px;
-}
-.blaze-welcome p {
-  color: var(--text-muted);
-  font-size: 14px;
-  line-height: 1.6;
-}
-.blaze-response-area {
-  background: var(--bg-inset);
-  border: 1px solid var(--border);
+.blaze-pill-icon { font-size: 15px; }
+
+/* ── Response Card ── */
+.blaze-response-glass {
+  backdrop-filter: blur(16px);
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
   border-radius: 18px;
   overflow: hidden;
-  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: fadeInUp 0.4s cubic-bezier(0.16,1,0.3,1);
+  margin-top: 4px;
 }
-.blaze-response-header {
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--border);
+.blaze-response-top {
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  background: rgba(0, 0, 0, 0.03);
+  justify-content: space-between;
+  background: rgba(0,0,0,0.2);
 }
-.blaze-ai-label {
+.blaze-ai-tag {
   font-size: 10px;
   font-weight: 800;
   color: #ff8c00;
-  letter-spacing: 1.2px;
+  letter-spacing: 1.5px;
   font-family: var(--font-mono);
 }
-.blaze-copy-btn {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+.blaze-copy-pill {
+  padding: 4px 14px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
   border-radius: 8px;
-  padding: 5px 12px;
-  font-size: 10px;
-  font-weight: 700;
+  color: rgba(255,255,255,0.6);
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
   font-family: var(--font-body);
 }
-.blaze-copy-btn:hover { background: var(--accent-light); color: var(--accent); }
-.blaze-response-content {
+.blaze-copy-pill:hover {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+.blaze-response-body {
   padding: 22px;
   font-size: 14px;
   line-height: 1.7;
-  color: var(--text);
+  color: rgba(255,255,255,0.85);
   white-space: pre-wrap;
-}
-.blaze-input-footer { padding: 16px 32px 32px; }
-.blaze-input-container {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  padding: 12px 16px;
-  display: flex;
-  gap: 12px;
-  transition: border-color 0.25s, box-shadow 0.25s;
-}
-.blaze-input-container:focus-within {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
-}
-.blaze-textarea {
-  flex: 1;
-  background: none;
-  border: none;
-  resize: vertical;
-  padding: 4px 0;
-  color: #fafafa;
-  font-size: 14px;
   font-family: var(--font-body);
-  min-height: 24px;
-  max-height: 200px;
-  line-height: 1.6;
 }
-.blaze-textarea:focus { outline: none; }
-.blaze-textarea::placeholder { color: #52525b; }
-.blaze-submit-btn {
-  background: #6366f1;
-  color: #fff;
-  border: none;
-  border-radius: 14px;
-  width: 42px;
-  height: 42px;
-  font-weight: 800;
-  font-size: 18px;
-  cursor: pointer;
+
+/* ── Thinking Indicator ── */
+.blaze-thinking-bar {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 22px;
+  backdrop-filter: blur(24px);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 100px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 20;
+  animation: fadeInUp 0.3s ease;
+}
+.blaze-thinking-label {
+  font-size: 13px;
+  color: rgba(255,255,255,0.65);
+  font-family: var(--font-body);
+}
+.blaze-thinking-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.25s ease;
-  flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
 }
-.blaze-submit-btn:hover {
-  background: #818cf8;
-  transform: scale(1.08);
+.blaze-typing-dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
+.blaze-typing-dots span {
+  width: 5px;
+  height: 5px;
+  background: rgba(255,255,255,0.8);
+  border-radius: 50%;
+  animation: blaze-dot-bounce 1.2s ease-in-out infinite;
+  box-shadow: 0 0 4px rgba(255,255,255,0.3);
+}
+.blaze-typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+.blaze-typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes blaze-dot-bounce {
+  0%, 100% { opacity: 0.3; transform: scale(0.85); }
+  50%      { opacity: 0.9; transform: scale(1.15); }
+}
+
+/* Error Message */
 .blaze-error-msg {
   color: #ef4444;
   background: rgba(239, 68, 68, 0.06);
@@ -1817,9 +1912,32 @@ tbody tr:nth-child(n+11) { animation-delay: 0.22s; }
   font-size: 13px;
 }
 
-@media (max-width: 850px) {
-  .blaze-glass-layout { flex-direction: column; max-height: none; }
-  .blaze-glass-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+/* ── Blaze Loader ── */
+.blaze-loader-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255,255,255,0.5);
+  font-size: 13px;
+  padding: 12px 0;
+}
+.blaze-pulse-core {
+  width: 10px;
+  height: 10px;
+  background: #ff8c00;
+  border-radius: 50%;
+  animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .blaze-animated-page { padding: 16px; }
+  .blaze-gradient-heading { font-size: 24px; }
+  .blaze-quick-actions { gap: 6px; }
+  .blaze-action-pill { padding: 8px 14px; font-size: 12px; }
+  .blaze-select-mini { min-width: 200px; }
+  .blaze-orb-1, .blaze-orb-2 { width: 250px; height: 250px; }
+  .blaze-orb-3 { width: 180px; height: 180px; }
 }
 </style>
 </head>
