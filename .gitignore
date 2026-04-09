@@ -19,7 +19,6 @@ CLAUDE.md
 .cursorrules
 deploy.ps1
 local-deploy.ps1
-docs/
 
 # Security - Environment & Credentials
 .env*
