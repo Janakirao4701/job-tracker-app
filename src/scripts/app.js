@@ -116,6 +116,22 @@ function showToast(msg, isError) {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+// ── SECURITY LOGGING (Rule 8) ──
+const SecurityLogger = {
+  log(event, details = {}) {
+    console.info(`[SECURITY] ${event}`, {
+      timestamp: new Date().toISOString(),
+      ...details
+    });
+  },
+  warn(event, details = {}) {
+    console.warn(`[SECURITY-ALERT] ${event}`, {
+      timestamp: new Date().toISOString(),
+      ...details
+    });
+  }
+};
+
 function headers(extra) {
   const token = session?.access_token || session?.token || SUPABASE_KEY;
   return { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+token, ...extra };
@@ -470,9 +486,17 @@ document.getElementById('auth-submit').addEventListener('click', async () => {
 
     if (data.error || data.error_description || data.msg || data.message) {
       const raw = data.error_description || data.error_code || data.error || data.msg || data.message || '';
+      SecurityLogger.warn(authMode === 'signin' ? 'Login Failed' : 'Signup Failed', { email, rawError: raw });
+
       let friendly = 'Something went wrong. Please try again.';
       if (/invalid.*(login|credentials)/i.test(raw))               friendly = 'Incorrect email or password.';
-      else if (/already.*registered|user.*exists/i.test(raw))      friendly = 'An account with this email already exists. Try signing in.';
+      // Rule 2 & 4: Use generic response for existing users to prevent enumeration
+      else if (/already.*registered|user.*exists/i.test(raw))      {
+        friendly = 'If an account with this email exists, a verification link has been sent.';
+        showAuthMsg(friendly, false); // Show as success/neutral
+        btn.disabled = false; btn.textContent = 'Create account';
+        return;
+      }
       else if (/password.*weak|weak.*password|should contain/i.test(raw)) friendly = 'Password is too weak. Use a mix of letters, numbers and symbols.';
       else if (/password.*characters|at least/i.test(raw))         friendly = 'Password must be at least 6 characters.';
       else if (/invalid.*email/i.test(raw))                        friendly = 'Please enter a valid email address.';

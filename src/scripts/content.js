@@ -222,6 +222,19 @@
     return _refreshPromise;
   }
 
+  // ── SECURITY LOGGING (Rule 8) ──
+  const AppLogger = {
+    warn(msg, details = {}) {
+      console.warn(`[AI Blaze] ${msg}`, { timestamp: new Date().toISOString(), ...details });
+    },
+    error(msg, details = {}) {
+      console.error(`[AI Blaze ERROR] ${msg}`, { timestamp: new Date().toISOString(), ...details });
+    },
+    security(event, details = {}) {
+      console.warn(`[SECURITY] ${event}`, { timestamp: new Date().toISOString(), ...details });
+    }
+  };
+
   async function sbFetch(url, opts) {
     if (!navigator.onLine) throw new Error('You are offline.');
     
@@ -250,12 +263,14 @@
     }
     
     if (res && res.status === 401) {
+      AppLogger.security('Session expired or unauthorized', { url });
       sessionToken = null; currentUser = null; clearSession();
       showToast('Session error — please sign out and sign in again', true);
       throw new Error('Unauthorized project or expired session');
     }
     
     if (!res || !res.ok) {
+      AppLogger.error('API request failed', { url, status: res?.status });
       throw new Error((res && res.data && res.data.message) || 'Request failed');
     }
     
