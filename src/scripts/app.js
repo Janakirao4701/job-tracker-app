@@ -2652,10 +2652,6 @@ async function generateIntegratedResume(app) {
 
 
 // ── JOB SEARCH ──
-let jobSearchResults = [];
-let jobSearchProvider = localStorage.getItem('rjd_job_provider') || 'arbeitnow';
-let jobQuery = '';
-let jobLocation = '';
 
 async function renderJobSearch() {
   const content = document.getElementById('page-content');
