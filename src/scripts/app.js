@@ -857,51 +857,6 @@ function renderDashboard() {
   });
 }
 
-  // Build weekly chart — pure canvas, no Chart.js dependency
-  function buildWeeklyChart() {
-    const el = document.getElementById('weekly-chart');
-    if (!el) return;
-    const labels = weeklyData.map(w => w.label);
-    const data   = weeklyData.map(w => w.count);
-    const max    = Math.max(...data, 1);
-    const W = el.parentElement.offsetWidth || 340;
-    const H = 120;
-    el.width  = W;
-    el.height = H;
-    const ctx = el.getContext('2d');
-    const n   = data.length;
-    const barW  = Math.floor((W - 20) / n * 0.55);
-    const gap   = Math.floor((W - 20) / n);
-    const padB  = 22, padT = 10;
-    const chartH = H - padB - padT;
-    ctx.clearRect(0, 0, W, H);
-    data.forEach((val, i) => {
-      const x   = 10 + i * gap + (gap - barW) / 2;
-      const bH  = val > 0 ? Math.max(4, Math.round((val / max) * chartH)) : 0;
-      const y   = padT + chartH - bH;
-      ctx.fillStyle = i === n - 1 ? '#4f46e5' : '#c7d2fe';
-      ctx.beginPath();
-      ctx.roundRect(x, y, barW, bH, 3);
-      ctx.fill();
-      if (val > 0) {
-        ctx.fillStyle = '#4a5568';
-        ctx.font = '10px -apple-system, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(val, x + barW / 2, y - 3);
-      }
-      ctx.fillStyle = '#a0aec0';
-      ctx.font = '9px -apple-system, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(labels[i], x + barW / 2, H - 5);
-    });
-  }
-  buildWeeklyChart();
-  if (apps.length > 6) {
-    const viewAllBtn = document.getElementById('view-all-btn');
-    if (viewAllBtn) viewAllBtn.addEventListener('click', () => navigateTo('applications'));
-  }
-}
-
 // ── AI BLAZE ──
 let blazeSelectedAppId = null;
 let blazeTemplates = [
