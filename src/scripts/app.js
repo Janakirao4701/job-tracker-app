@@ -1169,6 +1169,64 @@ function renderApplications() {
       <button id="bulk-reassign-btn" style="padding:7px 18px;background:rgba(255,255,255,0.2);backdrop-filter:blur(8px);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">✓ Reassign</button>
     </div>
 
+    <div class="section-card">
+      <div class="section-card-header">
+        <div class="section-card-title">All Applications (${filtered.length})</div>
+        <div class="filters-row">
+          <input class="filter-input" id="app-search" placeholder="Search..." value="${esc(filterSearch)}" style="width:140px"/>
+          <select class="filter-select" id="app-status-filter" style="width:130px">
+            <option value="all" ${filterStatus==='all'?'selected':''}>All Statuses</option>
+            ${STATUSES.map(s=>`<option value="${s}" ${filterStatus===s?'selected':''}>${s}</option>`).join('')}
+          </select>
+          <div style="display:flex;gap:6px;align-items:center;background:var(--bg-inset);padding:4px;border-radius:10px;border:1px solid var(--border);">
+            <button class="export-date-btn ${filterDate===workTodayISO()?'active':''}" id="filter-today-btn" style="padding:6px 12px;border:none;">Today</button>
+            <button class="export-date-btn ${filterDate===''?'active':''}" id="filter-all-btn" style="padding:6px 12px;border:none;">All</button>
+            <div style="position:relative;display:flex;align-items:center;">
+              <input class="filter-input ${filterDate!=='' && filterDate!==workTodayISO()?'active':''}" type="date" id="app-date-filter" value="${filterDate}" max="${todayISO()}" style="width:130px;padding:5px 10px;border-radius:6px;${filterDate!=='' && filterDate!==workTodayISO()?'background:var(--accent);color:#fff;border-color:var(--accent);':''}"/>
+            </div>
+          </div>
+          <button class="btn-new" id="toggle-bulk-mode-btn" style="padding:8px 12px;margin-left:auto;">${isBulkMode ? 'Cancel Select' : '≡ Select'}</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th class="bulk-col" style="width:36px;display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" id="select-all-chk" title="Select all"/></th>
+          <th>#</th><th>Company</th><th>Job Title</th><th>URL</th><th>Status</th><th>Session Date</th><th>Resume Content</th><th>Download</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+          ${filtered.length === 0
+            ? `<tr><td colspan="${isBulkMode ? 9 : 8}" class="empty-row">No applications match your filters</td></tr>`
+            : filtered.map((a,i) => `
+              <tr data-id="${a.id}" class="app-row" style="cursor:pointer;transition:background 0.2s;">
+                <td class="bulk-col" style="display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" class="app-chk" data-id="${a.id}"/></td>
+                <td style="color:var(--text-faint);font-size:12px;">${i+1}</td>
+                <td><div style="font-weight:600;font-size:13px;color:var(--text);">${esc(a.company||'—')}</div></td>
+                <td style="font-size:13px;color:var(--text2);">${esc(a.jobTitle||'—')}</td>
+                <td>${a.url?`<a href="${esc(a.url)}" target="_blank" class="url-link">Open ↗</a>`:'—'}</td>
+                <td>
+                  <select class="status-select" data-id="${a.id}" style="background:${(STATUS_BG[a.status]||STATUS_BG.Applied).bg};color:${(STATUS_BG[a.status]||STATUS_BG.Applied).color};">
+                    ${STATUSES.map(s=>`<option value="${s}" ${a.status===s?'selected':''}>${s}</option>`).join('')}
+                  </select>
+                </td>
+                <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${esc(a.dateKey||a.date||'—')}</td>
+                <td>
+                  <button class="auth-link add-resume-btn" data-id="${a.id}" style="font-size:12px;font-weight:600;color:${a.resume?'#059669':'var(--accent)'};">
+                    ${a.resume ? '📝 Update' : '➕ Add Content'}
+                  </button>
+                </td>
+                <td>
+                  <button class="btn-new dl-resume-btn" data-id="${a.id}" style="padding:4px 10px;font-size:11px;${!a.resume ? 'opacity:0.4;pointer-events:none;' : ''}">
+                    📥 Download
+                  </button>
+                </td>
+                <td style="white-space:nowrap;">
+                  <button class="auth-link del-btn" data-id="${a.id}" style="color:var(--danger);font-size:12px;">Delete</button>
+                </td>
+              </tr>`).join('')}
+        </tbody>
+      </table>
+      </div>
     </div>
     ${(!hasFullHistory && totalAppCount > apps.length) ? `
       <div style="text-align:center; padding: 20px 0;">
@@ -1193,7 +1251,6 @@ function renderApplications() {
       updateBadge();
     });
   }
-`;
 
   // Mobile FAB button
   if (window.innerWidth <= 768) {
