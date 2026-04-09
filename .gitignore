@@ -17,10 +17,8 @@ GEMINI.md
 CLAUDE.md
 .claude/
 .cursorrules
-build.js
 deploy.ps1
 local-deploy.ps1
-vercel.json
 docs/
 
 # Security - Environment & Credentials
