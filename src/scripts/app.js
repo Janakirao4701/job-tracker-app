@@ -396,22 +396,31 @@ async function loadAIModelDB(provider) {
 
 // ── RESUME PROFILE DB SYNC ──
 async function saveResumeProfileDB(profile) {
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/user_settings?on_conflict=username`, {
-      method: 'POST',
-      headers: headers({'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify({
-        username: currentUser.id,
-        resume_profile: profile 
-      })
+    // 1. Attempt PATCH (Update only specific column)
+    const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/user_settings?username=eq.${currentUser.id}`, {
+      method: 'PATCH',
+      headers: headers({'Prefer': 'return=representation'}),
+      body: JSON.stringify({ resume_profile: profile })
     });
-    if (res.ok) {
-      localStorage.setItem('rjd_resume_profile', JSON.stringify(profile));
-      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-        chrome.storage.local.set({ rjd_resume_profile: profile });
-      }
-      return true;
+    
+    // 2. If no record was updated, attempt POST (Insert)
+    const patchData = await patchRes.json().catch(() => []);
+    if (!patchRes.ok || (patchData && patchData.length === 0)) {
+       await fetch(`${SUPABASE_URL}/rest/v1/user_settings`, {
+        method: 'POST',
+        headers: headers({'Prefer': 'resolution=merge-duplicates'}),
+        body: JSON.stringify({
+          username: currentUser.id,
+          resume_profile: profile 
+        })
+      });
     }
+    
+    localStorage.setItem('rjd_resume_profile', JSON.stringify(profile));
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.set({ rjd_resume_profile: profile });
+    }
+    return true;
   } catch(e) {}
   // Fallback to local
   localStorage.setItem('rjd_resume_profile', JSON.stringify(profile));
@@ -447,18 +456,28 @@ async function loadResumeProfileDB() {
 // ── BLAZE SHORTCUTS DB SYNC ──
 async function saveBlazeShortcutsDB(shortcuts) {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/user_settings?on_conflict=username`, {
-      method: 'POST',
-      headers: headers({'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify({
-        username: currentUser.id,
-        blaze_shortcuts: shortcuts 
-      })
+    // 1. Attempt PATCH (Update only specific column)
+    const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/user_settings?username=eq.${currentUser.id}`, {
+      method: 'PATCH',
+      headers: headers({'Prefer': 'return=representation'}),
+      body: JSON.stringify({ blaze_shortcuts: shortcuts })
     });
-    if (res.ok) {
-      localStorage.setItem('rjd_blaze_shortcuts', JSON.stringify(shortcuts));
-      return true;
+    
+    // 2. If no record was updated (404-like behavior or empty representation), attempt POST (Insert)
+    const patchData = await patchRes.json().catch(() => []);
+    if (!patchRes.ok || (patchData && patchData.length === 0)) {
+      await fetch(`${SUPABASE_URL}/rest/v1/user_settings`, {
+        method: 'POST',
+        headers: headers({'Prefer': 'resolution=merge-duplicates'}),
+        body: JSON.stringify({
+          username: currentUser.id,
+          blaze_shortcuts: shortcuts 
+        })
+      });
     }
+    
+    localStorage.setItem('rjd_blaze_shortcuts', JSON.stringify(shortcuts));
+    return true;
   } catch(e) { console.error('Blaze save error:', e); }
   localStorage.setItem('rjd_blaze_shortcuts', JSON.stringify(shortcuts));
   return false;
