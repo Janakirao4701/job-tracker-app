@@ -1,4 +1,5 @@
 
+(function() {
 const SUPABASE_URL = CONFIG.SUPABASE_URL;
 // Extension ID - update this after publishing to Chrome Web Store
 // For now using runtime detection
@@ -2795,3 +2796,4 @@ async function saveRapidAPIKey(key) {
 
 // ── INIT ──
 setupAuth();
+})();

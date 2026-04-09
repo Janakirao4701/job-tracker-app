@@ -1,5 +1,6 @@
 importScripts('../lib/config.js');
 
+(function() {
 // ── SECURITY LOGGING ──
 const AppLogger = {
   warn(msg, details = {}) {
@@ -142,3 +143,4 @@ async function checkInterviewsToday() {
     chrome.storage.local.set({ [storageKey]: true });
   } catch(e) { AppLogger.warn('[RJD] Interview check failed', { message: e.message }); }
 }
+})();
