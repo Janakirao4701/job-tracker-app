@@ -313,21 +313,28 @@ body {
 .field-group input {
   width: 100%;
   padding: 12px 16px;
-  border: 1.5px solid #27272a;
+  border: 1.5px solid var(--border);
   border-radius: 12px;
   font-size: 14px;
   font-family: var(--font-body);
-  color: #fafafa;
-  background: #0f0f12;
+  color: var(--text);
+  background: var(--bg-inset);
   outline: none;
   transition: all 0.25s ease;
 }
 .field-group input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+}
+.field-group input::placeholder { color: var(--text-muted); }
+/* Auth-only overrides (always dark bg) */
+.auth-card .field-group input {
+  border-color: #27272a;
+  color: #fafafa;
   background: #0f0f12;
 }
-.field-group input::placeholder { color: #52525b; }
+.auth-card .field-group input:focus { background: #0f0f12; }
+.auth-card .field-group input::placeholder { color: #52525b; }
 .btn-primary {
   width: 100%;
   padding: 13px;
@@ -1214,6 +1221,8 @@ tbody tr:nth-child(n+11) { animation-delay: 0.22s; }
   background: radial-gradient(ellipse at top left, var(--accent-glow) 0%, transparent 60%);
   opacity: 0;
   transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 0;
 }
 .action-card:hover {
   transform: translateY(-4px);

@@ -794,7 +794,10 @@ async function showApp() {
     });
   });
 
-  navigateTo('dashboard');
+  // Restore last page from URL hash (persist across refresh)
+  const validPages = ['dashboard','applications','aiblaze','settings','export','privacy','about'];
+  const hashPage = window.location.hash.replace('#','');
+  navigateTo(validPages.includes(hashPage) ? hashPage : 'dashboard');
 
   // ✨ CSP COMPLIANCE: Global Event Delegation for Dynamic Content
   document.getElementById('page-content').addEventListener('click', e => {
@@ -841,6 +844,8 @@ document.querySelectorAll('.nav-item').forEach(item => {
 
 function navigateTo(page) {
   currentPage = page;
+  // Persist current page in URL hash so refresh stays on same page
+  try { window.location.hash = page; } catch(e) {}
   // Remove mobile FAB when changing pages
   const fab = document.getElementById('mobile-fab');
   if (fab && page !== 'applications') fab.remove();
