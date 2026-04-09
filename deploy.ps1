@@ -12,7 +12,7 @@ Write-Host "Sync Complete! Deploying to GitHub..." -ForegroundColor Cyan
 git add .
 
 # 4. Commit them with a descriptive message
-git commit -m "fix(blaze): switch to stable v1 API and add model selector"
+git commit -m "chore: prepare for v1.0.0 release and add publishing docs"
 
 # 5. Push to GitHub (This automatically triggers Vercel and GitHub pages)
 git push
