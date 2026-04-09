@@ -15,12 +15,15 @@ const AppLogger = {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   try {
     if (msg.action === 'session_saved' || msg.action === 'session_cleared') {
-      // Broadcast to all open tabs so content scripts update TRACK button immediately
-      chrome.tabs.query({}, (tabs) => {
+      // Broadcast only to web-accessible tabs so internal/system pages 
+      // do not trigger "Receiving end does not exist" errors.
+      chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] }, (tabs) => {
         tabs.forEach(tab => {
           chrome.tabs.sendMessage(tab.id, msg).catch(e => {
+            // Further swallow common lifecycle errors
             if (!e.message.includes('Receiving end does not exist') &&
-                !e.message.includes('Could not establish connection')) {
+                !e.message.includes('Could not establish connection') &&
+                !e.message.includes('context invalidated')) {
               AppLogger.warn('[RJD] sendMessage error on tab ' + tab.id, { message: e.message });
             }
           });
