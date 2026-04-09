@@ -38,3 +38,11 @@ yarn-error.log*
 # System Files
 .DS_Store
 Thumbs.db
+
+# Build Artifacts
+production.zip
+*.zip
+
+# Data & Documents
+public/assets/resumes/
+docs/*.docx
