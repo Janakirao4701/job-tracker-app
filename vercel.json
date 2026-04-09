@@ -13,6 +13,14 @@
     {
       "src": "public/**/*",
       "use": "@vercel/static"
+    },
+    {
+      "src": "sw.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "manifest.json",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
