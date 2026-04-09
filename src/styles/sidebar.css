@@ -721,18 +721,14 @@
 #rjd-toast.show { opacity: 1; transform: translateY(0) scale(1); }
 #rjd-sidebar.open ~ #rjd-toast { transform: translate(-532px, 0); }
 
-/* ── Scrollbars ── */
-#rjd-sidebar *::-webkit-scrollbar { width: 6px; height: 6px; }
-#rjd-sidebar *::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
-  border-radius: 10px;
-  border: 1px solid transparent;
-  background-clip: padding-box;
+/* ── Scrollbars (Hidden for 'Simply Side' Look) ── */
+#rjd-sidebar * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
-#rjd-sidebar *::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.4);
+#rjd-sidebar *::-webkit-scrollbar {
+  display: none;
 }
-#rjd-sidebar *::-webkit-scrollbar-track { background: transparent; }
 
 /* ── Follow-up badge ── */
 .blaze-premium-container {
@@ -753,49 +749,7 @@
 .rjd-followup-overdue { color: var(--danger); }
 .rjd-followup-normal { color: var(--text-muted); }
 
-/* ── Settings Switch (Toggle) ── */
-.rjd-switch {
-  position: relative;
-  display: inline-block;
-  width: 34px;
-  height: 20px;
-}
-.rjd-switch input { 
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-.rjd-slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--border-color);
-  transition: .4s;
-  border-radius: 20px;
-}
-.rjd-slider:before {
-  position: absolute;
-  content: "";
-  height: 14px;
-  width: 14px;
-  left: 3px;
-  bottom: 3px;
-  background-color: white;
-  transition: .4s;
-  border-radius: 50%;
-}
-#rjd-sidebar input:checked + .rjd-slider {
-  background-color: var(--accent-primary);
-}
-#rjd-sidebar input:focus + .rjd-slider {
-  box-shadow: 0 0 1px var(--accent-primary);
-}
-#rjd-sidebar input:checked + .rjd-slider:before {
-  transform: translateX(14px);
-}
+/* Legacy rjd-slider switch styles removed as per user request */
 /* ── AI Assistant Chat (Blaze Premium Dark) ── */
 .rjd-chat-container {
   display: flex;

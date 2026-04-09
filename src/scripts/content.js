@@ -1270,10 +1270,7 @@ ${context}`;
           <div style="border-top:1px solid var(--border-light,#f1f5f9); padding-top:14px; margin-bottom:16px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                <div style="font-size:13px; font-weight:700; color:var(--text-primary);">v2.0 Copilot Beta</div>
-               <label class="rjd-switch">
-                 <input type="checkbox" id="v2-copilot-toggle">
-                 <span class="rjd-slider round"></span>
-               </label>
+               <button id="v2-copilot-toggle" style="min-width:56px; height:28px; border-radius:100px; border:1.5px solid var(--border-color,#e2e8f0); background:var(--bg-secondary,#f8fafc); color:var(--text-muted,#94a3b8); font-size:10px; font-weight:800; cursor:pointer; transition:all 0.2s; font-family:inherit;">OFF</button>
             </div>
             <div style="font-size:11px; color:var(--text-muted); line-height:1.4;">
               Enable Highlight-to-Prompt, Shortcut Triggers (-ans, /fix), and Smart Context across all websites.
@@ -1295,15 +1292,24 @@ ${context}`;
         setTimeout(() => {
           // v2 Copilot Toggle Logic
           const v2Toggle = document.getElementById('v2-copilot-toggle');
-          const isV2Enabled = localStorage.getItem('rjd_v2_enabled') === 'true';
           if (v2Toggle) {
-            v2Toggle.checked = isV2Enabled;
-            v2Toggle.onchange = () => {
-              localStorage.setItem('rjd_v2_enabled', v2Toggle.checked);
+            let isEnabled = localStorage.getItem('rjd_v2_enabled') === 'true';
+            const updateUI = (en) => {
+              v2Toggle.textContent = en ? 'ON' : 'OFF';
+              v2Toggle.style.background = en ? 'var(--success,#10b981)' : 'var(--bg-secondary,#f8fafc)';
+              v2Toggle.style.color = en ? '#fff' : 'var(--text-muted,#94a3b8)';
+              v2Toggle.style.borderColor = en ? 'var(--success,#10b981)' : 'var(--border-color,#e2e8f0)';
+            };
+            updateUI(isEnabled);
+            
+            v2Toggle.onclick = () => {
+              isEnabled = !isEnabled;
+              localStorage.setItem('rjd_v2_enabled', isEnabled);
               if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-                chrome.storage.local.set({ rjd_v2_enabled: v2Toggle.checked });
+                chrome.storage.local.set({ rjd_v2_enabled: isEnabled });
               }
-              showToast('Copilot ' + (v2Toggle.checked ? 'Enabled' : 'Disabled') + ' — Refresh page to apply');
+              updateUI(isEnabled);
+              showToast('Copilot ' + (isEnabled ? 'Enabled' : 'Disabled') + ' — Refresh page to apply');
             };
           }
         }, 0);

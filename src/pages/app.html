@@ -471,6 +471,11 @@ body {
   flex: 1;
   padding: 16px 0;
   overflow-y: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;  /* IE and Edge */
+}
+.sidebar-nav::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
 }
 .nav-section {
   font-size: 10px;
@@ -2561,7 +2566,7 @@ tbody tr:nth-child(n+11) { animation-delay: 0.22s; }
   <script src="../lib/FileSaver.min.js?v=6"></script>
   <script src="../lib/xlsxbuilder.js?v=6"></script>
   <script src="../lib/resume-engine.js?v=8"></script>
-  <script src="../scripts/app.js?v=8"></script>
+  <script src="../scripts/app.js?v=9"></script>
   <script src="../scripts/sw-register.js?v=6"></script>
 </body>
 </html>
