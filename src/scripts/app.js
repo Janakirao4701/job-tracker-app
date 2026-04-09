@@ -798,7 +798,7 @@ async function showApp() {
   });
 
   // Restore last page from URL hash (persist across refresh)
-  const validPages = ['dashboard','applications','aiblaze','settings','export','privacy','about'];
+  const validPages = ['dashboard','applications','jobs','aiblaze','settings','export','privacy','about'];
   const hashPage = window.location.hash.replace('#','');
   navigateTo(validPages.includes(hashPage) ? hashPage : 'dashboard');
 
@@ -853,7 +853,7 @@ function navigateTo(page) {
   const fab = document.getElementById('mobile-fab');
   if (fab && page !== 'applications') fab.remove();
   document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.page === page));
-  const titles = { dashboard:'Overview', applications:'Applications', aiblaze:'Ai-Blaze', settings:'Settings', export:'Export', privacy:'Privacy Policy' };
+  const titles = { dashboard:'Overview', applications:'Applications', jobs:'Job Search', aiblaze:'Ai-Blaze', settings:'Settings', export:'Export', privacy:'Privacy Policy' };
   document.getElementById('page-title').textContent = titles[page] || page;
   const addBtn = document.getElementById('add-app-btn');
   if (addBtn) addBtn.classList.toggle('hidden', page !== 'applications');
@@ -872,6 +872,7 @@ function renderPage(page) {
   if (page === 'dashboard')    renderDashboard();
   else if (page === 'applications') renderApplications();
   else if (page === 'aiblaze')  renderAiBlaze();
+  else if (page === 'jobs')     renderJobSearch();
   else if (page === 'settings') renderSettings();
   else if (page === 'export')  renderExport();
   else if (page === 'privacy') renderPrivacy();
@@ -1704,7 +1705,7 @@ function renderSettings() {
     <div class="settings-layout">
       <div class="settings-nav-card">
         <div style="padding:16px 20px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); border-bottom:1px solid var(--border-light); margin-bottom:8px;">Configuration</div>
-        ${[['apikey','🔑','AI Config'],['blaze_shortcuts','🔥','Blaze Shortcuts'],['resumeprofile','📄','Resume Profile'],['account','👤','Account'],['shortcuts','⌨️','Shortcuts'],['logs','📜','System Logs']].map(([id,icon,label]) =>
+        ${[['apikey','🔑','AI Config'],['integrations','🔌','Integrations'],['blaze_shortcuts','🔥','Blaze Shortcuts'],['resumeprofile','📄','Resume Profile'],['account','👤','Account'],['shortcuts','⌨️','Shortcuts'],['logs','📜','System Logs']].map(([id,icon,label]) =>
           `<div class="settings-nav-item ${settingsSection===id?'active':''}" data-sec="${id}">${icon} ${label}</div>`
         ).join('')}
       </div>
@@ -1822,6 +1823,55 @@ function renderSettingsSection(sec) {
       };
     });
 
+
+  } else if (sec === 'integrations') {
+    const adzunaAppId = localStorage.getItem('rjd_adzuna_app_id_' + currentUser.id) || '';
+    const adzunaKey = localStorage.getItem('rjd_adzuna_key_' + currentUser.id) || '';
+    const rapidKey = localStorage.getItem('rjd_rapidapi_key_' + currentUser.id) || '';
+
+    panel.innerHTML = `
+      <div class="settings-section-title">External Integrations</div>
+      <div class="settings-section-sub">Configure API keys for external job search providers. These keys are stored locally.</div>
+      
+      <div class="action-card" style="margin-bottom:24px; cursor:default;">
+        <div style="font-weight:700; color:var(--text); margin-bottom:12px;">Adzuna API (Free Tier)</div>
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">Get a free App ID and Key at <a href="https://developer.adzuna.com/" target="_blank" style="color:var(--accent);">developer.adzuna.com</a></div>
+        <div style="display:grid; grid-template-columns:1fr 1.5fr; gap:16px; margin-bottom:16px;">
+          <div class="field-group">
+            <label>App ID</label>
+            <input type="text" class="settings-input" id="adzuna-id-input" value="${esc(adzunaAppId)}" placeholder="e.g. 1a2b3c4d"/>
+          </div>
+          <div class="field-group">
+            <label>App Key</label>
+            <input type="password" class="settings-input" id="adzuna-key-input" value="${esc(adzunaKey)}" placeholder="••••••••"/>
+          </div>
+        </div>
+        <button class="settings-btn" id="save-adzuna-btn" style="width:auto; padding:8px 20px;">Save Adzuna Config</button>
+      </div>
+
+      <div class="action-card" style="margin-bottom:24px; cursor:default;">
+        <div style="font-weight:700; color:var(--text); margin-bottom:12px;">RapidAPI (JSearch)</div>
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">Enter your X-RapidAPI-Key from <a href="https://rapidapi.com/letscrape-6bR7n6qO7Qpb/api/jsearch" target="_blank" style="color:var(--accent);">RapidAPI JSearch</a>.</div>
+        <div class="field-group" style="margin-bottom:16px;">
+          <label>X-RapidAPI-Key</label>
+          <input type="password" class="settings-input" id="rapid-key-input" value="${esc(rapidKey)}" placeholder="••••••••" style="width:100%"/>
+        </div>
+        <button class="settings-btn" id="save-rapid-btn" style="width:auto; padding:8px 20px;">Save RapidAPI Key</button>
+      </div>
+    `;
+
+    document.getElementById('save-adzuna-btn').onclick = async () => {
+      const id = document.getElementById('adzuna-id-input').value.trim();
+      const key = document.getElementById('adzuna-key-input').value.trim();
+      await saveAdzunaConfig(id, key);
+      showToast('Adzuna config saved ✓');
+    };
+
+    document.getElementById('save-rapid-btn').onclick = async () => {
+      const key = document.getElementById('rapid-key-input').value.trim();
+      await saveRapidAPIKey(key);
+      showToast('RapidAPI key saved ✓');
+    };
 
   } else if (sec === 'blaze_shortcuts') {
     panel.innerHTML = `
@@ -2554,6 +2604,193 @@ async function generateIntegratedResume(app) {
     console.error(err);
     showToast('Download failed: ' + err.message, true);
   }
+}
+
+
+// ── JOB SEARCH ──
+let jobSearchResults = [];
+let jobSearchProvider = localStorage.getItem('rjd_job_provider') || 'arbeitnow';
+let jobQuery = '';
+let jobLocation = '';
+
+async function renderJobSearch() {
+  const content = document.getElementById('page-content');
+  if (!content) return;
+
+  content.innerHTML = `
+    <div class="job-search-wrap">
+      <div class="job-search-header">
+        <h2 style="font-size:20px; font-weight:800; margin-bottom:16px;">Find Your Next Role</h2>
+        <div class="job-search-grid-inputs">
+          <div class="field-group">
+            <label>Role / Keywords</label>
+            <input type="text" id="job-q" class="settings-input" placeholder="e.g. Frontend Developer" value="${esc(jobQuery)}"/>
+          </div>
+          <div class="field-group">
+            <label>Location</label>
+            <input type="text" id="job-l" class="settings-input" placeholder="e.g. Remote or London" value="${esc(jobLocation)}"/>
+          </div>
+          <div class="field-group">
+            <label>Provider</label>
+            <select id="job-p" class="settings-input">
+              <option value="arbeitnow" ${jobSearchProvider==='arbeitnow'?'selected':''}>Instant (Arbeitnow - No Key)</option>
+              <option value="adzuna" ${jobSearchProvider==='adzuna'?'selected':''}>Adzuna (Key Required)</option>
+              <option value="jsearch" ${jobSearchProvider==='jsearch'?'selected':''}>JSearch (RapidAPI Key Required)</option>
+            </select>
+          </div>
+          <button class="btn-export" id="btn-job-search" style="height:44px; padding:0 30px;">Search</button>
+        </div>
+      </div>
+
+      <div id="job-results-container">
+        ${jobSearchResults.length > 0 ? renderJobResults(jobSearchResults) : '<div style="text-align:center; padding:40px; color:var(--text-muted);">Enter a role and location to start searching.</div>'}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btn-job-search').onclick = async () => {
+    jobQuery = document.getElementById('job-q').value.trim();
+    jobLocation = document.getElementById('job-l').value.trim();
+    jobSearchProvider = document.getElementById('job-p').value;
+    localStorage.setItem('rjd_job_provider', jobSearchProvider);
+
+    if (!jobQuery) { showToast('Please enter keywords', true); return; }
+
+    const btn = document.getElementById('btn-job-search');
+    btn.disabled = true;
+    btn.textContent = 'Searching...';
+    document.getElementById('job-results-container').innerHTML = '<div style="text-align:center; padding:60px;"><div class="spinner"></div></div>';
+
+    try {
+      jobSearchResults = await fetchJobs(jobQuery, jobLocation, jobSearchProvider);
+      document.getElementById('job-results-container').innerHTML = renderJobResults(jobSearchResults);
+    } catch (err) {
+      console.error(err);
+      document.getElementById('job-results-container').innerHTML = `<div style="text-align:center; padding:40px; color:var(--danger);">${esc(err.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Search';
+    }
+  };
+}
+
+function renderJobResults(results) {
+  if (!results || results.length === 0) return '<div style="text-align:center; padding:40px; color:var(--text-muted);">No results found. Try different keywords.</div>';
+
+  return `
+    <div class="job-results-grid">
+      ${results.map(j => `
+        <div class="job-card">
+          <div class="job-card-top">
+            <div class="job-card-logo">${initials(j.company)}</div>
+            <div style="flex:1">
+              <div class="job-card-title">${esc(j.title)}</div>
+              <div class="job-card-company">${esc(j.company)}</div>
+            </div>
+          </div>
+          <div class="job-card-meta">
+            <span class="job-card-badge">📍 ${esc(j.location || 'Remote')}</span>
+            ${j.salary ? `<span class="job-card-badge">💰 ${esc(j.salary)}</span>` : ''}
+          </div>
+          <div class="job-card-actions">
+            <a href="${esc(j.url)}" target="_blank" class="btn-new" style="flex:1; text-align:center; background:var(--bg-inset); color:var(--text); border:1px solid var(--border); text-decoration:none; font-size:12px;">View</a>
+            <button class="btn-export btn-track-job" data-id="${esc(j.id)}" style="flex:1; font-size:12px;">Track</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// Global listener for Track buttons (delegation)
+document.addEventListener('click', e => {
+  if (e.target.closest('.btn-track-job')) {
+    const jobId = e.target.closest('.btn-track-job').dataset.id;
+    const job = jobSearchResults.find(j => j.id === jobId);
+    if (job) trackJobFromResult(job);
+  }
+});
+
+function trackJobFromResult(job) {
+  document.getElementById('m-company').value = job.company || '';
+  document.getElementById('m-title').value = job.title || '';
+  document.getElementById('m-url').value = job.url || '';
+  document.getElementById('m-jd').value = job.description || '';
+  document.getElementById('m-status').value = 'Applied';
+  document.getElementById('add-modal').classList.remove('hidden');
+  showToast('Job details pre-filled!');
+}
+
+async function fetchJobs(q, l, provider) {
+  if (provider === 'arbeitnow') {
+    const res = await fetch(`https://www.arbeitnow.com/api/job-board-api`);
+    const data = await res.json();
+    const filtered = data.data.filter(j => 
+      (j.title.toLowerCase().includes(q.toLowerCase()) || j.company_name.toLowerCase().includes(q.toLowerCase())) &&
+      (!l || j.location.toLowerCase().includes(l.toLowerCase()))
+    );
+    return filtered.map(j => ({
+      id: 'an-' + Math.random().toString(36).substr(2, 9),
+      title: j.title,
+      company: j.company_name,
+      location: j.location,
+      url: j.url,
+      description: j.description,
+      salary: ''
+    }));
+  }
+
+  if (provider === 'adzuna') {
+    const appId = localStorage.getItem('rjd_adzuna_app_id_' + currentUser.id);
+    const appKey = localStorage.getItem('rjd_adzuna_key_' + currentUser.id);
+    if (!appId || !appKey) throw new Error('Adzuna App ID and Key missing. Check Settings.');
+    
+    const res = await fetch(`https://api.adzuna.com/v1/api/jobs/us/search/1?app_id=${appId}&app_key=${appKey}&what=${encodeURIComponent(q)}&where=${encodeURIComponent(l)}&results_per_page=20&content-type=application/json`);
+    const data = await res.json();
+    if (!data.results) throw new Error(data.error || 'Adzuna API Error');
+    return data.results.map(j => ({
+      id: String(j.id),
+      title: j.title.replace(/<\/?[^>]+(>|$)/g, ""),
+      company: j.company.display_name,
+      location: j.location.display_name,
+      url: j.redirect_url,
+      description: j.description.replace(/<\/?[^>]+(>|$)/g, ""),
+      salary: j.salary_min ? `${Math.round(j.salary_min / 1000)}k - ${Math.round(j.salary_max / 1000)}k` : ''
+    }));
+  }
+
+  if (provider === 'jsearch') {
+    const key = localStorage.getItem('rjd_rapidapi_key_' + currentUser.id);
+    if (!key) throw new Error('RapidAPI Key missing. Check Settings.');
+    
+    const res = await fetch(`https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(q + ' in ' + l)}&page=1&num_pages=1`, {
+      headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': 'jsearch.p.rapidapi.com' }
+    });
+    const data = await res.json();
+    if (!data.data) throw new Error(data.message || 'JSearch API Error');
+    return data.data.map(j => ({
+      id: j.job_id,
+      title: j.job_title,
+      company: j.employer_name,
+      location: (j.job_city || '') + (j.job_state ? ', ' + j.job_state : ''),
+      url: j.job_apply_link,
+      description: j.job_description,
+      salary: j.job_min_salary ? `${j.job_min_salary} - ${j.job_max_salary}` : ''
+    }));
+  }
+
+  return [];
+}
+
+async function saveAdzunaConfig(appId, appKey) {
+  localStorage.setItem('rjd_adzuna_app_id_' + currentUser.id, appId);
+  localStorage.setItem('rjd_adzuna_key_' + currentUser.id, appKey);
+  return { ok: true };
+}
+
+async function saveRapidAPIKey(key) {
+  localStorage.setItem('rjd_rapidapi_key_' + currentUser.id, key);
+  return { ok: true };
 }
 
 // ── INIT ──
