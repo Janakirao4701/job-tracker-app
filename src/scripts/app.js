@@ -1199,6 +1199,8 @@ Response:`;
 }
 
 
+let currentView = localStorage.getItem('rjd_view_mode') || 'list';
+
 // ── APPLICATIONS TABLE ──
 function renderApplications() {
   const isMobile = window.innerWidth <= 768;
@@ -1206,6 +1208,73 @@ function renderApplications() {
   if (filterStatus !== 'all') filtered = filtered.filter(a => a.status === filterStatus);
   if (filterDate)   filtered = filtered.filter(a => a.dateRaw && new Date(a.dateRaw).toLocaleDateString('en-CA') === filterDate);
   if (filterSearch) { const q = filterSearch.toLowerCase(); filtered = filtered.filter(a => (a.company+a.jobTitle+a.url).toLowerCase().includes(q)); }
+
+  let viewContentHTML = '';
+
+  if (currentView === 'board') {
+    const columns = STATUSES.map(s => {
+      const colApps = filtered.filter(a => a.status === s);
+      const bg = STATUS_BG[s]?.bg || '#f1f5f9';
+      const color = STATUS_BG[s]?.color || '#94a3b8';
+      
+      const cardsHtml = colApps.map(a => `
+        <div class="kanban-card app-row" draggable="true" data-id="${a.id}">
+          <div class="kanban-card-company">${esc(a.company||'—')}</div>
+          <div class="kanban-card-title">${esc(a.jobTitle||'—')}</div>
+          <div class="kanban-card-footer">
+            <span>${esc(a.dateKey||a.date||'—')}</span>
+            ${a.url ? `<a href="${esc(a.url)}" target="_blank" class="url-link" style="font-size:11px;" onclick="event.stopPropagation()">↗</a>` : ''}
+          </div>
+        </div>
+      `).join('');
+
+      return `
+        <div class="kanban-column" data-status="${s}">
+          <div class="kanban-column-header" style="border-top: 3px solid ${color};">
+            <span style="color: ${color}">${s}</span>
+            <span class="kanban-column-count">${colApps.length}</span>
+          </div>
+          <div class="kanban-column-body" data-status="${s}">
+            ${cardsHtml}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    viewContentHTML = `<div class="kanban-view">${columns}</div>`;
+  } else {
+    // List View HTML
+    viewContentHTML = `
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th class="bulk-col" style="width:36px;display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" id="select-all-chk" title="Select all"/></th>
+          <th>#</th><th>Company</th><th>Job Title</th><th>URL</th><th>Status</th><th>Session Date</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+          ${filtered.length === 0
+            ? `<tr><td colspan="${isBulkMode ? 8 : 7}" class="empty-row">No applications match your filters</td></tr>`
+            : filtered.map((a,i) => `
+              <tr data-id="${a.id}" class="app-row" style="cursor:pointer;transition:background 0.2s;">
+                <td class="bulk-col" style="display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" class="app-chk" data-id="${a.id}"/></td>
+                <td style="color:var(--text-faint);font-size:12px;">${i+1}</td>
+                <td><div style="font-weight:600;font-size:13px;color:var(--text);">${esc(a.company||'—')}</div></td>
+                <td style="font-size:13px;color:var(--text2);">${esc(a.jobTitle||'—')}</td>
+                <td>${a.url?`<a href="${esc(a.url)}" target="_blank" class="url-link" onclick="event.stopPropagation()">Open ↗</a>`:'—'}</td>
+                <td>
+                  <select class="status-select" data-id="${a.id}" style="background:${(STATUS_BG[a.status]||STATUS_BG.Applied).bg};color:${(STATUS_BG[a.status]||STATUS_BG.Applied).color};" onclick="event.stopPropagation()">
+                    ${STATUSES.map(s=>`<option value="${s}" ${a.status===s?'selected':''}>${s}</option>`).join('')}
+                  </select>
+                </td>
+                <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${esc(a.dateKey||a.date||'—')}</td>
+                <td style="white-space:nowrap;">
+                  <button class="auth-link del-btn" data-id="${a.id}" style="color:var(--danger);font-size:12px;" onclick="event.stopPropagation()">Delete</button>
+                </td>
+              </tr>`).join('')}
+        </tbody>
+      </table>
+      </div>`;
+  }
 
   document.getElementById('page-content').innerHTML = `
     <!-- Bulk Action Bar -->
@@ -1232,38 +1301,16 @@ function renderApplications() {
               <input class="filter-input ${filterDate!=='' && filterDate!==workTodayISO()?'active':''}" type="date" id="app-date-filter" value="${filterDate}" max="${todayISO()}" style="width:130px;padding:5px 10px;border-radius:6px;${filterDate!=='' && filterDate!==workTodayISO()?'background:var(--accent);color:#fff;border-color:var(--accent);':''}"/>
             </div>
           </div>
-          <button class="btn-new" id="toggle-bulk-mode-btn" style="padding:8px 12px;margin-left:auto;">${isBulkMode ? 'Cancel Select' : '≡ Select'}</button>
+          <div class="view-toggle" style="margin-left: auto;">
+            <button class="view-toggle-btn ${currentView === 'list' ? 'active' : ''}" id="toggle-list-view">≡ List</button>
+            <button class="view-toggle-btn ${currentView === 'board' ? 'active' : ''}" id="toggle-board-view">◫ Board</button>
+          </div>
+          <button class="btn-new" id="toggle-bulk-mode-btn" style="padding:8px 12px; display:${currentView === 'board' ? 'none' : 'block'};">${isBulkMode ? 'Cancel Select' : '✓ Select'}</button>
         </div>
       </div>
-      <div style="overflow-x:auto">
-      <table>
-        <thead><tr>
-          <th class="bulk-col" style="width:36px;display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" id="select-all-chk" title="Select all"/></th>
-          <th>#</th><th>Company</th><th>Job Title</th><th>URL</th><th>Status</th><th>Session Date</th><th>Actions</th>
-        </tr></thead>
-        <tbody>
-          ${filtered.length === 0
-            ? `<tr><td colspan="${isBulkMode ? 8 : 7}" class="empty-row">No applications match your filters</td></tr>`
-            : filtered.map((a,i) => `
-              <tr data-id="${a.id}" class="app-row" style="cursor:pointer;transition:background 0.2s;">
-                <td class="bulk-col" style="display:${isBulkMode ? 'table-cell' : 'none'};"><input type="checkbox" class="app-chk" data-id="${a.id}"/></td>
-                <td style="color:var(--text-faint);font-size:12px;">${i+1}</td>
-                <td><div style="font-weight:600;font-size:13px;color:var(--text);">${esc(a.company||'—')}</div></td>
-                <td style="font-size:13px;color:var(--text2);">${esc(a.jobTitle||'—')}</td>
-                <td>${a.url?`<a href="${esc(a.url)}" target="_blank" class="url-link">Open ↗</a>`:'—'}</td>
-                <td>
-                  <select class="status-select" data-id="${a.id}" style="background:${(STATUS_BG[a.status]||STATUS_BG.Applied).bg};color:${(STATUS_BG[a.status]||STATUS_BG.Applied).color};">
-                    ${STATUSES.map(s=>`<option value="${s}" ${a.status===s?'selected':''}>${s}</option>`).join('')}
-                  </select>
-                </td>
-                <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${esc(a.dateKey||a.date||'—')}</td>
-                <td style="white-space:nowrap;">
-                  <button class="auth-link del-btn" data-id="${a.id}" style="color:var(--danger);font-size:12px;">Delete</button>
-                </td>
-              </tr>`).join('')}
-        </tbody>
-      </table>
-      </div>
+      
+      ${viewContentHTML}
+      
     </div>
     ${(!hasFullHistory && totalAppCount > apps.length) ? `
       <div style="text-align:center; padding: 20px 0;">
@@ -1276,6 +1323,66 @@ function renderApplications() {
       </div>
     ` : ''}
   `;
+
+  // Attach view toggle listeners
+  document.getElementById('toggle-list-view').addEventListener('click', () => {
+    currentView = 'list';
+    localStorage.setItem('rjd_view_mode', 'list');
+    renderApplications();
+  });
+  document.getElementById('toggle-board-view').addEventListener('click', () => {
+    currentView = 'board';
+    isBulkMode = false; // Disable bulk mode on board view
+    localStorage.setItem('rjd_view_mode', 'board');
+    renderApplications();
+  });
+
+  // Kanban Drag & Drop API
+  if (currentView === 'board') {
+    const kanbanCards = document.querySelectorAll('.kanban-card');
+    kanbanCards.forEach(card => {
+      card.addEventListener('dragstart', (e) => {
+        card.style.opacity = '0.5';
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', card.dataset.id);
+      });
+      card.addEventListener('dragend', (e) => {
+        card.style.opacity = '1';
+        document.querySelectorAll('.kanban-column-body').forEach(col => col.classList.remove('drag-over'));
+      });
+    });
+
+    const columns = document.querySelectorAll('.kanban-column-body');
+    columns.forEach(col => {
+      col.addEventListener('dragover', (e) => {
+        e.preventDefault(); // Necessary to allow dropping
+        e.dataTransfer.dropEffect = 'move';
+        col.classList.add('drag-over');
+      });
+      col.addEventListener('dragleave', (e) => {
+        col.classList.remove('drag-over');
+      });
+      col.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        col.classList.remove('drag-over');
+        const draggedId = e.dataTransfer.getData('text/plain');
+        const newStatus = col.dataset.status;
+        
+        const app = apps.find(a => String(a.id) === String(draggedId));
+        if (app && app.status !== newStatus) {
+          app.status = newStatus;
+          const ok = await updateApp(app);
+          if (ok) {
+            showToast('Moved to ' + newStatus);
+            renderApplications();
+            updateBadge();
+          } else {
+            showToast('Failed to update status', true);
+          }
+        }
+      });
+    });
+  }
 
   if (document.getElementById('load-history-btn')) {
     document.getElementById('load-history-btn').addEventListener('click', async () => {
