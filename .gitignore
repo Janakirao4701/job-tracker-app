@@ -1,4 +1,5 @@
 node_modules/
+src/lib/config.js
 package-lock.json
 convert-icons.js
 fix-refs.js
