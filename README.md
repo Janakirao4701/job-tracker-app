@@ -334,4 +334,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-**Built with ❤️ by [Janakirao](https://github.com/Janakirao4701)**
+**Built with ❤️ by [Janakirao4701](https://github.com/Janakirao4701)**
