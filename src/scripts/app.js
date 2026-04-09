@@ -2659,8 +2659,29 @@ async function renderJobSearch() {
 
     const btn = document.getElementById('btn-job-search');
     btn.disabled = true;
-    btn.textContent = 'Searching...';
-    document.getElementById('job-results-container').innerHTML = '<div style="text-align:center; padding:60px;"><div class="spinner"></div></div>';
+    btn.innerHTML = '<span class="ai-scan-loading" style="display:inline-block; width:16px; height:16px;"></span> Searching...';
+    
+    // Show skeletons
+    document.getElementById('job-results-container').innerHTML = `
+      <div class="job-results-grid">
+        ${Array(6).fill(0).map(() => `
+          <div class="skeleton-card">
+            <div style="display:flex; gap:12px; margin-bottom:16px;">
+              <div class="skeleton-rect" style="width:48px; height:48px; border-radius:12px;"></div>
+              <div style="flex:1">
+                <div class="skeleton-rect" style="width:70%; height:16px; margin-bottom:8px;"></div>
+                <div class="skeleton-rect" style="width:40%; height:12px;"></div>
+              </div>
+            </div>
+            <div class="skeleton-rect" style="width:100%; height:40px; margin-bottom:16px;"></div>
+            <div style="display:flex; gap:8px;">
+              <div class="skeleton-rect" style="flex:1; height:32px; border-radius:10px;"></div>
+              <div class="skeleton-rect" style="flex:1; height:32px; border-radius:10px;"></div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
 
     try {
       jobSearchResults = await fetchJobs(jobQuery, jobLocation, jobSearchProvider);
@@ -2681,20 +2702,23 @@ function renderJobResults(results) {
   return `
     <div class="job-results-grid">
       ${results.map(j => `
-        <div class="job-card">
+        <div class="job-card" id="job-card-${esc(j.id)}">
           <div class="job-card-top">
             <div class="job-card-logo">${initials(j.company)}</div>
             <div style="flex:1">
               <div class="job-card-title">${esc(j.title)}</div>
               <div class="job-card-company">${esc(j.company)}</div>
             </div>
+            <div class="ai-score-container" id="ai-score-${esc(j.id)}"></div>
           </div>
           <div class="job-card-meta">
             <span class="job-card-badge">📍 ${esc(j.location || 'Remote')}</span>
             ${j.salary ? `<span class="job-card-badge">💰 ${esc(j.salary)}</span>` : ''}
           </div>
+          <div id="ai-insight-${esc(j.id)}" class="ai-insight-box" style="display:none;"></div>
           <div class="job-card-actions">
-            <a href="${esc(j.url)}" target="_blank" class="btn-new" style="flex:1; text-align:center; background:var(--bg-inset); color:var(--text); border:1px solid var(--border); text-decoration:none; font-size:12px;">View</a>
+            <button class="ai-match-btn btn-ai-match" data-id="${esc(j.id)}">✨ AI Match</button>
+            <a href="${esc(j.url)}" target="_blank" class="btn-new" style="flex:1; text-align:center; background:var(--bg-inset); color:var(--text); border:1px solid var(--border); text-decoration:none; font-size:12px; display:flex; align-items:center; justify-content:center;">View</a>
             <button class="btn-export btn-track-job" data-id="${esc(j.id)}" style="flex:1; font-size:12px;">Track</button>
           </div>
         </div>
@@ -2703,14 +2727,104 @@ function renderJobResults(results) {
   `;
 }
 
-// Global listener for Track buttons (delegation)
-document.addEventListener('click', e => {
-  if (e.target.closest('.btn-track-job')) {
-    const jobId = e.target.closest('.btn-track-job').dataset.id;
+// Global listener for Track & AI Match buttons
+document.addEventListener('click', async e => {
+  const trackBtn = e.target.closest('.btn-track-job');
+  const aiMatchBtn = e.target.closest('.btn-ai-match');
+
+  if (trackBtn) {
+    const jobId = trackBtn.dataset.id;
     const job = jobSearchResults.find(j => j.id === jobId);
     if (job) trackJobFromResult(job);
   }
+
+  if (aiMatchBtn) {
+    const jobId = aiMatchBtn.dataset.id;
+    const job = jobSearchResults.find(j => j.id === jobId);
+    if (job) analyzeJobMatch(job, aiMatchBtn);
+  }
 });
+
+async function analyzeJobMatch(job, btn) {
+  const scoreContainer = document.getElementById('ai-score-' + job.id);
+  const insightBox = document.getElementById('ai-insight-' + job.id);
+  
+  if (!scoreContainer || !insightBox) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="ai-scan-loading"></span> Scanning...';
+  scoreContainer.innerHTML = '<div class="ai-scan-loading" style="width:40px;"></div>';
+
+  try {
+    const profile = JSON.parse(localStorage.getItem('rjd_resume_profile_' + currentUser.id) || '{}');
+    if (!profile.name && !profile.title) {
+      showToast('Please complete your Resume Profile in Settings first.', true);
+      btn.disabled = false;
+      btn.innerHTML = '✨ AI Match';
+      scoreContainer.innerHTML = '';
+      return;
+    }
+
+    const prompt = `
+      Compare this job description with my professional profile.
+      
+      JOB: ${job.title} at ${job.company}
+      DESCRIPTION: ${job.description || 'No description provided.'}
+      
+      MY PROFILE:
+      ${JSON.stringify(profile)}
+      
+      Respond in STRICT JSON:
+      {
+        "score": number (0-100),
+        "fit": "Excellent" | "Good" | "Fair" | "Poor",
+        "pros": ["bullet", "bullet"],
+        "gaps": ["bullet", "bullet"]
+      }
+    `;
+
+    const res = await callGemini(prompt);
+    let analysis;
+    try {
+      // Find JSON block if Gemini includes markdown
+      const match = res.match(/\{[\s\S]*\}/);
+      analysis = JSON.parse(match ? match[0] : res);
+    } catch(e) {
+      throw new Error("Failed to parse AI response");
+    }
+
+    scoreContainer.innerHTML = `
+      <div class="ai-score-pill" title="${esc(analysis.fit)} Fit">
+        ${analysis.score}%
+      </div>
+    `;
+
+    insightBox.style.display = 'block';
+    insightBox.innerHTML = `
+      <div style="font-size:12px; margin-top:12px; background:var(--bg-inset); padding:14px; border-radius:12px; border:1px solid var(--accent-border);">
+        <div style="font-weight:800; color:var(--accent); font-size:11px; text-transform:uppercase; margin-bottom:8px;">AI Insight</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div>
+            <div style="font-weight:700; font-size:10px; color:var(--success); margin-bottom:4px;">PROS</div>
+            ${analysis.pros.map(p => `<div style="font-size:11px; margin-bottom:2px; color:var(--text2)">• ${esc(p)}</div>`).join('')}
+          </div>
+          <div>
+            <div style="font-weight:700; font-size:10px; color:var(--danger); margin-bottom:4px;">GAPS</div>
+            ${analysis.gaps.map(g => `<div style="font-size:11px; margin-bottom:2px; color:var(--text2)">• ${esc(g)}</div>`).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+
+    btn.style.display = 'none'; // Hide button after scan
+  } catch(err) {
+    console.error(err);
+    showToast('AI analysis failed: ' + err.message, true);
+    btn.disabled = false;
+    btn.innerHTML = '✨ AI Match';
+    scoreContainer.innerHTML = '';
+  }
+}
 
 function trackJobFromResult(job) {
   document.getElementById('m-company').value = job.company || '';

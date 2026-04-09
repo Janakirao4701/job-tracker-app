@@ -1489,6 +1489,95 @@ tbody tr:nth-child(n+11) { animation-delay: 0.22s; }
 .toast.error { background: #ef4444; box-shadow: 0 8px 24px rgba(239,68,68,0.35); }
 
 /* ══════════════════════════════════════
+   JOB SEARCH (NEW)
+   ══════════════════════════════════════ */
+.job-search-wrap { animation: fadeIn 0.4s ease; }
+.job-search-grid-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 16px;
+  background: var(--bg-card);
+  padding: 24px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  align-items: flex-end;
+  margin-bottom: 32px;
+}
+.job-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+.job-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.job-card:hover { 
+  transform: translateY(-4px); 
+  box-shadow: 0 12px 24px var(--accent-glow);
+  border-color: var(--accent-border);
+}
+.job-card-top { display: flex; gap: 14px; align-items: flex-start; }
+.job-card-logo {
+  width: 48px; height: 48px; background: var(--bg-inset);
+  color: var(--accent); font-weight: 800; font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 12px; border: 1px solid var(--border);
+}
+.job-card-title { font-size: 16px; font-weight: 700; color: var(--text); line-height: 1.4; }
+.job-card-company { font-size: 13px; color: var(--text-muted); font-weight: 600; }
+.job-card-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+.job-card-badge {
+  background: var(--bg-inset); padding: 4px 10px; border-radius: 100px;
+  font-size: 11px; font-weight: 600; color: var(--text2); border: 1px solid var(--border);
+}
+.job-card-actions { display: flex; gap: 10px; margin-top: auto; }
+
+/* AI Analysis Styles */
+.ai-match-btn {
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  color: #fff; border: none; font-size: 11px; font-weight: 800;
+  padding: 8px 14px; border-radius: 10px; cursor: pointer;
+  display: flex; align-items: center; gap: 6px;
+}
+.ai-match-btn:hover { filter: brightness(1.1); }
+.ai-score-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--accent-light); color: var(--accent);
+  padding: 4px 12px; border-radius: 100px; font-weight: 800;
+  font-size: 12px; border: 1px solid var(--accent-border);
+}
+.ai-scan-loading {
+  height: 20px; width: 60px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%; animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+/* Skeleton Loading */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton-card {
+  height: 180px; background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px;
+}
+.skeleton-rect {
+  background: var(--bg-inset); border-radius: 4px;
+  background: linear-gradient(90deg, var(--bg-inset) 25%, var(--border) 50%, var(--bg-inset) 75%);
+  background-size: 200% 100%; animation: shimmer 1.5s infinite;
+}
+
+/* ══════════════════════════════════════
    KANBAN BOARD VIEW
    ══════════════════════════════════════ */
 .kanban-view {
