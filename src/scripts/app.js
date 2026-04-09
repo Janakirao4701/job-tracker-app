@@ -636,11 +636,13 @@ document.getElementById('auth-submit').addEventListener('click', async () => {
     showApp();
   } catch(e) {
     if (!navigator.onLine) {
-      showAuthMsg('No internet connection. Please check your network and try again.', true);
+      showAuthMsg('No internet connection. Please try again.', true);
     } else {
-      showAuthMsg('Could not connect to the server. Please try again.', true);
+      console.error('Auth Exception:', e);
+      showAuthMsg('Auth Error: ' + (e.message || 'Check console'), true);
     }
-    btn.disabled = false; btn.textContent = authMode === 'signin' ? 'Sign in' : 'Create account';
+    btn.disabled = false; 
+    btn.textContent = authMode === 'signin' ? 'Sign in' : 'Create account';
   }
 });
 
