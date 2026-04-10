@@ -527,10 +527,12 @@ function saveSession(data) {
   // Save to chrome.storage — works because app.html is an extension page
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     chrome.storage.local.set({ rjd_session: payload }, () => {
-      // Tell background to push to all tabs
-      chrome.runtime.sendMessage({ action: 'session_saved', payload }, () => {
-        if (chrome.runtime.lastError) {} // ignore
-      });
+      // Tell background to push to all tabs - guard against No SW
+      if (chrome.runtime && chrome.runtime.id) {
+        chrome.runtime.sendMessage({ action: 'session_saved', payload }, () => {
+          if (chrome.runtime.lastError) { /* ignore No SW / idle errors */ }
+        });
+      }
     });
   }
 }
@@ -541,9 +543,11 @@ function clearStoredSession() {
   localStorage.removeItem('rjd_web_session');
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     chrome.storage.local.remove('rjd_session', () => {
-      chrome.runtime.sendMessage({ action: 'session_cleared' }, () => {
-        if (chrome.runtime.lastError) { /* ignore No SW errors */ }
-      });
+      if (chrome.runtime && chrome.runtime.id) {
+        chrome.runtime.sendMessage({ action: 'session_cleared' }, () => {
+          if (chrome.runtime.lastError) { /* ignore No SW / idle errors */ }
+        });
+      }
     });
   }
 }

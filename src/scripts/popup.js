@@ -94,9 +94,11 @@ function renderLoggedIn(appCount) {
 
   document.getElementById('btn-so').addEventListener('click', () => {
     chrome.storage.local.remove('rjd_session', () => {
-      chrome.runtime.sendMessage({ action: 'session_cleared' }, () => {
-        if (chrome.runtime.lastError) { /* ignore No SW errors */ }
-      });
+      if (chrome.runtime && chrome.runtime.id) {
+        chrome.runtime.sendMessage({ action: 'session_cleared' }, () => {
+          if (chrome.runtime.lastError) { /* ignore No SW errors */ }
+        });
+      }
       window.close();
     });
   });
