@@ -184,17 +184,31 @@
   }
 
   async function refreshSession() {
-    if (!sessionRefreshToken || !isContextValid()) return false;
+    if (!isContextValid()) return false;
     if (_refreshPromise) return _refreshPromise; 
     
     _refreshPromise = (async () => {
       try {
+        // Multi-tab fix: first check if another tab has already refreshed the token
+        const sess = await new Promise(resolve => {
+          chrome.storage.local.get('rjd_session', r => resolve(r.rjd_session || null));
+        });
+        
+        if (sess && sess.token && sess.token !== sessionToken) {
+          // If the token in storage is already different (newer), just apply it locally
+          applySession(sess);
+          return true;
+        }
+
+        const rt = sess?.refreshToken || sess?.refresh_token || sessionRefreshToken;
+        if (!rt) return false;
+
         const payload = {
           url: SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token',
           opts: {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-            body: JSON.stringify({ refresh_token: sessionRefreshToken }),
+            body: JSON.stringify({ refresh_token: rt }),
           }
         };
 
@@ -203,12 +217,14 @@
         if (response && response.ok && response.data && response.data.access_token) {
           const data = response.data;
           sessionToken = data.access_token;
-          if (data.refresh_token) sessionRefreshToken = data.refresh_token;
+          sessionRefreshToken = data.refresh_token || rt;
+          
+          const newSess = { token: sessionToken, user: currentUser, refreshToken: sessionRefreshToken };
           saveSession(sessionToken, currentUser, sessionRefreshToken);
           
           await safeSendMessage({
             action: 'session_saved',
-            payload: { token: sessionToken, user: currentUser, refreshToken: sessionRefreshToken }
+            payload: newSess
           });
           return true;
         }
@@ -231,7 +247,7 @@
       console.error(`[AI Blaze ERROR] ${msg}`, { timestamp: new Date().toISOString(), ...details });
     },
     security(event, details = {}) {
-      console.warn(`[SECURITY] ${event}`, { timestamp: new Date().toISOString(), ...details });
+      console.warn(`[SECURITY] ${event}`, details);
     }
   };
 
@@ -263,8 +279,9 @@
     }
     
     if (res && res.status === 401) {
-      AppLogger.security('Session expired or unauthorized', { url });
-      sessionToken = null; currentUser = null; clearSession();
+      AppLogger.security('Session expired or unauthorized', { url, status: 401 });
+      applySession(null);
+      clearSession();
       showToast('Session error — please sign out and sign in again', true);
       throw new Error('Unauthorized project or expired session');
     }
