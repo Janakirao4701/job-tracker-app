@@ -359,7 +359,7 @@
     let allRows = [];
     let offset  = 0;
 
-    const LIST_FIELDS = 'id,company,job_title,url,status,date,date_raw,date_key,notes,follow_up_date';
+    const LIST_FIELDS = 'id,company,job_title,url,status,date,date_raw,date_key,notes,follow_up_date,resume';
     let query = `?username=eq.${currentUser.id}&select=${LIST_FIELDS}&order=created_at.desc&limit=${PAGE_SIZE}&offset=${offset}`;
 
     if (isInitial) {
@@ -396,7 +396,7 @@
       jobTitle: r.job_title,
       url:      r.url,
       jd:       '', // Not loaded by default
-      resume:   '', // Not loaded by default
+      resume:   r.resume || '',
       status:   r.status,
       date:     r.date,
       dateRaw:  r.date_raw,

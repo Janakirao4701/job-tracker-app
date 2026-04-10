@@ -191,7 +191,7 @@ async function loadApps(days = 30) {
   let allRows = [];
   let offset  = 0;
   let fetchSuccess = false;
-  const LIST_FIELDS = 'id,company,job_title,url,status,date,date_raw,date_key,notes,follow_up_date';
+  const LIST_FIELDS = 'id,company,job_title,url,status,date,date_raw,date_key,notes,follow_up_date,resume';
   
   // First, get the total count for the badges
   await fetchTotalCount();
