@@ -238,18 +238,7 @@
     return _refreshPromise;
   }
 
-  // ── SECURITY LOGGING (Rule 8) ──
-  const AppLogger = {
-    warn(msg, details = {}) {
-      console.warn(`[AI Blaze] ${msg}`, { timestamp: new Date().toISOString(), ...details });
-    },
-    error(msg, details = {}) {
-      console.error(`[AI Blaze ERROR] ${msg}`, { timestamp: new Date().toISOString(), ...details });
-    },
-    security(event, details = {}) {
-      console.warn(`[SECURITY] ${event}`, details);
-    }
-  };
+  // AppLogger is now loaded from src/lib/logger.js via manifest.json
 
   async function sbFetch(url, opts) {
     if (!navigator.onLine) throw new Error('You are offline.');
@@ -1636,7 +1625,12 @@ ${context}`;
           <div style="margin-top:16px;background:#f8fafc;border-radius:8px;padding:12px;font-size:11px;color:#718096;text-align:center;line-height:1.6;">
             Built for job seekers who mean business.<br>
             <span style="color:#1F4E79;font-weight:600;">Free forever.</span>
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0;">
+              <button id="rjd-download-logs-btn" style="background:none;border:none;color:#4f46e5;text-decoration:underline;font-size:10px;cursor:pointer;font-family:inherit;">Download Debug Logs</button>
+            </div>
           </div>`;
+        const dlBtn = panel.querySelector('#rjd-download-logs-btn');
+        if (dlBtn) dlBtn.onclick = () => AppLogger.download();
         panel.querySelectorAll('[data-theme]').forEach(btn => {
           btn.addEventListener('click', () => {
             const t = btn.dataset.theme;

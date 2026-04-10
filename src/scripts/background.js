@@ -1,15 +1,7 @@
-importScripts('/src/lib/config.js');
+importScripts('/src/lib/config.js', '/src/lib/logger.js');
 
 (function() {
-// ── SECURITY LOGGING ──
-const AppLogger = {
-  warn(msg, details = {}) {
-    console.warn(`[AI Blaze] ${msg}`, { timestamp: new Date().toISOString(), ...details });
-  },
-  error(msg, details = {}) {
-    console.error(`[AI Blaze ERROR] ${msg}`, { timestamp: new Date().toISOString(), ...details });
-  }
-};
+// AppLogger is now loaded via importScripts
 
 // ── FORWARD SESSION EVENTS & PROXY FETCHES ──
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

@@ -70,6 +70,7 @@
       ],
       "js": [
         "src/lib/config.js",
+        "src/lib/logger.js",
         "src/lib/docx-bundle.js",
         "src/lib/FileSaver.min.js",
         "src/lib/resume-engine.js",

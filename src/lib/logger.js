@@ -32,6 +32,13 @@ const AppLogger = (() => {
     });
   }
 
+  const getUrl = () => {
+    try {
+      if (typeof window !== 'undefined') return window.location.href;
+      return 'background-worker';
+    } catch (e) { return 'unknown'; }
+  };
+
   return {
     error: async (message, context = {}) => {
       const timestamp = new Date().toISOString();
@@ -40,8 +47,8 @@ const AppLogger = (() => {
         timestamp,
         message: String(message),
         context: JSON.stringify(context),
-        url: window.location.href,
-        userAgent: navigator.userAgent
+        url: getUrl(),
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'node/sw'
       };
       
       console.error(`[AppLogger] ${message}`, context);
@@ -58,7 +65,7 @@ const AppLogger = (() => {
         timestamp,
         message: String(message),
         context: JSON.stringify(context),
-        url: window.location.href
+        url: getUrl()
       };
       
       console.warn(`[AppLogger] ${message}`, context);
@@ -74,8 +81,24 @@ const AppLogger = (() => {
         level: 'INFO',
         timestamp,
         message: String(message),
-        context: JSON.stringify(context)
+        context: JSON.stringify(context),
+        url: getUrl()
       };
+      const logs = await getLogs();
+      logs.push(entry);
+      await saveLogs(logs);
+    },
+
+    security: async (event, context = {}) => {
+      const timestamp = new Date().toISOString();
+      const entry = {
+        level: 'SECURITY',
+        timestamp,
+        message: String(event),
+        context: JSON.stringify(context),
+        url: getUrl()
+      };
+      console.warn(`[SECURITY] ${event}`, context);
       const logs = await getLogs();
       logs.push(entry);
       await saveLogs(logs);
@@ -90,7 +113,7 @@ const AppLogger = (() => {
     download: async () => {
       const logs = await getLogs();
       if (logs.length === 0) {
-        alert('No logs available locally.');
+        console.log('No logs available locally.');
         return;
       }
 
@@ -98,15 +121,19 @@ const AppLogger = (() => {
         `[${l.timestamp}] ${l.level}: ${l.message}\nContext: ${l.context}\nURL: ${l.url}\n-------------------`
       ).join('\n\n');
 
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `ai-blaze-logs-${new Date().getTime()}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      if (typeof document !== 'undefined') {
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ai-blaze-logs-${new Date().getTime()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        console.log('Logs (Text):\n' + content);
+      }
     }
   };
 })();
@@ -114,6 +141,8 @@ const AppLogger = (() => {
 // Export for different environments
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = AppLogger;
+} else if (typeof self !== 'undefined') {
+  self.AppLogger = AppLogger;
 } else {
   window.AppLogger = AppLogger;
 }
