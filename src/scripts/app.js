@@ -691,6 +691,7 @@ async function showApp() {
   showSection('app-section');
   // Topbar user info
   function updateUserInfo(u) {
+    if (!u) return;
     const ta = document.getElementById('topbar-avatar');
     const tn = document.getElementById('topbar-name');
     const te = document.getElementById('topbar-email');
@@ -764,6 +765,7 @@ async function showApp() {
   }
   showLoading();
   apps = await loadApps();
+  if (!currentUser) return; // Session might have been cleared during load
   // Auto-refresh token every 50 minutes
   if (!window._appRefreshTimer) {
     window._appRefreshTimer = setInterval(async () => {
@@ -924,7 +926,7 @@ function renderDashboard() {
         </div>
         
         <div style="border-top: 1px solid var(--border); padding-top: 24px; display: flex; align-items: center; justify-content: space-between;">
-          <div style="font-size: 13px; color: var(--text-muted);">Signed in as <strong>${currentUser.name || currentUser.email}</strong></div>
+          <div style="font-size: 13px; color: var(--text-muted);">Signed in as <strong>${(currentUser?.name || currentUser?.email) || 'User'}</strong></div>
           <button class="signout-btn" id="dash-signout-btn" style="width: auto; padding: 10px 24px; font-weight: 700;">Sign Out</button>
         </div>
       </div>

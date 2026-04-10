@@ -441,7 +441,7 @@
   async function dbSaveApp(app) {
     if (!navigator.onLine) {
       enqueueApp(app);
-      applications.push(app);
+      applications.unshift(app);
       renderTable();
       return true; // treat as success so UI updates
     }
@@ -639,9 +639,65 @@
 
   // ── GEMINI EXTRACTION ──
 
+  function getCompanyFromUrl(urlStr) {
+    if (!urlStr) return '';
+    try {
+      const u = new URL(urlStr);
+      const host = u.hostname.toLowerCase();
+      const params = u.searchParams;
+
+      // 1. Greenhouse (query params)
+      if (host.includes('greenhouse.io') && params.get('for')) {
+        return params.get('for');
+      }
+
+      // 2. Workday (subdomain before .wd1 or .myworkdayjobs)
+      if (host.includes('myworkdayjobs.com')) {
+        const parts = host.split('.');
+        if (parts[0] !== 'www' && parts.length > 2) return parts[0];
+      }
+
+      // 3. iCIMS (subdomain after 'careers-')
+      if (host.includes('icims.com')) {
+        const parts = host.split('.');
+        let sub = parts[0];
+        if (sub.startsWith('careers-')) return sub.replace('careers-', '');
+        return sub;
+      }
+
+      // 4. Lever (subdomain before .lever.co)
+      if (host.includes('lever.co')) {
+        const parts = host.split('.');
+        if (parts.length > 2) return parts[0];
+      }
+
+      return '';
+    } catch (e) { return ''; }
+  }
+
+  function getJobTitleFromUrl(urlStr) {
+    if (!urlStr) return '';
+    try {
+      const u = new URL(urlStr);
+      const path = decodeURIComponent(u.pathname);
+      const parts = path.split('/').filter(Boolean);
+      
+      // Look for parts that look like titles
+      const TITLE_KEYWORDS = ['data','engineer','analyst','manager','developer','specialist','architect','scientist','designer','coordinator','lead','senior','junior'];
+      for (const part of parts) {
+        if (part.includes('-') && TITLE_KEYWORDS.some(k => part.toLowerCase().includes(k))) {
+          // Clean up workday/icims style strings (e.g. Lead-Data-Analyst--Data---Analytics_R26)
+          return part.split('_')[0].split(/[.\-]{1,}/).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+        }
+      }
+    } catch (e) {}
+    return '';
+  }
+
   function extractFromDomain() {
     try {
       const hostname = window.location.hostname;
+      const urlStr   = window.location.href;
       // LinkedIn
       if (hostname.includes('linkedin.com')) {
         let company = document.querySelector('.job-details-jobs-unified-top-card__company-name a')?.innerText
@@ -714,6 +770,17 @@
                    || document.querySelector('[data-automation-id="companyLogo"]')?.getAttribute('aria-label')
                    || document.title.split('-')?.[0]?.trim();
         if (company || title) return { company: company?.trim(), jobTitle: title?.trim(), source: 'workday_dom' };
+      }
+
+      // Fallback: URL based extraction
+      const urlCompany = getCompanyFromUrl(urlStr);
+      const urlTitle   = getJobTitleFromUrl(urlStr);
+      if (urlCompany || urlTitle) {
+        return { 
+          company: urlCompany ? urlCompany.replace(/[\-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '',
+          jobTitle: urlTitle ? urlTitle.replace(/\b\w/g, c => c.toUpperCase()) : '',
+          source: 'url_pattern' 
+        };
       }
     } catch(e) { console.warn('[AI Blaze] DOM extraction error:', e.message); }
     return null;
@@ -1070,22 +1137,26 @@ ${context}`;
 
 
   async function fetchWithRetry(url, opts, retries = 3, delay = 2000) {
+    let lastResp = null;
     for (let i = 0; i < retries; i++) {
       try {
-        const resp = await fetch(url, opts);
-        if (resp.status === 429) {
+        lastResp = await fetch(url, opts);
+        if (lastResp.status === 429) {
           AppLogger.warn(`Gemini Rate Limited (429). Retry ${i + 1}/${retries} in ${delay}ms...`);
-          await new Promise(res => setTimeout(res, delay));
-          delay *= 2; // Exponential backoff
-          continue;
+          if (i < retries - 1) {
+            await new Promise(res => setTimeout(res, delay));
+            delay *= 2; // Exponential backoff
+            continue;
+          }
         }
-        return resp;
+        return lastResp;
       } catch (e) {
         if (i === retries - 1) throw e;
         await new Promise(res => setTimeout(res, delay));
         delay *= 2;
       }
     }
+    return lastResp;
   }
 
   async function callGeminiBlaze(key, prompt) {
@@ -1104,9 +1175,11 @@ ${context}`;
       try { chrome.storage?.local?.set({ rjd_gemini_model: model }); } catch(e) {}
     }
 
+    console.log(`[AI Blaze] Using model: ${model}`);
+
     const endpoints = [
-      `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${key}`,
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${key}`
     ];
 
     let lastErr = null;
@@ -1121,14 +1194,29 @@ ${context}`;
           })
         });
 
+        if (!resp) {
+          lastErr = "No response from Google API";
+          continue;
+        }
+
         if (resp.ok) {
           const data = await resp.json();
           return String(data.candidates?.[0]?.content?.parts?.[0]?.text ?? '');
         }
         
-        const errData = await resp.json();
-        lastErr = errData.error?.message || `HTTP ${resp.status}`;
-        if (resp.status !== 404 && resp.status !== 400 && resp.status !== 429) break; 
+        let errorMsg = `HTTP ${resp.status}`;
+        try {
+          const errData = await resp.json();
+          errorMsg = errData.error?.message || errorMsg;
+        } catch(e) {}
+        
+        lastErr = errorMsg;
+        if (resp.status === 429) {
+          lastErr = "Rate Limit Exceeded (429). Please wait a minute or use a different API key.";
+          break; // Don't try other endpoints if we're rate-limited
+        }
+        
+        if (resp.status !== 404 && resp.status !== 400) break; 
       } catch (e) {
         lastErr = e.message;
       }
@@ -2061,6 +2149,7 @@ ${context}`;
             <span class="rjd-panel-title">Details</span>
           </div>
           <div class="rjd-panel-body">
+            <button id="rjd-save-notes-btn" class="rjd-primary-btn" style="width:100%;padding:10px;margin-bottom:18px;font-weight:700;">💾 Save Changes</button>
             <div class="rjd-detail-row">
               <span class="rjd-detail-lbl">Company</span>
               <input type="text" id="rjd-detail-company-input" style="flex:1;padding:6px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:#1e293b;outline:none;" placeholder="Company Name"/>
@@ -2093,7 +2182,6 @@ ${context}`;
             <div class="rjd-detail-section">
               <div class="rjd-detail-lbl">Notes</div>
               <textarea id="rjd-detail-notes" class="rjd-notes-input" rows="3"></textarea>
-              <button id="rjd-save-notes-btn" class="rjd-action-btn" style="margin-top:6px;">Save Changes</button>
             </div>
             <div style="margin-top:12px;"><button id="rjd-delete-app-btn" class="rjd-delete-app-btn">Delete Application</button></div>
           </div>
@@ -2104,12 +2192,12 @@ ${context}`;
             <button class="rjd-back-btn" id="rjd-resume-back">← Back</button>
             <span class="rjd-panel-title" id="rjd-resume-title">Resume</span>
           </div>
+          <div style="padding:10px 12px;border-bottom:1px solid #e2e8f0;flex-shrink:0;display:flex;gap:8px;background:var(--bg-secondary,#f8fafc);">
+            <button id="rjd-resume-save-btn" class="rjd-primary-btn" style="flex:1;">💾 Save Changes</button>
+            <button id="rjd-resume-copy-btn" class="rjd-action-btn rjd-secondary-btn" style="flex:0 0 auto;width:40px;" title="Copy to clipboard">📋</button>
+          </div>
           <div style="flex:1;overflow:hidden;background:#fff;padding:12px;">
             <textarea id="rjd-resume-body" class="rjd-resume-body" style="width:100%;height:100%;border:1px solid #e2e8f0;border-radius:8px;padding:12px;font-size:12px;font-family:'SF Mono',monospace;line-height:1.6;color:#1e293b;resize:none;background:#f8fafc;"></textarea>
-          </div>
-          <div style="padding:10px 12px;border-top:1px solid #e2e8f0;flex-shrink:0;display:flex;gap:8px;">
-            <button id="rjd-resume-save-btn" class="rjd-primary-btn" style="flex:1;">Save Changes</button>
-            <button id="rjd-resume-copy-btn" class="rjd-action-btn rjd-secondary-btn" style="flex:0 0 auto;width:40px;" title="Copy to clipboard">📋</button>
           </div>
         </div>
       </div>`;
@@ -2435,7 +2523,7 @@ ${context}`;
         };
         const ok = await dbSaveApp(app);
         if (ok) {
-          applications.push(app);
+          applications.unshift(app);
           renderTable();
           showToast('Saved: ' + company + ' — ' + jobTitle);
         } else {
@@ -2500,7 +2588,7 @@ ${context}`;
       _saving = false;
       if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '💾 Save Application'; }
       if (ok) {
-        applications.push(app);
+        applications.unshift(app);
         hideNewAppPanel();
         renderTable();
         showToast('✓ Application saved — ' + company);
