@@ -1,4 +1,4 @@
-importScripts('../lib/config.js');
+importScripts('/src/lib/config.js');
 
 (function() {
 // ── SECURITY LOGGING ──
